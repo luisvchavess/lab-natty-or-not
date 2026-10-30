@@ -114,6 +114,36 @@ body.in-play #btnPause, body.in-play #btnBomb { display: flex; }
 
 #toasts { position: fixed; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 56px); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; z-index: 30; }
 
+/* Celular deitado: o core põe body.rotate-hint (e pausa a partida). O jogo é em pé. */
+body.rotate-hint::after {
+  content: "GIRE O CELULAR\A\AO Fusca só voa em pé.";
+  white-space: pre-line;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: rgba(11, 16, 34, 0.96);
+  color: var(--yellow);
+  font: 26px/1.25 var(--font-display);
+  pointer-events: auto;
+}
+/* tablet deitado ainda dá pra jogar: só um aviso discreto no topo, sem bloquear */
+@media (min-height: 560px) {
+  body.rotate-hint::after {
+    content: "Dica: o jogo foi feito para a tela em pé.";
+    inset: 0 0 auto 0;
+    padding: 6px 12px;
+    background: rgba(11, 16, 34, 0.8);
+    font: 800 14px/1.2 var(--font-body);
+    letter-spacing: 0.04em;
+    pointer-events: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

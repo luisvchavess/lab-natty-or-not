@@ -7,7 +7,10 @@
      node tools/play.js --q "stage=3&boss=1&god=1&auto=1&ts=3&skipui=1" --eval "G.debug.hurtBoss(0.5)" --at 8
    Opções:
      --page dev|index      (padrão dev: carrega src/ separado)
-     --q "..."             parâmetros de URL (stage, loop, boss, god, auto, ts, skipui, hitboxes, autocontinue, mods)
+     --q "..."             parâmetros de URL (stage, loop, boss, bossid, god, auto, ts, skipui, hitboxes, autocontinue, mods, quality)
+                           quality=high é o padrão aqui (prints nítidos e iguais entre rodadas; o Chromium do sandbox
+                           rasteriza na CPU e o modo automático baixaria a resolução). Use --q "...&quality=auto" para
+                           testar o modo automático.
      --seconds N           quanto tempo rodar (tempo real)
      --shots N             quantos prints ao longo do tempo
      --out DIR             pasta dos prints (padrão /tmp/fusca-shots)
@@ -40,7 +43,9 @@ for (let i = 0; i < args.length; i++) {
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(m.type() + ': ' + m.text()); });
   page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + (e.stack || e.message)));
   const file = path.resolve(__dirname, '..', (opt.page === 'index' ? 'index' : 'dev') + '.html');
-  const url = 'file://' + file + (opt.q ? '?' + opt.q : '');
+  let q = opt.q || '';
+  if (!/(^|&)quality=/.test(q)) q += (q ? '&' : '') + 'quality=high';
+  const url = 'file://' + file + '?' + q;
   await page.goto(url);
   await page.waitForTimeout(400);
   for (const [x, y] of opt.taps) { await page.touchscreen.tap(x, y); await page.waitForTimeout(250); }

@@ -11,7 +11,8 @@
   G.SUBTITLE = 'Guerra em Brasília';
 
   // ---------- Armas do Zé ----------
-  // As 4 armas. O item "P" alterna entre elas a cada 3 s: pegue na cor certa.
+  // As 4 armas. O item "P" alterna entre elas a cada 3 s: a cor escolhe a arma.
+  // Todo P (de qualquer cor) enche a barra de força: 1, 2, 3 e 3 P para subir do nível 1 ao 5.
   G.WEAPONS = {
     voto:   { id: 'voto',   name: 'VOTO',         color: '#3ddc84', desc: 'Tiro reto. Simples e honesto.' },
     boca:   { id: 'boca',   name: 'BOCA DE URNA', color: '#ffd23f', desc: 'Leque largo. Pega todo mundo.' },
@@ -26,7 +27,7 @@
     pix:    { name: 'Pix',               desc: 'Dinheiro do povo de volta. Gaste na Lojinha.' },
     pix5:   { name: 'Pix gordo',         desc: 'R$ 5 de uma vez.' },
     mala:   { name: 'Mala de dinheiro',  desc: 'R$ 25. Alguém vai sentir falta.' },
-    power:  { name: 'Arma',              desc: 'Mesma cor: sobe o nível. Outra cor: troca de arma.' },
+    power:  { name: 'Arma',              desc: 'Todo P fortalece a arma. A cor escolhe qual arma você usa.' },
     bomb:   { name: 'Delação Premiada',  desc: 'Bomba: limpa os tiros da tela e acerta todo mundo.' },
     shield: { name: 'Habeas Corpus',     desc: 'Escudo que aguenta um tiro.' },
     life:   { name: '13º Salário',       desc: 'Vida extra.' },
@@ -35,12 +36,14 @@
 
   // ---------- Lojinha do Zé (melhorias permanentes, pagas com Pix) ----------
   G.UPGRADES = [
-    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida no começo da partida',          costs: [400, 1200] },
-    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação Premiada no começo',          costs: [300, 900] },
-    { id: 'turbo',  name: 'Motor Turbinado',         desc: 'Tiro 10% mais rápido por nível',          costs: [250, 700, 1500] },
-    { id: 'ima',    name: 'Chave Pix Aleatória',     desc: 'Puxa Pix e itens de mais longe',          costs: [150, 450, 900] },
-    { id: 'arma',   name: 'Emenda Bélica',           desc: 'Começa com a arma um nível acima',        costs: [500, 1400] },
-    { id: 'habeas', name: 'Habeas Corpus Preventivo', desc: 'Começa cada fase com escudo',            costs: [800] },
+    // Custos pensados para ~6 partidas (jogador bom) a ~9 (casual) até comprar tudo (total R$ 22.700).
+    // Comprado na parada entre fases já vale na partida em andamento (vida, delação e nível na hora).
+    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida no começo da partida',             costs: [900, 2700] },
+    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação Premiada no começo',             costs: [700, 2100] },
+    { id: 'turbo',  name: 'Gatilho Turbinado',       desc: 'Atira 10% mais rápido por nível',           costs: [600, 1700, 3600] },
+    { id: 'ima',    name: 'Chave Pix Aleatória',     desc: 'Puxa Pix e itens (menos o P) de mais longe', costs: [600, 1100, 2200] },
+    { id: 'arma',   name: 'Emenda Bélica',           desc: 'Começa com a arma um nível acima',           costs: [1200, 3400] },
+    { id: 'habeas', name: 'Habeas Corpus Preventivo', desc: 'Começa cada fase com escudo',               costs: [1900] },
   ];
 
   // ---------- Conquistas ----------
@@ -57,7 +60,7 @@
     { id: 'bolsonario',    name: 'Fim da Motociata', desc: 'Derrote o Capitão Bolsonário' },
     { id: 'lule',          name: 'A Conta Chegou',   desc: 'Derrote Lule (as duas vezes)' },
     { id: 'reeleito',      name: 'Reeleito',         desc: 'Vença o 2º Mandato' },
-    { id: 'cacador',       name: 'Caçador de Marajá', desc: 'Derrube 1.000 políticos no total',            counter: 'kills', goal: 1000 },
+    { id: 'cacador',       name: 'Caçador de Marajás', desc: 'Derrube 1.000 políticos no total',            counter: 'kills', goal: 1000 },
     { id: 'magnata',       name: 'Magnata do Pix',   desc: 'Junte R$ 10.000 no total',                       counter: 'pixTotal', goal: 10000 },
   ];
 
@@ -93,9 +96,10 @@
     stages: {
       rodoviaria: {
         intro: [
-          { who: 'vo', text: 'Zezinho, cuidado com o carro do seu avô! E leva um casaquinho, que em Brasília venta.' },
+          { who: 'vo', text: 'Zezinho, cuidado com o meu Fusca, que era do seu avô! E leva um casaquinho, que em Brasília venta.' },
           { who: 'ze', text: 'Pode deixar, vó. Rodoviária do Plano à vista. Tá lotada de cabo eleitoral.' },
-          { who: 'vo', text: 'Arraste o dedo para pilotar. O Fusca atira sozinho. Pegue o "P" na cor da arma que você quiser.' },
+          { who: 'vo', text: 'Arraste o dedo em qualquer lugar da tela. O Fusca copia o movimento: não precisa encostar nele.' },
+          { who: 'vo', text: 'Ele atira sozinho. Todo "P" deixa a arma mais forte, e a cor dele escolhe qual arma você usa.' },
           { who: 'vo', text: 'Se apertar, aperta o botão da Delação Premiada: todo mundo entrega todo mundo e a tela fica limpa.' },
         ],
       },

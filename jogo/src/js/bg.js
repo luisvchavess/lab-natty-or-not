@@ -48,7 +48,26 @@
   function hash1(n) { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
   function approach(v, tg, s) { return v < tg ? Math.min(v + s, tg) : Math.max(v - s, tg); }
   function mkCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
-  function freeCanvas(c) { if (c) { c.width = 1; c.height = 1; } }
+  // Liberar um canvas grande (largura = 1) custa ~1 ms a 4x: os da fase anterior saem
+  // aos poucos pelo relógio da pré-construção, nunca todos no 1º quadro da fase nova.
+  const FREEQ = [];
+  function freeCanvas(c) { if (c && c.width > 1) FREEQ.push(c); }
+  function drainFree(budgetMs) {
+    const t0 = performance.now();
+    while (FREEQ.length && performance.now() - t0 < budgetMs) { const c = FREEQ.shift(); c.width = 1; c.height = 1; }
+  }
+  // O Chrome grava os comandos de um canvas e só rasteriza quando ele é usado pela
+  // 1ª vez: sem isto, o custo da construção caía no 1º quadro da fase (~23 ms a 4x).
+  // Desenhar num canvas de 1 px força a rasterização na hora da construção.
+  let BAKE = null;
+  function bake(c) {
+    if (!c) return c;
+    try {
+      if (!BAKE) { const b = document.createElement('canvas'); b.width = 1; b.height = 1; BAKE = b.getContext('2d'); }
+      BAKE.drawImage(c, 0, 0, 1, 1);
+    } catch (e) { /* nada */ }
+    return c;
+  }
   // canvas com coordenadas lógicas (w×h px do jogo) na resolução res
   function surface(w, h, res) { const c = mkCanvas(w * res, h * res); const x = c.getContext('2d'); x.scale(res, res); return { c, x }; }
 
@@ -1498,32 +1517,140 @@
       { x: 45.5, dir: -1, v: 90, n: 2 }, { x: 60.5, dir: -1, v: 70, n: 3, convoy: true }, { x: 75.5, dir: -1, v: 80, n: 2 }, { x: 90.5, dir: -1, v: 100, n: 1 },
       { x: 269.5, dir: 1, v: 60, n: 2 }, { x: 284.5, dir: 1, v: 45, n: 2 }, { x: 299.5, dir: 1, v: 35, n: 3, convoy: true }, { x: 314.5, dir: 1, v: 25, n: 1 },
     ],
-    upper: 'smoke',
+    upper: 'smoke', puffs: true, // fumaça da churrasqueira e das barracas
     tint: [0, 'rgba(255,110,45,0.24)', 0.2, 'rgba(255,90,50,0.08)', 0.45, 'rgba(40,30,90,0.05)', 1, 'rgba(4,6,28,0.32)'],
   };
 
   // =================================================================
   // Estado, caches e rolagem
   // =================================================================
-  const caches = {};      // cacheId -> { kinds: {nome: {c,h,feats,over}} }
-  let cacheOrder = [];
+  // Um CONJUNTO de cache por fase e resolução: blocos do chão, sprites do trânsito,
+  // nuvens e as camadas de tela cheia (tinta, vinheta do chefão). Ele fica pronto ANTES
+  // de a fase começar: a pré-construção (PRE, mais abaixo) trabalha nas telas de
+  // resultado/loja/título/história, um item por vez. Durante o jogo, o que faltar entra
+  // numa fila e sai no máximo um item a cada 250 ms — nada é construído de surpresa
+  // no meio da luta (a vinheta do chefão ficava para o 1º quadro do chefão: 146 ms a 4x).
+  const caches = {};      // cacheId -> { kinds: {nome: {c,h,feats,over}}, ov: {chave: {c,W,H,res}}, spr, up }
   let S = null;           // estado corrente
+  let EDGE = null;        // faixas vermelhas da borda (iguais em todas as fases)
+  const MAP = ['rodoviaria', 'esplanada', 'paranoa', 'planalto'];
+  const Q_DPR = { high: 2, mid: 1.5, low: 1 }; // mesma regra do core (resize)
+  const PLAY_GAP = 250;   // ms entre construções durante o jogo
+  const PRE_GAP = 140;    // ms entre construções nas telas (resultado, loja, título)
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+  const quality = () => G.quality || 'high';
+  // para os testes: últimas construções (nome, ms, estado do jogo)
+  const BUILDS = [];
+  function logBuild(id, item, ms) { BUILDS.push({ id, item, ms: Math.round(ms * 10) / 10, state: G.state, t: G.game ? Math.round(G.game.t * 10) / 10 : -1 }); if (BUILDS.length > 120) BUILDS.shift(); }
 
-  // resolução dos caches = escala real da tela (para desenhar 1:1, sem filtro).
+  // resolução dos caches = escala real da tela (para desenhar 1:1, sem filtro: no
+  // Canvas sem GPU, ampliar uma imagem com filtro custa ~13x mais que copiar 1:1).
   // Telas muito grandes (tablet) ficam em 2,5 e passam a usar filtro.
   function quantRes(k) { return k <= 2.6 ? Math.max(0.5, Math.round(k * 1000) / 1000) : 2.5; }
   function getCache(cacheId) {
     let c = caches[cacheId];
-    if (!c) { c = caches[cacheId] = { kinds: {} }; }
-    cacheOrder = cacheOrder.filter((k) => k !== cacheId); cacheOrder.push(cacheId);
-    // guarda no máximo 2 conjuntos (ex.: menu + fase atual) para poupar memória
-    while (cacheOrder.length > 2) {
-      const old = cacheOrder.shift(); const oc = caches[old];
-      if (oc) for (const k in oc.kinds) { freeCanvas(oc.kinds[k].c); if (oc.kinds[k].over) freeCanvas(oc.kinds[k].over.c); }
-      delete caches[old];
-    }
+    if (!c) c = caches[cacheId] = { kinds: {}, ov: {}, spr: null, up: null, puffs: null };
     return c;
   }
+  function freeKind(k) { if (k) { freeCanvas(k.c); if (k.over) freeCanvas(k.over.c); } }
+  function freeSprites(spr) { if (spr) for (const set of [spr.up, spr.down]) for (const l of [set.car, set.bus]) for (const c of l) freeCanvas(c); }
+  function freeUpper(up) { if (up) { for (const sh of up.shapes) freeCanvas(sh.c); for (const sh of up.dark) freeCanvas(sh.c); } }
+  function freeCache(cacheId) {
+    const c = caches[cacheId];
+    if (!c) return;
+    for (const k in c.kinds) freeKind(c.kinds[k]);
+    for (const k in c.ov) freeCanvas(c.ov[k].c);
+    freeSprites(c.spr); freeUpper(c.up);
+    if (c.puffs) for (const k in c.puffs) freeCanvas(c.puffs[k]);
+    delete caches[cacheId];
+  }
+  // Fica na memória só o conjunto em uso, o do menu e o que está sendo pré-construído
+  // (a fase anterior inteira ficava viva: ~25 MB de canvas a mais; o iOS limita a memória de canvas).
+  function pruneCaches() {
+    const keep = {};
+    if (S) keep[S.cacheId] = 1;
+    for (const id in PRE.keep) keep[id] = 1;
+    for (const id in caches) if (!keep[id]) freeCache(id);
+    if (EDGE && S && (EDGE.res !== S.res || quality() !== 'high')) { freeCanvas(EDGE.c); freeCanvas(EDGE.r); EDGE = null; }
+  }
+  // contexto mínimo para pintar um item de uma fase (não precisa do estado de rolagem)
+  function paintCtx(id, res) { const def = STAGES[id]; return { id, def, P: def.pal, res }; }
+  // Constrói um item de um conjunto. Devolve true se trabalhou (false = já estava pronto).
+  // Itens: 'spr' (trânsito), 'up' (nuvens), 'ov0' (tinta), 'ov1' (vinheta do chefão), 'edge', ou o nome de um bloco.
+  function buildItem(pc, cache, item, W, H) {
+    const t0 = nowMs();
+    switch (item) {
+      case 'spr':
+        if (cache.spr) return false;
+        cache.spr = buildSprites(pc);
+        break;
+      case 'up': {
+        const U = UPPER[pc.def.upper];
+        if (!U || cache.up) return false;
+        cache.up = buildUpper(pc, U);
+        break;
+      }
+      case 'puff': {
+        if (!pc.def.puffs || cache.puffsAll) return false;
+        const P = cache.puffs || (cache.puffs = {});
+        for (let rb = 2; rb <= 44; rb += 2) if (!P[rb]) P[rb] = buildPuff(pc.res, rb);
+        cache.puffsAll = true;
+        break;
+      }
+      case 'ov0': case 'ov1': {
+        if ((item === 'ov1' && !pc.def.bossKind) || cache.ov[item + '|' + H]) return false;
+        for (const k in cache.ov) if (k.indexOf(item + '|') === 0) { freeCanvas(cache.ov[k].c); delete cache.ov[k]; } // altura antiga
+        cache.ov[item + '|' + H] = buildOverlay(pc, W, H, item === 'ov1');
+        break;
+      }
+      case 'edge':
+        if (!pc.def.bossKind || (EDGE && EDGE.H === H && EDGE.res === pc.res)) return false;
+        if (EDGE) { freeCanvas(EDGE.c); freeCanvas(EDGE.r); }
+        EDGE = buildEdge(pc, H);
+        break;
+      default:
+        if (!pc.def.kinds[item] || cache.kinds[item]) return false;
+        cache.kinds[item] = buildKind(pc, item);
+    }
+    logBuild(pc.id, item, nowMs() - t0);
+    return true;
+  }
+  // ordem de construção: o que aparece primeiro vem antes; o marco e a vinheta do chefão por último
+  function itemsFor(def) {
+    const L = ['spr', def.first, 'ov0'];
+    const ks = Object.keys(def.kinds);
+    if (ks.indexOf('a') >= 0 && L.indexOf('a') < 0) L.push('a');
+    if (def.upper && quality() !== 'low') L.push('up'); // sem nuvens na qualidade baixa
+    if (def.puffs) L.push('puff');
+    for (const k of ks) if (L.indexOf(k) < 0 && k !== def.bossKind) L.push(k);
+    if (def.bossKind) { L.push(def.bossKind, 'ov1'); if (quality() === 'high') L.push('edge'); }
+    return L;
+  }
+  function isBuilt(st, item, H) {
+    const c = st.cache;
+    switch (item) {
+      case 'spr': return !!c.spr;
+      case 'up': return !!c.up || !UPPER[st.def.upper];
+      case 'puff': return !!c.puffsAll || !st.def.puffs;
+      case 'ov0': case 'ov1': return !!c.ov[item + '|' + H] || (item === 'ov1' && !st.def.bossKind);
+      case 'edge': return !!(EDGE && EDGE.H === H && EDGE.res === st.res) || !st.def.bossKind;
+      default: return !!c.kinds[item] || !st.def.kinds[item];
+    }
+  }
+  function queueItem(st, item) { if (st.queue.indexOf(item) < 0) st.queue.push(item); }
+  function queueMissing(st, H) { st.queue = itemsFor(st.def).filter((it) => !isBuilt(st, it, H)); }
+  // fila da fase em andamento: 1 item a cada 4 quadros; jogando, no máximo 1 a cada 250 ms
+  function processQueue(st, W, H) {
+    if (!st.queue.length) return;
+    if (st.delay > 0) { st.delay--; return; }
+    const t0 = nowMs();
+    if (G.state === 'play' && t0 - st.lastBuild < PLAY_GAP) return;
+    while (st.queue.length) {
+      const it = st.queue.shift();
+      if (buildItem(st.pc, st.cache, it, W, H)) { st.lastBuild = nowMs(); st.delay = 3; return; }
+    }
+  }
+
   function buildKind(st, name) {
     const kd = st.def.kinds[name];
     const res = st.res, h = kd.h;
@@ -1532,6 +1659,7 @@
     const R = rng(hashStr(st.id + ':' + name));
     try { kd.paint(s.x, st.P, R, h, F); } catch (err) { G.reportError(err, 'bg.paint ' + st.id + '/' + name); }
     sealRow(s.c, h * res);
+    bake(s.c);
     let over = null;
     if (kd.over && kd.paintOver) {
       const oy0 = kd.over[0], oh = kd.over[1] - kd.over[0];
@@ -1539,7 +1667,7 @@
       o.x.translate(0, -oy0);
       try { kd.paintOver(o.x, st.P, rng(hashStr(st.id + ':' + name + ':over')), h, F); } catch (err) { G.reportError(err, 'bg.over ' + st.id + '/' + name); }
       sealRow(o.c, oh * res);
-      over = { c: o.c, y0: oy0, h: oh };
+      over = { c: bake(o.c), y0: oy0, h: oh };
     }
     return { c: s.c, h, feats: F, over };
   }
@@ -1567,63 +1695,66 @@
     if (sh <= 0) return;
     ctx.drawImage(img, 0, sy, img.width, sh, 0, y0 / q, (img.width / res) * (W / WW), (y1 - y0) / q);
   }
+  // bloco pronto (ou construído agora: só acontece se a fila não deu conta a tempo)
   function kindOf(st, name) {
     let k = st.cache.kinds[name];
-    if (!k) k = st.cache.kinds[name] = buildKind(st, name);
+    if (!k) { const t0 = nowMs(); k = st.cache.kinds[name] = buildKind(st, name); logBuild(st.id, name + '!', nowMs() - t0); }
     return k;
   }
   function resolveId(id) {
     if (STAGES[id]) return id;
-    const g = G.game, map = ['rodoviaria', 'esplanada', 'paranoa', 'planalto'];
-    if (g && map[g.stageIdx]) return map[g.stageIdx]; // fase de teste do core etc.
+    const g = G.game;
+    if (g && MAP[g.stageIdx]) return MAP[g.stageIdx]; // fase de teste do core etc.
     return 'rodoviaria';
   }
-  // libera canvases do estado antigo (o iOS demora a devolver memória de canvas)
+  // libera os canvases do estado (os do conjunto de cache ficam; o iOS demora a devolver memória de canvas)
   function disposeState(o) {
     if (!o) return;
-    for (const c of [o.ov0, o.ov1]) if (c) freeCanvas(c.c);
-    if (o.edge) { freeCanvas(o.edge.c); freeCanvas(o.edge.r); }
-    if (o.up) { for (const sh of o.up.shapes) freeCanvas(sh.c); for (const sh of o.up.dark) freeCanvas(sh.c); }
-    if (o.spr) for (const set of [o.spr.up, o.spr.down]) for (const l of [set.car, set.bus]) for (const c of l) freeCanvas(c);
-    freeCanvas(o.flagImg);
+    freeCanvas(o.flagImg); o.flagImg = null;
   }
-  function initState(id, g, res, scrollY, t) {
+  function initState(id, g, res, scrollY, t, H) {
     disposeState(S);
     const def = STAGES[id];
+    const cacheId = id + '@' + res;
     const st = {
-      id, def, P: def.pal, g, res, cache: getCache(id + '@' + res),
+      id, def, P: def.pal, g, res, cacheId, cache: getCache(cacheId), pc: paintCtx(id, res),
       pos: 0, lastScroll: scrollY, lastT: t, dt: 0, seq: [], n: 1, mul: def.speed || 1,
       bossK: 0, boss: null, park: null, flags: {}, lastLoop: null, cloudPos: 0, ranges: [],
-      queue: [], delay: 3, spr: null, traffic: null, ov0: null, ov1: null, edge: null, up: null, puff: null, flagImg: null, k: res, crisp: true,
+      queue: [], delay: 3, lastBuild: 0, traffic: null, flagImg: null, k: res, crisp: true,
     };
     const fk = kindOf(st, def.first);
     st.seq.push({ kind: def.first, y0: -(def.firstAt || 0), h: fk.h, n: 0 });
-    st.queue = Object.keys(def.kinds).filter((k) => !st.cache.kinds[k]);
-    buildSprites(st);
+    queueMissing(st, H);
     buildTraffic(st);
+    S = st;
+    // começou uma fase: o resto (menu, fase anterior) sai da memória; a pré-construção recomeça na próxima tela
+    if (id !== 'menu') { PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {}; }
+    pruneCaches();
     return st;
   }
-  function ensure(ctx, id, scrollY, t) {
+  let lastSeen = null; // última escala real (ctx do jogo) — a pré-construção usa a mesma resolução
+  function ensure(ctx, id, scrollY, t, H) {
     const g = id === 'menu' ? null : (G.game || null); // o menu nunca olha para uma fase antiga
     let k = 2, tx = 0, ty = 0;
     try { const m = ctx.getTransform(); k = Math.hypot(m.a, m.b) || 2; tx = m.e; ty = m.f; } catch (e) { /* navegador antigo */ }
     const res = quantRes(k);
-    if (!S || S.id !== id || S.g !== g || scrollY < S.lastScroll - 2 || t < S.lastT - 1) S = initState(id, g, res, scrollY, t);
+    lastSeen = { k, scale: G.view ? G.view.scale : 0, q: quality() };
+    if (!S || S.id !== id || S.g !== g || scrollY < S.lastScroll - 2 || t < S.lastT - 1) initState(id, g, res, scrollY, t, H);
     else if (res !== S.res) {
       // a tela mudou de tamanho: espera estabilizar e refaz só os caches (o mundo continua)
       if (S.pendRes === res) S.pendN++; else { S.pendRes = res; S.pendN = 0; }
-      if (S.pendN > 12) rescale(S, res);
+      if (S.pendN > 12) rescale(S, res, H);
     }
     S.k = k; S.tx = tx; S.ty = ty;
     S.crisp = Math.abs(S.res - k) < 0.002;
     return S;
   }
-  function rescale(st, res) {
+  function rescale(st, res, H) {
     disposeState(st);
-    st.res = res; st.cache = getCache(st.id + '@' + res);
-    st.up = null; st.ov0 = null; st.ov1 = null; st.edge = null; st.flagImg = null; st.pendRes = null;
-    buildSprites(st);
-    st.queue = Object.keys(st.def.kinds).filter((k) => !st.cache.kinds[k]);
+    st.res = res; st.cacheId = st.id + '@' + res; st.cache = getCache(st.cacheId); st.pc = paintCtx(st.id, res);
+    st.pendRes = null;
+    queueMissing(st, H);
+    pruneCaches();
   }
   // rolagem própria: acompanha scrollY, mas acelera/estaciona no marco do chefão
   function advance(st, scrollY, t, H) {
@@ -1638,6 +1769,8 @@
     let target = st.def.speed || 1;
     // chefão chegou e o marco ainda não entrou na fila: acelera até ele aparecer
     if (boss && st.def.bossKind && !st.flags.boss && boss.state !== 'leaving') target = 4.2;
+    // fase vencida (diálogo final, resultado, loja): o mundo para, como num diálogo
+    if (G.state === 'clear' && st.g) target = 0;
     const pk = st.park;
     if (pk) {
       const ch = pk.chunk;
@@ -1672,6 +1805,76 @@
   function chunkTop(st, ch, H) { const top = H + st.pos - (ch.y0 + ch.h); return Math.round(top * st.k) / st.k; }
 
   // =================================================================
+  // Pré-construção (fora do jogo): a próxima fase enquanto o resultado e a
+  // Lojinha estão na tela; no título/história, o fundo do menu e a 1ª fase.
+  // Um item por vez, com folga de 140 ms entre eles (a tela de resultado parada
+  // esconde o engasgo). Roda pelo draw() e por um relógio próprio, porque o
+  // título e a história não desenham o fundo.
+  // =================================================================
+  const PRE = { key: '', jobs: [], i: 0, next: 0, keep: {} };
+  function preTargets() {
+    const st = G.state, g = G.game;
+    if (st === 'clear' && g) { const nx = MAP[(g.stageIdx | 0) + 1]; return nx ? [nx] : null; }
+    if (st === 'menu' || st === 'ending' || (st === 'intro' && !g)) {
+      const sv = G.save || {}, un = sv.unlocked || 1;
+      // provável próxima escolha: a 1ª fase (ou o 2º Mandato) ou a fase mais nova liberada
+      const stage = st === 'intro' || sv.cleared || un <= 1 ? 'rodoviaria' : MAP[Math.min(3, un - 1)];
+      return st === 'intro' ? [stage] : ['menu', stage];
+    }
+    return null;
+  }
+  // Resultado/loja com a próxima fase a caminho: o mundo parado só mostra os blocos visíveis.
+  // O resto do conjunto da fase vencida sai já (pico de memória: ~13 Mpx em vez de ~19).
+  function trimForClear(st) {
+    if (!st || st.id === 'menu' || st.trimmed) return;
+    st.trimmed = true;
+    const vis = {};
+    for (const ch of st.seq) vis[ch.kind] = 1;
+    const c = st.cache;
+    for (const k in c.kinds) if (!vis[k]) { freeKind(c.kinds[k]); delete c.kinds[k]; }
+    if (st.bossK < 0.004) for (const k in c.ov) if (k.indexOf('ov1|') === 0) { freeCanvas(c.ov[k].c); delete c.ov[k]; }
+    st.queue.length = 0;
+  }
+  function predictRes() {
+    const v = G.view, q = quality();
+    if (!v || !(v.scale > 0)) return 0;
+    if (lastSeen && lastSeen.scale === v.scale && lastSeen.q === q) return quantRes(lastSeen.k);
+    const dpr = Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, Q_DPR[q] || 2);
+    return quantRes(v.scale * dpr);
+  }
+  function prebuildPump() {
+    if (!G.canvas || (typeof document !== 'undefined' && document.hidden)) return;
+    const ids = preTargets();
+    if (!ids) return;
+    // telas do menu: um estado de fase antiga (o título não desenha fundo) não segura mais a memória dela
+    if (S && S.id !== 'menu' && G.state !== 'clear' && (!G.game || S.g !== G.game)) { disposeState(S); S = null; }
+    const t0 = nowMs();
+    if (t0 < PRE.next) return;
+    const res = predictRes();
+    if (!res) return;
+    const W = G.W || 360, H = G.H || 640;
+    const key = ids.join(',') + '@' + res + '@' + H + '@' + quality();
+    if (PRE.key !== key) {
+      if (G.state === 'clear') trimForClear(S);
+      PRE.key = key; PRE.i = 0; PRE.jobs = []; PRE.keep = {};
+      for (const id of ids) {
+        if (!STAGES[id]) continue;
+        const cid = id + '@' + res, pc = paintCtx(id, res);
+        PRE.keep[cid] = 1;
+        for (const it of itemsFor(pc.def)) PRE.jobs.push({ cid, pc, it });
+      }
+      pruneCaches();
+    }
+    while (PRE.i < PRE.jobs.length) {
+      const j = PRE.jobs[PRE.i++];
+      let did = false;
+      try { did = buildItem(j.pc, getCache(j.cid), j.it, W, H); } catch (err) { G.reportError(err, 'bg.prebuild ' + j.cid + '/' + j.it); }
+      if (did) { PRE.next = nowMs() + PRE_GAP; return; }
+    }
+  }
+  if (typeof setInterval !== 'undefined') setInterval(() => { try { drainFree(3); prebuildPump(); } catch (err) { G.reportError(err, 'bg.prebuild'); } }, 100);
+
+  // =================================================================
   // Sprites e trânsito
   // =================================================================
   function beam(x, P, cx, y0, dir, len) {
@@ -1681,9 +1884,9 @@
     g.addColorStop(0, 'rgba(' + P.beams + ',' + P.beamA + ')'); g.addColorStop(1, 'rgba(' + P.beams + ',0)');
     x.fillStyle = g; x.beginPath(); x.moveTo(cx - 2.6, y0); x.lineTo(cx + 2.6, y0); x.lineTo(cx + 5, y1); x.lineTo(cx - 5, y1); x.closePath(); x.fill();
   }
-  function buildSprites(st) {
-    const P = st.P, res = st.res;
-    const mk = (w, h, fn) => { const s = surface(w, h, res); fn(s.x); s.c.lw = w; s.c.lh = h; return s.c; };
+  function buildSprites(pc) {
+    const P = pc.P, res = pc.res;
+    const mk = (w, h, fn) => { const s = surface(w, h, res); fn(s.x); s.c.lw = w; s.c.lh = h; return bake(s.c); };
     const cols = P.cars, bcols = P.bus || ['#376a8a'];
     const spr = { up: { car: [], bus: [] }, down: { car: [], bus: [] } };
     for (const c of cols) {
@@ -1694,16 +1897,17 @@
       spr.up.bus.push(mk(14, 52, (x) => { beam(x, P, 7, 12, -1, 12); bus(x, 7, 26, c, 0, 28); }));
       spr.down.bus.push(mk(14, 52, (x) => { beam(x, P, 7, 40, 1, 12); bus(x, 7, 26, c, Math.PI, 28); }));
     }
-    st.spr = spr;
+    return spr;
   }
   function buildTraffic(st) {
     const T = st.def.traffic; if (!T) { st.traffic = null; return; }
     const R = rng(hashStr(st.id + ':traffic'));
+    const nCar = st.P.cars.length, nBus = (st.P.bus || [0]).length;
     st.traffic = T.map((ln) => {
       const ofs = [], col = [];
       for (let i = 0; i < ln.n; i++) {
         if (ln.convoy) { for (let k = 0; k < 3; k++) { ofs.push(R.r(0, 900) + k * 16); col.push(-1); } }
-        else { ofs.push(R.r(0, 900)); col.push(R.i(0, (ln.bus ? st.spr.up.bus : st.spr.up.car).length - 1)); }
+        else { ofs.push(R.r(0, 900)); col.push(R.i(0, (ln.bus ? nBus : nCar) - 1)); }
       }
       return { x: ln.x, dir: ln.dir, v: ln.v, bus: !!ln.bus, ofs, col };
     });
@@ -1725,12 +1929,14 @@
     return r;
   }
   function drawTraffic(ctx, st, H, t) {
-    const T = st.traffic; if (!T) return;
+    const T = st.traffic, spr = st.cache.spr;
+    if (!T) return;
+    if (!spr) { queueItem(st, 'spr'); return; } // ainda na fila: o trânsito aparece em instantes
     const r = laneRanges(st, H);
     const L = 900;
     ctx.imageSmoothingEnabled = !st.crisp;
     for (const ln of T) {
-      const set = ln.dir > 0 ? st.spr.up : st.spr.down;
+      const set = ln.dir > 0 ? spr.up : spr.down;
       const list = ln.bus ? set.bus : set.car;
       for (let i = 0; i < ln.ofs.length; i++) {
         let y = H + st.pos - ln.ofs[i] - ln.dir * ln.v * t;
@@ -1752,7 +1958,7 @@
     poly(x, P.flagY, [28, 4, 52, 19, 28, 34, 4, 19]);
     circ(x, P.flagB, 28, 19, 9.5);
     x.strokeStyle = P.flagW || '#bdb8ae'; x.lineWidth = 1.6; x.beginPath(); x.arc(28, 27, 12, -2.2, -0.95); x.stroke();
-    return s.c;
+    return bake(s.c);
   }
   function drawFeats(ctx, st, W, H, t) {
     for (const ch of st.seq) {
@@ -1844,6 +2050,27 @@
     x.fillStyle = g; x.fillRect(0, 0, 64, 64);
     return c;
   }
+  // Fumaça (churrasqueira, barraquinhas): baforadas em tamanhos fixos de 2 em 2 px,
+  // pintadas na resolução da tela e desenhadas 1:1. Ampliar o pincel de 64 px com
+  // filtro a cada quadro era a parte mais cara da camada de cima na fase 4.
+  const PUFF_RGB = '118,112,114';
+  function buildPuff(res, rb) {
+    const s = surface(rb * 2, rb * 2, res), x = s.x;
+    const g = x.createRadialGradient(rb, rb, 0, rb, rb, rb);
+    g.addColorStop(0, 'rgba(' + PUFF_RGB + ',1)'); g.addColorStop(0.45, 'rgba(' + PUFF_RGB + ',0.55)'); g.addColorStop(1, 'rgba(' + PUFF_RGB + ',0)');
+    x.fillStyle = g; x.fillRect(0, 0, rb * 2, rb * 2);
+    const c = bake(s.c); c.rb = rb;
+    return c;
+  }
+  function puffAt(st, r) {
+    const rb = Math.max(2, Math.round(r / 2) * 2);
+    const P = st.cache.puffs || (st.cache.puffs = {}); // normalmente já veio da pré-construção
+    return P[rb] || (P[rb] = buildPuff(st.res, rb));
+  }
+  function drawPuff(ctx, st, x, y, r) {
+    const c = puffAt(st, r), rb = c.rb;
+    ctx.drawImage(c, snap(st, x - rb), snap(st, y - rb), c.width / st.res, c.height / st.res);
+  }
   // Camada de cima: nuvens/névoa/fumaça como SPRITES soltos (pintados na resolução
   // da tela e desenhados 1:1) — só custa a área que ocupam, ao contrário de um
   // ladrilho de tela cheia.
@@ -1869,14 +2096,15 @@
         s.x.globalAlpha = U.a * U.alpha * R.r(0.55, 1); // alpha já embutido: desenha com globalAlpha 1 (mais barato)
         s.x.drawImage(brush, px - pw, py - pr, pw * 2, pr * 2);
       }
-      shapes.push({ c: s.c, w: s.c.width / res, h: s.c.height / res });
+      shapes.push({ c: bake(s.c), w: s.c.width / res, h: s.c.height / res });
       if (U.shadow) { // versão escura = sombra da nuvem no chão
         const d = surface(bw, bh, res);
         d.x.setTransform(1, 0, 0, 1, 0, 0); d.x.globalAlpha = 0.4; d.x.drawImage(s.c, 0, 0); d.x.globalAlpha = 1;
         d.x.globalCompositeOperation = 'source-in'; d.x.fillStyle = 'rgb(10,14,24)'; d.x.fillRect(0, 0, d.c.width, d.c.height);
-        dark.push({ c: d.c, w: d.c.width / res, h: d.c.height / res });
+        dark.push({ c: bake(d.c), w: d.c.width / res, h: d.c.height / res });
       }
     }
+    brush.width = 1; brush.height = 1;
     const mkInst = (n) => { const a = []; for (let i = 0; i < n; i++) a.push({ s: i % shapes.length, x: R.r(-50, WW - 40), y: (i + R.r(0, 0.8)) * UL / n, v: R.r(0.85, 1.15), p: R() * TAU }); return a; };
     return { shapes, dark, inst: mkInst(U.inst), inst2: U.boss ? mkInst(U.boss) : null };
   }
@@ -1896,27 +2124,32 @@
     // pintado pequeno e ampliado → fica desfocado (perto da câmera)
     const c = mkCanvas(12, 16), x = c.getContext('2d');
     rect(x, '#d8d2c4', 2, 1, 8, 13); rect(x, col, 2, 1, 8, 4); rect(x, 'rgba(40,30,30,0.6)', 3.5, 8, 5, 1); rect(x, 'rgba(40,30,30,0.6)', 3.5, 10, 4, 1);
-    return c;
+    return bake(c);
   }
   function drawUpper(ctx, st, W, H, t) {
-    const def = st.def, U = UPPER[def.upper];
-    if (U && !(G.BG.skip && G.BG.skip.clouds)) {
-      if (!st.up) st.up = buildUpper(st, U);
-      const set = st.up;
-      ctx.imageSmoothingEnabled = !st.crisp;
-      // sombras das nuvens no chão (só de dia): andam com o chão, um pouco mais devagar que as nuvens
-      if (U.shadow) drawCloudSet(ctx, st, set, set.dark, set.inst, st.cloudPos * 0.75 + 120, 1, W, H, t);
-      drawCloudSet(ctx, st, set, set.shapes, set.inst, st.cloudPos, 1, W, H, t);
-      if (set.inst2 && st.bossK > 0.01) drawCloudSet(ctx, st, set, set.shapes, set.inst2, st.cloudPos * 1.3 + 500, st.bossK * 0.8, W, H, t);
-      ctx.imageSmoothingEnabled = true;
-      ctx.globalAlpha = 1;
+    const def = st.def, U = UPPER[def.upper], q = quality();
+    // qualidade baixa: sem nuvens/névoa (a fumaça da churrasqueira e das barracas fica)
+    if (U && q !== 'low' && !(G.BG.skip && G.BG.skip.clouds)) {
+      const set = st.cache.up;
+      if (!set) queueItem(st, 'up');
+      else {
+        ctx.imageSmoothingEnabled = !st.crisp;
+        // sombras das nuvens no chão (só de dia): andam com o chão, um pouco mais devagar que as nuvens
+        if (U.shadow && q === 'high') drawCloudSet(ctx, st, set, set.dark, set.inst, st.cloudPos * 0.75 + 120, 1, W, H, t);
+        drawCloudSet(ctx, st, set, set.shapes, set.inst, st.cloudPos, 1, W, H, t);
+        // fumaça extra na chegada do chefão: enfeite, só na qualidade alta
+        if (set.inst2 && st.bossK > 0.01 && q === 'high') drawCloudSet(ctx, st, set, set.shapes, set.inst2, st.cloudPos * 1.3 + 500, st.bossK * 0.8, W, H, t);
+        ctx.imageSmoothingEnabled = true;
+        ctx.globalAlpha = 1;
+      }
     }
     // fumaça da churrasqueira do Lule (sai do marco e vem descendo) e das barraquinhas
+    let smoked = false;
     for (const ch of st.seq) {
       const F = st.cache.kinds[ch.kind] && st.cache.kinds[ch.kind].feats;
       if (!F || (!F.grill && !F.smoke.length)) continue;
       const top = chunkTop(st, ch, H);
-      if (!st.puff) st.puff = puffSprite('118,112,114');
+      if (!smoked) { smoked = true; ctx.imageSmoothingEnabled = !st.crisp; }
       if (F.grill) {
         const gx = F.grill.x, gy = top + F.grill.y;
         if (gy > -160 && gy < H + 40) {
@@ -1924,22 +2157,26 @@
           for (let i = 0; i < n; i++) {
             const p = (t * 0.12 + i / n) % 1;
             const px = gx + p * 70 + Math.sin(t * 0.8 + i) * 8, py = gy - 6 + p * 150 - Math.sin(p * Math.PI) * 30;
-            const r = 8 + p * 34;
-            ctx.globalAlpha = Math.min(1, (1 - p) * p * 4) * 0.32 * k;
-            ctx.drawImage(st.puff, px - r, py - r, r * 2, r * 2);
+            const a = Math.min(1, (1 - p) * p * 4) * 0.32 * k;
+            if (a < 0.01) continue;
+            ctx.globalAlpha = a;
+            drawPuff(ctx, st, px, py, 8 + p * 34);
           }
         }
       }
       for (const sm of F.smoke) {
         const sy = top + sm.y; if (sy < -60 || sy > H + 20) continue;
         for (let i = 0; i < 2; i++) {
-          const p = (t * 0.25 + i / 2 + sm.x * 0.01) % 1, r = 4 + p * 12;
-          ctx.globalAlpha = (1 - p) * 0.2;
-          ctx.drawImage(st.puff, sm.x + p * 18 - r, sy - p * 10 - r, r * 2, r * 2);
+          const p = (t * 0.25 + i / 2 + sm.x * 0.01) % 1;
+          const a = (1 - p) * 0.2;
+          if (a < 0.01) continue;
+          ctx.globalAlpha = a;
+          drawPuff(ctx, st, sm.x + p * 18, sy - p * 10, 4 + p * 12);
         }
       }
       ctx.globalAlpha = 1;
     }
+    if (smoked) ctx.imageSmoothingEnabled = true;
     // santinhos de campanha voando perto da câmera (grandes, translúcidos, desfocados)
     const ns = (G.BG.skip && G.BG.skip.sant) ? 0 : def.santinhos || 0;
     if (ns) {
@@ -1998,12 +2235,33 @@
       y0 = y1;
     }
   }
-  // Camadas de tela cheia pré-renderizadas na resolução da tela:
+  // Camadas de tela cheia pré-renderizadas na resolução da tela (blit 1:1; em meia
+  // resolução o blit ampliado com filtro custaria ~13x mais por quadro sem GPU):
   //  ov0 = tinta do horário; ov1 = tinta + escurecida + vinheta + bordas vermelhas (chefão).
   // Por quadro: 1 blit com globalAlpha 1 (barato); só na transição (1,4 s) são 2.
+  // tinta do horário em faixas sólidas de 4 px do aparelho (presas ao pixel: sem emendas).
+  // Na tinta fraquinha (alpha ≤ 0,4) não dá para ver degrau, e pintar faixas sólidas custa
+  // ~1/15 de avaliar um gradiente na tela inteira sem GPU.
+  function tintBands(x, stops, Wd, Hd) {
+    const st = []; for (let i = 0; i < stops.length; i += 2) st.push([stops[i], parseRGBA(stops[i + 1])]);
+    x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
+    let last = '';
+    for (let y = 0; y < Hd; y += 4) {
+      const u = (y + 2) / Hd;
+      let j = 0; while (j < st.length - 2 && u > st[j + 1][0]) j++;
+      const a = st[j], b = st[Math.min(j + 1, st.length - 1)];
+      const f = b[0] > a[0] ? Math.max(0, Math.min(1, (u - a[0]) / (b[0] - a[0]))) : 0;
+      const al = a[1][3] + (b[1][3] - a[1][3]) * f;
+      if (al < 0.002) continue;
+      const col = 'rgba(' + Math.round(a[1][0] + (b[1][0] - a[1][0]) * f) + ',' + Math.round(a[1][1] + (b[1][1] - a[1][1]) * f) + ',' + Math.round(a[1][2] + (b[1][2] - a[1][2]) * f) + ',' + al.toFixed(4) + ')';
+      if (col !== last) { x.fillStyle = col; last = col; }
+      x.fillRect(0, y, Wd, Math.min(4, Hd - y));
+    }
+    x.restore();
+  }
   function buildOverlay(st, W, H, boss) {
     const s = surface(W, H, st.res), x = s.x;
-    if (st.def.tint) { x.fillStyle = lgrad(x, 0, 0, 0, H, st.def.tint); x.fillRect(0, 0, W, H); }
+    if (st.def.tint) tintBands(x, st.def.tint, s.c.width, s.c.height);
     if (st.def.sun) { // brilho do sol baixo à frente (pôr do sol no lago)
       const sn = st.def.sun;
       x.save(); x.translate(W * sn.x, H * sn.y); x.scale(1.5, 1);
@@ -2013,15 +2271,21 @@
     }
     if (boss) {
       x.fillStyle = 'rgba(5,3,12,0.15)'; x.fillRect(0, 0, W, H);
+      // vinheta: gradiente radial pintado em 1/8 da resolução e ampliado uma vez só (é bem suave;
+      // avaliar o gradiente na tela inteira custava ~15 ms sem GPU)
+      const q = 8, v = surface(W, H, st.res / q), vx = v.x;
       const cx = W / 2, cy = H * 0.46, sy = (H / W) * 0.8;
-      x.save(); x.translate(cx, cy); x.scale(1, sy);
-      const g = x.createRadialGradient(0, 0, W * 0.36, 0, 0, W * 0.86);
+      vx.translate(cx, cy); vx.scale(1, sy);
+      const g = vx.createRadialGradient(0, 0, W * 0.36, 0, 0, W * 0.86);
       g.addColorStop(0, 'rgba(6,0,12,0)'); g.addColorStop(0.55, 'rgba(6,0,12,0.24)'); g.addColorStop(1, 'rgba(6,0,12,0.62)');
-      x.fillStyle = g; x.fillRect(-W, -H / sy, W * 2, (H * 2) / sy);
+      vx.fillStyle = g; vx.fillRect(-W, -H / sy, W * 2, (H * 2) / sy);
+      x.save(); x.imageSmoothingEnabled = true;
+      x.drawImage(v.c, 0, 0, v.c.width, v.c.height, 0, 0, v.c.width * q / st.res, v.c.height * q / st.res);
       x.restore();
+      v.c.width = 1; v.c.height = 1;
       edgeGrad(x, W, H, 0.16);
     }
-    return { c: s.c, W, H, res: st.res };
+    return { c: bake(s.c), W, H, res: st.res };
   }
   function edgeGrad(x, W, H, a) {
     const w = 46;
@@ -2035,33 +2299,50 @@
     const w = 46, s = surface(w, H, st.res), r = surface(w, H, st.res);
     s.x.fillStyle = lgrad(s.x, 0, 0, w, 0, [0, 'rgba(255,60,30,0.9)', 0.4, 'rgba(255,60,30,0.25)', 1, 'rgba(255,60,30,0)']); s.x.fillRect(0, 0, w, H);
     r.x.fillStyle = lgrad(r.x, w, 0, 0, 0, [0, 'rgba(255,60,30,0.9)', 0.4, 'rgba(255,60,30,0.25)', 1, 'rgba(255,60,30,0)']); r.x.fillRect(0, 0, w, H);
-    return { c: s.c, r: r.c, H, res: st.res };
+    return { c: bake(s.c), r: bake(r.c), H, res: st.res };
   }
   function blitFull(ctx, st, ov, a) {
     if (a <= 0.003) return;
     ctx.globalAlpha = a > 0.995 ? 1 : a;
     ctx.drawImage(ov.c, 0, 0, ov.c.width, ov.c.height, 0, 0, ov.c.width / ov.res, ov.c.height / ov.res);
   }
+  // camada ainda na fila (tela mudou de tamanho, fase aberta direto num teste): faixas sólidas, sem travar
+  function fallbackTint(ctx, st, W, H, a, boss) {
+    if (a <= 0.003) return;
+    if (!st.tintB) st.tintB = st.def.tint ? buildBands(st.def.tint, 12) : [];
+    ctx.globalAlpha = a > 0.995 ? 1 : a;
+    drawBands(ctx, st, st.tintB, W, H);
+    if (boss) { ctx.fillStyle = 'rgba(5,3,12,0.22)'; ctx.fillRect(0, 0, W, H); }
+  }
   function drawOverlay(ctx, st, W, H, t) {
-    const k = (G.BG.skip && G.BG.skip.boss) ? 0 : st.bossK;
-    const ok = (o) => o && o.H === H && o.W === W && o.res === st.res;
+    const k = (G.BG.skip && G.BG.skip.boss) ? 0 : st.bossK, q = quality();
+    const ok = (o) => o && o.W === W && o.res === st.res;
     ctx.imageSmoothingEnabled = !st.crisp;
-    if (k < 0.995) { if (!ok(st.ov0)) st.ov0 = buildOverlay(st, W, H, false); blitFull(ctx, st, st.ov0, 1 - k); }
-    if (k > 0.005) { if (!ok(st.ov1)) st.ov1 = buildOverlay(st, W, H, true); blitFull(ctx, st, st.ov1, k); }
-    // borda de perigo pulsando
-    if (k > 0.01) {
-      if (!st.edge || st.edge.H !== H || st.edge.res !== st.res) st.edge = buildEdge(st, H);
-      const e = st.edge, p = 0.5 + 0.5 * Math.sin(t * 3.2);
-      if (p > 0.05) {
-        const ew = e.c.width / e.res, eh = e.c.height / e.res;
-        ctx.globalAlpha = k * p * 0.12;
-        ctx.drawImage(e.c, 0, 0, e.c.width, e.c.height, 0, 0, ew, eh);
-        ctx.drawImage(e.r, 0, 0, e.c.width, e.c.height, snap(st, W - ew), 0, ew, eh);
+    if (k < 0.995) {
+      const o = st.cache.ov['ov0|' + H];
+      if (ok(o)) blitFull(ctx, st, o, 1 - k); else { queueItem(st, 'ov0'); fallbackTint(ctx, st, W, H, 1 - k, false); }
+    }
+    if (k > 0.005) {
+      const o = st.cache.ov['ov1|' + H];
+      if (ok(o)) blitFull(ctx, st, o, k); else { queueItem(st, 'ov1'); fallbackTint(ctx, st, W, H, k, true); }
+    }
+    // borda de perigo pulsando (enfeite: só na qualidade alta)
+    if (k > 0.01 && q === 'high') {
+      const e = EDGE;
+      if (!e || e.H !== H || e.res !== st.res) queueItem(st, 'edge');
+      else {
+        const p = 0.5 + 0.5 * Math.sin(t * 3.2);
+        if (p > 0.05) {
+          const ew = e.c.width / e.res, eh = e.c.height / e.res;
+          ctx.globalAlpha = k * p * 0.12;
+          ctx.drawImage(e.c, 0, 0, e.c.width, e.c.height, 0, 0, ew, eh);
+          ctx.drawImage(e.r, 0, 0, e.c.width, e.c.height, snap(st, W - ew), 0, ew, eh);
+        }
       }
     }
     ctx.imageSmoothingEnabled = true;
-    // planalto: brilho do churrasco pulsando no alto (só as faixas de cima)
-    if (st.id === 'planalto') {
+    // planalto: brilho do churrasco pulsando no alto (só as faixas de cima; sem ele na qualidade baixa)
+    if (st.id === 'planalto' && q !== 'low') {
       if (!st.glowB) st.glowB = buildBands([0, 'rgba(255,100,40,0.16)', 0.3, 'rgba(255,100,40,0)', 1, 'rgba(255,100,40,0)'], 28);
       const a = 0.5 + 0.5 * Math.sin(t * 1.3) * Math.sin(t * 0.7 + 1);
       if (a > 0.03) { ctx.globalAlpha = a; drawBands(ctx, st, st.glowB, W, H); }
@@ -2076,11 +2357,11 @@
     W = W || G.W || 360; H = H || G.H || 640;
     scrollY = +scrollY || 0; t = +t || 0;
     id = resolveId(id);
-    const st = ensure(ctx, id, scrollY, t);
+    const st = ensure(ctx, id, scrollY, t, H);
     advance(st, scrollY, t, H);
     fill(st, H);
-    // pré-constrói os outros blocos aos poucos (1 por quadro, depois de alguns quadros)
-    if (st.queue.length) { if (st.delay > 0) st.delay--; else { const nm = st.queue.shift(); if (!st.cache.kinds[nm]) kindOf(st, nm); st.delay = 3; } }
+    // o que faltar do conjunto da fase sai da fila aos poucos
+    processQueue(st, W, H);
     ctx.save();
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     // tremor de tela (o core translada o canvas): cancela a fração de pixel para manter
@@ -2104,6 +2385,25 @@
     if (!sk || !sk.upper) drawUpper(ctx, st, W, H, t);
     if (!sk || !sk.overlay) drawOverlay(ctx, st, W, H, t);
     ctx.restore();
+    // fora do jogo (resultado, loja, diálogo do fim): adianta a próxima fase
+    if (G.state !== 'play') prebuildPump();
+  }
+  // memória de canvas (testes): conjuntos vivos e megapixels
+  function cacheStats() {
+    const sets = {};
+    let px = 0;
+    const add = (id, c) => { if (c && c.width > 1) { const n = c.width * c.height; sets[id] = (sets[id] || 0) + n; px += n; } };
+    for (const id in caches) {
+      const c = caches[id];
+      for (const k in c.kinds) { add(id, c.kinds[k].c); if (c.kinds[k].over) add(id, c.kinds[k].over.c); }
+      for (const k in c.ov) add(id, c.ov[k].c);
+      if (c.spr) for (const set of [c.spr.up, c.spr.down]) for (const l of [set.car, set.bus]) for (const cv of l) add(id, cv);
+      if (c.up) { for (const sh of c.up.shapes) add(id, sh.c); for (const sh of c.up.dark) add(id, sh.c); }
+      if (c.puffs) for (const k in c.puffs) add(id, c.puffs[k]);
+    }
+    if (EDGE) { add('edge', EDGE.c); add('edge', EDGE.r); }
+    for (const id in sets) sets[id] = +(sets[id] / 1e6).toFixed(2);
+    return { sets, mpx: +(px / 1e6).toFixed(2), built: Object.keys(caches).map((id) => id + ':' + Object.keys(caches[id].kinds).join('/') + ' ov=' + Object.keys(caches[id].ov).join('/')), pre: PRE.key, preLeft: PRE.jobs.length - PRE.i };
   }
 
   G.BG = G.BG || {};
@@ -2112,8 +2412,16 @@
     draw,
     ids: Object.keys(STAGES),
     skip: null, // testes de custo: { traffic, feats, overs, upper, clouds, sant, overlay, boss } pula partes do desenho
+    // as fontes chegaram depois do boot: os outdoors pintados com a fonte reserva são refeitos
+    // (os conjuntos fora de uso são descartados e a pré-construção recomeça; o da tela atual fica)
+    fontsReady() {
+      for (const id in caches) if (!S || id !== S.cacheId) freeCache(id);
+      PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {};
+    },
     // para testes: estado atual (posição do mundo, blocos visíveis, estacionamento no chefão)
     _state() { return S; },
-    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds) } : null; },
+    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
+    builds() { return BUILDS.slice(); },
+    cacheStats,
   });
 })();

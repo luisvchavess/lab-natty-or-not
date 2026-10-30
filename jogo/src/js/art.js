@@ -104,12 +104,23 @@
   }
   function glow(ctx, x, y, r, color, alpha) {
     if (!(r > 0) || !(alpha > 0)) return;
+    if (ctx === G.ctx && G.quality === 'low') return; // qualidade baixa: sem halos no jogo (gradiente por pixel)
     ctx.save();
     ctx.translate(x, y); ctx.scale(r, r);
     ctx.globalAlpha *= Math.min(1, alpha);
     ctx.fillStyle = radial(ctx, color);
     ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
     ctx.restore();
+  }
+  // O Chrome grava os comandos de um canvas e só rasteriza no 1º uso: desenhar num canvas
+  // de 1 px força a rasterização na hora em que o sprite nasce (e não no meio de um quadro).
+  let BAKE = null;
+  function bake(cv) {
+    try {
+      if (!BAKE) { const b = document.createElement('canvas'); b.width = 1; b.height = 1; BAKE = b.getContext('2d'); }
+      BAKE.drawImage(cv, 0, 0, 1, 1);
+    } catch (e) { /* nada */ }
+    return cv;
   }
   // Sprites pré-renderizados (itens muito repetidos, ex.: 200 moedas de Pix)
   const spriteCache = new Map();
@@ -124,7 +135,7 @@
     x.lineJoin = 'round'; x.lineCap = 'round';
     try { paint(x); } catch (err) { G.reportError(err, 'art.sprite ' + key); }
     c._w = w; c._h = h;
-    spriteCache.set(key, c);
+    spriteCache.set(key, bake(c));
     return c;
   }
   function drawSprite(ctx, spr, x, y) { ctx.drawImage(spr, x - spr._w / 2, y - spr._h / 2, spr._w, spr._h); }
@@ -940,14 +951,29 @@
   // (balanço, piscada, boca, olhar) são quantizadas; gotas de suor e a veia de raiva continuam ao vivo.
   const pcache = new Map(), pseen = new Map();
   let pRes = 0, pPixels = 0;
-  const P_MAX = 520, P_BUDGET = 5e6; // no máximo ~20 MB de sprites
+  const P_MAX = 600, P_BUDGET = 5.5e6; // no máximo ~22 MB de sprites
   const BOX_BODY = [-50, 2, 100, 58], BOX_HEAD = [-53, -77, 106, 106], BOX_ARMS = [-47, -21, 94, 48];
-  function partSprite(key, box, s, res, paint) {
+  // Teto de sprites NOVOS por quadro: uma onda inteira de ministros (ou a entrada de um chefão)
+  // pintava 20+ sprites no mesmo quadro (35–55 ms a 4x). Passou do teto, o personagem sai em
+  // vetor nesse quadro e o sprite nasce num dos próximos (ou no aquecimento em segundo plano).
+  const P_PER_FRAME = 2;
+  let pFrame = -1, pMade = 0;
+  // contador de quadros próprio (o g.frame para nos diálogos, mas o chefão continua desenhado)
+  let rafN = 0;
+  if (typeof requestAnimationFrame !== 'undefined') { const tick = () => { rafN++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+  function frameId() { return rafN; }
+  function partSprite(key, box, s, res, paint, force) {
     let cv = pcache.get(key);
     if (cv) { pcache.delete(key); pcache.set(key, cv); return cv; } // LRU
-    const n = (pseen.get(key) || 0) + 1;      // só guarda o que aparece mais de uma vez
-    if (n < 2) { if (pseen.size > 3000) pseen.clear(); pseen.set(key, n); return null; }
-    pseen.delete(key);
+    if (!force) {
+      const n = (pseen.get(key) || 0) + 1;      // só guarda o que aparece mais de uma vez
+      if (n < 2) { if (pseen.size > 3000) pseen.clear(); pseen.set(key, n); return null; }
+      const f = frameId();
+      if (f !== pFrame) { pFrame = f; pMade = 0; }
+      if (pMade >= P_PER_FRAME) return null;    // fica para o próximo quadro (pseen continua em 1)
+      pMade++;
+      pseen.delete(key);
+    }
     const k = s * res;
     cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.ceil(box[2] * k)); cv.height = Math.max(1, Math.ceil(box[3] * k));
@@ -960,19 +986,26 @@
     x.scale(k, k); x.translate(-box[0], -box[1]);
     x.lineJoin = 'round'; x.lineCap = 'round';
     try { paint(x); } catch (err) { G.reportError(err, 'art.person sprite'); }
-    pcache.set(key, cv);
+    pcache.set(key, bake(cv));
     return cv;
   }
   const q2 = (v) => Math.round(v * 2) / 2;
-  function personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY) {
-    const res = G.canvas.width / G.W;
+  // resolução dos sprites do jogo (px do aparelho por px lógico); muda com a qualidade
+  function gameRes() {
+    const res = G.canvas ? G.canvas.width / G.W : 0;
+    if (res > 0 && res !== pRes) { pcache.clear(); pseen.clear(); pRes = res; pPixels = 0; WARM.q.length = 0; WARM.seen.clear(); }
+    return res;
+  }
+  // resOver: resolução própria (arte do título, fora do canvas do jogo)
+  function personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY, resOver) {
+    const res = resOver || gameRes();
     if (!(res > 0)) return false;
-    if (res !== pRes) { pcache.clear(); pseen.clear(); pRes = res; pPixels = 0; }
     const sz = Math.round(size);
     const s = sz / 100;
     const t = o.t || 0, seed = spec.seed || 0;
     let sk;
     try { sk = JSON.stringify(spec); } catch (e) { return false; }
+    if (resOver) sk += '@' + resOver;
     const flash = !!o.flash;
     const body = spec.body || 'suit';
     const hasBody = body !== 'none' && !o.bust;
@@ -989,6 +1022,7 @@
     const ly = flash ? 0 : lookY > 0.25 ? 0.5 : lookY < -0.25 ? -0.5 : 0;
     const base = sk + '|' + sz + '|' + (flash ? 1 : 0);
     const skin = flash ? WHITE : spec.skin || '#e8b48a';
+    if (!resOver) noteWarm(sk, sz, spec, mood, pose, false);
     setScale(sz, flash);
     let bodyS = null, armS = null;
     if (hasBody) {
@@ -1029,6 +1063,133 @@
     return true;
   }
 
+  // Personagens grandes (chefões, ≥ 70 px): só o CORPO vira sprite (pose × balanço × flash,
+  // ~10 imagens); a cabeça continua em vetor (expressões, boca e olhar variam demais).
+  // Corta mais ou menos pela metade o custo por quadro de um chefão.
+  function personBodyCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY) {
+    const body = spec.body || 'suit';
+    if (body === 'none' || o.bust) return false;
+    const res = gameRes();
+    if (!(res > 0)) return false;
+    const sz = Math.round(size), s = sz / 100;
+    const t = o.t || 0, seed = spec.seed || 0;
+    let sk;
+    try { sk = JSON.stringify(spec); } catch (e) { return false; }
+    const flash = !!o.flash;
+    const pose = o.pose || spec.pose || 'idle';
+    const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
+    const arms = o.arms !== false && spec.arms !== false;
+    const sw = q2(Math.sin(t * 6 + seed));
+    const skin = flash ? WHITE : spec.skin || '#e8b48a';
+    noteWarm(sk, sz, spec, mood, pose, true);
+    setScale(sz, flash);
+    const bodyS = partSprite(bodyKey(sk, sz, flash, pose, sw, arms), BOX_BODY, s, res, (c) => paintBigBody(c, spec, body, skin, pose, sw, arms, raised));
+    if (!bodyS) return false;
+    setScale(size, flash);
+    const k = size / sz;
+    ctx.save();
+    ctx.translate(x, y);
+    if (o.alpha != null) ctx.globalAlpha *= o.alpha;
+    if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
+    ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
+    ctx.scale(s, s);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const bob = mood === 'laugh' ? -Math.abs(Math.sin(t * 12 + seed)) * 2.4 : Math.sin(t * 6 + seed) * 1.2;
+    const hx = mood === 'hurt' ? Math.sin(t * 50) * 0.9 : 0;
+    if (hx) ctx.translate(hx, 0);
+    drawHead(ctx, spec, o, mood, -14 + bob, t, skin, lookX, lookY);
+    if (hx) ctx.translate(-hx, 0);
+    if (arms && raised) drawArms(ctx, poseHands(pose, Math.sin(t * 6 + seed), POSE_FREQ[pose] ? Math.sin(t * POSE_FREQ[pose]) : 0), spec, body, skin, pose);
+    ctx.restore();
+    return true;
+  }
+  function bodyKey(sk, sz, flash, pose, sw, arms) { return sk + '|' + sz + '|' + (flash ? 1 : 0) + '|B|' + pose + '|' + sw + '|' + (arms ? 1 : 0); }
+  function paintBigBody(c, spec, body, skin, pose, sw, arms, raised) {
+    drawBody(c, spec, body, sw * 1.1, skin);
+    if (arms && !raised) drawArms(c, poseHands(pose, sw, 0), spec, body, skin, pose);
+  }
+
+  // ---------- aquecimento em segundo plano ----------
+  // Quando um personagem novo aparece (2ª vez que o vemos no mesmo tamanho), as variações
+  // mais comuns (balanço, olhar para os lados/para baixo, flash do acerto) são pintadas fora
+  // do quadro, em fatias de ~3 ms entre os quadros. G.Art.prewarm(lista) faz o mesmo antes
+  // de o personagem entrar (introdução da fase, aviso do chefão).
+  const WARM = { q: [], seen: new Map(), timer: 0 };
+  const SWAYS = [-1, -0.5, 0, 0.5, 1];
+  function noteWarm(sk, sz, spec, mood, pose, big) {
+    const id = sk + '|' + sz + '|' + mood + '|' + pose;
+    const n = (WARM.seen.get(id) || 0) + 1;
+    if (n > 2) return;
+    if (WARM.seen.size > 1500) WARM.seen.clear();
+    WARM.seen.set(id, n);
+    if (n === 2) queueWarm(sk, sz, spec, mood, pose, big);
+  }
+  function queueWarm(sk, sz, spec, mood, pose, big) {
+    if (WARM.q.length > 400) return;
+    const body = spec.body || 'suit';
+    const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
+    const arms = body !== 'none' && spec.arms !== false;
+    const res = pRes;
+    const J = (fn) => WARM.q.push(fn);
+    for (const flash of [false, true]) {
+      const skin = flash ? WHITE : spec.skin || '#e8b48a', s = sz / 100;
+      if (body !== 'none') for (const sw of SWAYS) {
+        J(() => {
+          if (res !== pRes) return;
+          setScale(sz, flash);
+          if (big) partSprite(bodyKey(sk, sz, flash, pose, sw, arms), BOX_BODY, s, res, (c) => paintBigBody(c, spec, body, skin, pose, sw, arms, raised), true);
+          else partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|b|' + pose + '|' + sw + '|' + (arms ? 1 : 0), BOX_BODY, s, res, (c) => {
+            drawBody(c, spec, body, sw * 1.1, skin);
+            if (arms && !raised) drawArms(c, poseHands(pose, sw, 0), spec, body, skin, pose);
+          }, true);
+        });
+      }
+      if (big) continue;
+      // cabeça: olhando para baixo (o Fusca quase sempre está embaixo) e reto; no flash, uma só
+      const looks = flash ? [[0, 0]] : [[-1, 0.5], [0, 0.5], [1, 0.5], [-1, 0], [0, 0], [1, 0]];
+      for (const L of looks) {
+        J(() => {
+          if (res !== pRes) return;
+          setScale(sz, flash);
+          partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|0|0|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
+            BLINK = false; NO_EMOTES = true;
+            drawHead(c, spec, { mouth: 0 }, mood, -14, 0, skin, L[0], L[1]);
+            BLINK = null; NO_EMOTES = false;
+          }, true);
+        });
+      }
+    }
+    pumpWarmSoon();
+  }
+  function pumpWarmSoon() { if (!WARM.timer && WARM.q.length) WARM.timer = setTimeout(pumpWarm, 0); }
+  function pumpWarm() {
+    WARM.timer = 0;
+    if (typeof document !== 'undefined' && document.hidden) { if (WARM.q.length) WARM.timer = setTimeout(pumpWarm, 150); return; }
+    const t0 = performance.now();
+    while (WARM.q.length && performance.now() - t0 < 3) {
+      const fn = WARM.q.shift();
+      try { fn(); } catch (err) { G.reportError(err, 'art.warm'); WARM.q.length = 0; }
+    }
+    if (WARM.q.length) WARM.timer = setTimeout(pumpWarm, 4);
+  }
+  // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose? }] — pinta antes de o personagem
+  // aparecer. Sem lista: aquece os sprites dos itens (ver warmItems).
+  function prewarm(list) {
+    if (!list) { warmItems(); return; }
+    const res = gameRes();
+    if (!(res > 0)) return;
+    for (const it of [].concat(list)) {
+      if (!it || !it.spec || !(it.size > 1)) continue;
+      let sk;
+      try { sk = JSON.stringify(it.spec); } catch (e) { continue; }
+      const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
+      const id = sk + '|' + sz + '|' + mood + '|' + pose;
+      if ((WARM.seen.get(id) || 0) >= 2) continue;
+      WARM.seen.set(id, 2);
+      queueWarm(sk, sz, it.spec, mood, pose, sz >= 70);
+    }
+  }
+
   /**
    * G.Art.person(ctx, x, y, size, spec, o) — mesmas chaves do core, mais extras opcionais:
    * spec extra: face ('oval'|'round'|'square'|'long'|'jowl'), nose ('small'|'big'), grin (sorriso de dentes),
@@ -1055,7 +1216,12 @@
     }
     lookX = clamp(lookX || 0, -1.5, 1.5);
     lookY = clamp(lookY || 0, -1.5, 1.5);
-    if (inGame && size < 70 && o.cache !== false && G.canvas && personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY)) return;
+    if (o.cache !== false && G.canvas) {
+      if (inGame) {
+        if (size < 70) { if (personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY)) return; }
+        else if (size <= 260 && personBodyCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY)) return;
+      } else if (o.cacheRes > 0 && size < 70 && personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY, o.cacheRes)) return;
+    }
     const s = size / 100;
     setScale(size, o.flash);
     const seed = spec.seed || 0;
@@ -1430,6 +1596,48 @@
     c.beginPath(); E(c, -2, -3.8, 2, 0.6); fillP(c, '#a77b5a');
   }
 
+  // Aquece os sprites dos itens e os caches de fonte/gradiente do canvas do jogo, fora do jogo
+  // (logo depois do boot e de novo se as fontes chegarem depois). A 1ª chuva de moedas de uma
+  // Delação e a 1ª mala de um chefão deixam de engasgar.
+  let itemsWarm = false;
+  function warmItems() {
+    const jobs = [
+      () => sprite('pix', 18, 18, pixFront), () => sprite('pixb', 18, 18, pixBack), () => sprite('pix5', 24, 16, pix5Paint),
+      () => sprite('mala', 26, 28, malaPaint), () => sprite('folder', 26, 24, (q) => folderPaint(q, true)),
+      () => sprite('seal', 26, 32, sealPaint), () => sprite('envelope', 26, 20, envelopePaint), () => sprite('cup', 26, 22, cupPaint),
+      () => sprite('life', 28, 18, lifePaint),
+      () => { // gradientes de brilho do canvas do jogo + texto do item P (fonte já usada uma vez)
+        const g = G.ctx;
+        if (g) { for (const w in (G.WEAPONS || {})) radial(g, G.WEAPONS[w].color); for (const col of ['#ffd23f', '#4cc9f0', '#ff5d8f', '#ff9f43']) radial(g, col); }
+        const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+        const x = cv.getContext('2d'); x.translate(32, 32);
+        for (const ty of ['power', 'bomb', 'shield', 'life', 'cafe', 'pix', 'pix5', 'mala']) pickup(x, ty, 0, 0, 0.3, { wtype: 'voto', cycle: true });
+        cv.width = 1;
+      },
+    ];
+    let i = 0;
+    const step = () => {
+      const t0 = performance.now();
+      while (i < jobs.length && performance.now() - t0 < 4) { try { jobs[i](); } catch (err) { G.reportError(err, 'art.warmItems'); } i++; }
+      if (i < jobs.length) setTimeout(step, 16);
+    };
+    setTimeout(step, 0);
+  }
+  // espera o boot (canvas do jogo pronto) para aquecer
+  (function waitBoot() {
+    if (itemsWarm) return;
+    if (G.canvas && G.state && G.state !== 'boot') { itemsWarm = true; setTimeout(warmItems, 50); return; }
+    setTimeout(waitBoot, 150);
+  })();
+  // fontes chegaram depois do boot: refaz os sprites com texto (e o resto do cache de personagens)
+  function fontsReady() {
+    spriteCache.clear();
+    pcache.clear(); pseen.clear(); pPixels = 0; WARM.q.length = 0; WARM.seen.clear();
+    TL.key = '';
+    if (fuscaSpr) { fuscaSpr.c.width = 1; fuscaSpr = null; }
+    warmItems();
+  }
+
   function pickup(ctx, type, x, y, t, item) {
     const c = ctx;
     t = t || 0;
@@ -1587,7 +1795,7 @@
     // chama + turbina (atrás)
     const jet = o.jet !== false;
     const ja = -0.16; // turbina levemente inclinada
-    if (jet) {
+    if (jet && !o.noFlame) {
       c.save(); c.translate(-36, -46); c.rotate(ja);
       const fl = (o.flame || 1);
       if (fl > 0) {
@@ -1679,15 +1887,66 @@
       }
       c.beginPath(); E(c, 23, 0, 4.5, 9.4); inked(c, '#5b6375', lw * 0.8);
       c.beginPath(); E(c, 23.6, 0, 2.6, 7); fillP(c, '#20242c');
-      c.save(); c.translate(23.6, 0); c.scale(0.37, 1); c.rotate(t * 25);
-      c.beginPath(); for (let i = 0; i < 3; i++) { const a = (i * TAU) / 3; c.moveTo(0, 0); c.lineTo(Math.cos(a) * 6.5, Math.sin(a) * 6.5); } strokeP(c, '#9aa5b8', 2.4);
-      c.restore();
+      if (!o.noFan) {
+        c.save(); c.translate(23.6, 0); c.scale(0.37, 1); c.rotate(t * 25);
+        c.beginPath(); for (let i = 0; i < 3; i++) { const a = (i * TAU) / 3; c.moveTo(0, 0); c.lineTo(Math.cos(a) * 6.5, Math.sin(a) * 6.5); } strokeP(c, '#9aa5b8', 2.4);
+        c.restore();
+      }
       // cintas
       c.beginPath(); c.moveTo(-18, -9.5); c.lineTo(-17, 13); c.moveTo(6, -9.5); c.lineTo(7, 12); strokeP(c, INK, 3.6 + lw); strokeP(c, '#7a4a26', 3.6);
       c.beginPath(); c.rect(-19.5, -2, 3.6, 4); c.rect(4.6, -2, 3.6, 4); fillP(c, '#ffd23f');
       c.restore();
     }
     c.restore();
+  }
+
+  // partes animadas do Fusca de lado (mesmas coordenadas de fuscaSide, já escalado)
+  function fuscaFlame(c, t, o) {
+    const fl = (o.flame || 1);
+    if (o.jet === false || !(fl > 0)) return;
+    c.save(); c.translate(-36, -46); c.rotate(-0.16);
+    const L = (24 + Math.sin(t * 29) * 4 + Math.sin(t * 47) * 2.5) * fl;
+    const tear = (w, l, col) => {
+      c.beginPath(); c.moveTo(-30, -w); c.bezierCurveTo(-30 - l * 0.45, -w * 1.1, -30 - l * 0.85, -w * 0.35, -30 - l, 0);
+      c.bezierCurveTo(-30 - l * 0.85, w * 0.35, -30 - l * 0.45, w * 1.1, -30, w); c.closePath(); fillP(c, col);
+    };
+    glow(c, -34, 0, 22 * Math.sqrt(fl), '#ff8c1a', 0.7);
+    tear(9 * Math.sqrt(fl), L + 12 * fl, 'rgba(76,201,240,0.85)');
+    tear(7.5 * Math.sqrt(fl), L, '#ff8c1a');
+    tear(4.8 * Math.sqrt(fl), L * 0.6, '#ffd23f');
+    tear(2.4 * Math.sqrt(fl), L * 0.3, '#ffffff');
+    c.restore();
+  }
+  function fuscaFan(c, t, ja) {
+    c.save(); c.translate(-36, -46); c.rotate(ja); c.translate(23.6, 0); c.scale(0.37, 1); c.rotate(t * 25);
+    c.beginPath(); for (let i = 0; i < 3; i++) { const a = (i * TAU) / 3; c.moveTo(0, 0); c.lineTo(Math.cos(a) * 6.5, Math.sin(a) * 6.5); } strokeP(c, '#9aa5b8', 2.4);
+    c.restore();
+  }
+  // caixa da lataria em unidades do Fusca (rodas, carroceria, turbina e cintas, com folga para o contorno)
+  const FUSCA_BOX = [-82, -64, 140, 70];
+  // Fusca do título já GIRADO num sprite (lataria parada): colado 1:1 no pixel do aparelho.
+  // Girar um sprite grande a cada quadro custa tanto quanto os vetores sem GPU, por isso o
+  // ângulo é fixo; a chama e a hélice continuam ao vivo por cima/por baixo.
+  let fuscaSpr = null;
+  function fuscaTitleSprite(len, rot, fx, fy, o, pr) {
+    const key = [len.toFixed(2), rot, fx.toFixed(2), fy.toFixed(2), pr, o.lw || 2.2].join('|');
+    if (fuscaSpr && fuscaSpr.key === key) return fuscaSpr;
+    if (fuscaSpr) { fuscaSpr.c.width = 1; fuscaSpr.c.height = 1; }
+    const s = len / 100, co = Math.cos(rot), si = Math.sin(rot);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const [bx, by] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const px = fx + s * (FUSCA_BOX[0] + bx * FUSCA_BOX[2]), py = fy + s * (FUSCA_BOX[1] + by * FUSCA_BOX[3]);
+      const rx = px * co - py * si, ry = px * si + py * co;
+      x0 = Math.min(x0, rx); x1 = Math.max(x1, rx); y0 = Math.min(y0, ry); y1 = Math.max(y1, ry);
+    }
+    x0 = Math.floor(x0 * pr - 2) / pr; y0 = Math.floor(y0 * pr - 2) / pr;
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil((x1 - x0) * pr + 4)); cv.height = Math.max(1, Math.ceil((y1 - y0) * pr + 4));
+    const x = cv.getContext('2d');
+    x.setTransform(pr, 0, 0, pr, -x0 * pr, -y0 * pr); x.rotate(rot);
+    try { fuscaSide(x, fx, fy, len, Object.assign({}, o, { noFlame: true, noFan: true, t: 0 })); } catch (err) { G.reportError(err, 'art.fuscaSprite'); }
+    fuscaSpr = { key, c: bake(cv), ox: x0, oy: y0, pr };
+    return fuscaSpr;
   }
 
   // ======================================================================
@@ -1810,9 +2069,12 @@
     c.globalAlpha = 1;
   }
   // Silhueta do Congresso Nacional (torres gêmeas, cúpula e cuia)
-  function congresso(ctx, cx, groundY, k, col, litCol, t) {
+  // mode: 0 = tudo; 1 = só a parte parada (silhueta + janelas sempre acesas); 2 = só as janelas que piscam
+  function congresso(ctx, cx, groundY, k, col, litCol, t, mode) {
     const c = ctx;
+    mode = mode || 0;
     c.save(); c.translate(cx, groundY); c.scale(k, k);
+    if (mode === 2) { congressoLit(c, litCol, t, 2); c.restore(); return; }
     c.fillStyle = col;
     c.beginPath();
     c.rect(-150, -14, 300, 14);                     // plataforma
@@ -1825,17 +2087,20 @@
     // cuia da Câmara (direita)
     c.beginPath(); c.moveTo(42, -38); c.lineTo(132, -38); c.quadraticCurveTo(118, -16, 87, -16); c.quadraticCurveTo(56, -16, 42, -38); c.closePath(); c.fill();
     c.beginPath(); c.rect(80, -18, 14, 5); c.fill();
-    if (litCol) {
-      c.fillStyle = litCol;
-      for (let tw = 0; tw < 2; tw++) {
-        const x0 = tw ? 6.5 : -18.5;
-        for (let r = 0; r < 18; r++) for (let q = 0; q < 3; q++) {
-          const h = hash(r * 7 + q * 3 + tw * 50);
-          if (h > 0.55 && (h < 0.92 || Math.sin(t * 3 + r + q) > 0)) c.fillRect(x0 + q * 4.4, -123 + r * 6, 3, 2.6);
-        }
+    if (litCol) congressoLit(c, litCol, t, mode);
+    c.restore();
+  }
+  function congressoLit(c, litCol, t, mode) {
+    c.fillStyle = litCol;
+    for (let tw = 0; tw < 2; tw++) {
+      const x0 = tw ? 6.5 : -18.5;
+      for (let r = 0; r < 18; r++) for (let q = 0; q < 3; q++) {
+        const h = hash(r * 7 + q * 3 + tw * 50);
+        if (h <= 0.55) continue;
+        const steady = h < 0.92;
+        if (mode === 1 ? steady : mode === 2 ? !steady && Math.sin(t * 3 + r + q) > 0 : steady || Math.sin(t * 3 + r + q) > 0) c.fillRect(x0 + q * 4.4, -123 + r * 6, 3, 2.6);
       }
     }
-    c.restore();
   }
 
   // ======================================================================
@@ -2238,6 +2503,39 @@
   // ======================================================================
   // Arte do título: o Fusca subindo sobre Brasília (topo livre para o logo)
   // ======================================================================
+  // Camadas paradas do título (céu em gradiente; Congresso + chão) pintadas uma vez por
+  // tamanho/densidade de tela e coladas 1:1. Repintar o gradiente da tela inteira e a
+  // silhueta a cada quadro era a maior parte do custo do título (sem GPU).
+  const TL = { key: '', sky: null, city: null, cityY: 0 };
+  function titleLayer(w, h, pr, paint) {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w * pr)); cv.height = Math.max(1, Math.round(h * pr));
+    const x = cv.getContext('2d');
+    x.scale(pr, pr); x.lineJoin = 'round'; x.lineCap = 'round';
+    try { paint(x); } catch (err) { G.reportError(err, 'art.titleLayer'); }
+    return bake(cv);
+  }
+  function titleLayers(ctx, w, h, K) {
+    let pr = 1;
+    try { const m = ctx.getTransform(); pr = Math.hypot(m.a, m.b) || 1; } catch (e) { /* navegador antigo */ }
+    const key = w + 'x' + h + '@' + pr.toFixed(3) + '@' + K.toFixed(4);
+    if (TL.key === key) return TL;
+    for (const cv of [TL.sky, TL.city]) if (cv) { cv.width = 1; cv.height = 1; }
+    TL.key = key; TL.pr = pr;
+    TL.sky = titleLayer(w, h, pr, (x) => {
+      x.fillStyle = vgrad(x, 0, h, [0, '#0b1022', 0.4, '#24124a', 0.7, '#8e2450', 0.88, '#e2553a', 1, '#ffb347']);
+      x.fillRect(0, 0, w, h);
+    });
+    // faixa de baixo com o Congresso (presa ao pixel do aparelho)
+    const y0 = Math.max(0, Math.floor((h * 0.985 - 134 * K) * pr) / pr);
+    TL.cityY = y0;
+    TL.city = titleLayer(w, h - y0, pr, (x) => {
+      x.translate(0, -y0);
+      congresso(x, w * 0.5, h * 0.985, K, '#150a24', '#ffd27a', 0, 1);
+      x.fillStyle = '#150a24'; x.fillRect(0, h * 0.985, w, h * 0.02);
+    });
+    return TL;
+  }
   function titleArt(ctx, w, h, t) {
     if (!(w > 0) || !(h > 0)) return;
     t = t || 0;
@@ -2247,8 +2545,9 @@
       c.beginPath(); c.rect(0, 0, w, h); c.clip();
       c.lineJoin = 'round'; c.lineCap = 'round';
       const u = Math.min(w / 360, h / 560);
-      c.fillStyle = vgrad(c, 0, h, [0, '#0b1022', 0.4, '#24124a', 0.7, '#8e2450', 0.88, '#e2553a', 1, '#ffb347']);
-      c.fillRect(0, 0, w, h);
+      const K = 1.12 * Math.min(Math.max(u, w / 380), h / 480);
+      const TLs = titleLayers(c, w, h, K);
+      c.drawImage(TLs.sky, 0, 0, TLs.sky.width / TLs.pr, TLs.sky.height / TLs.pr);
       const L = { x: 0, y: 0, w, h };
       stars(c, L, t, 70, h * 0.5, 21);
       const cx = w * 0.5, cy = h * 0.6 + Math.sin(t * 2.2) * 6 * u;
@@ -2257,8 +2556,8 @@
       // cidade
       smokePuffs(c, w * 0.12, h * 0.93, t, 10, 12 * u, 'rgba(30,14,40,0.5)', 30 * u, 1);
       smokePuffs(c, w * 0.9, h * 0.94, t + 2, 10, 13 * u, 'rgba(30,14,40,0.5)', -24 * u, 2);
-      congresso(c, w * 0.5, h * 0.985, 1.12 * Math.min(Math.max(u, w / 380), h / 480), '#150a24', '#ffd27a', t);
-      c.fillStyle = '#150a24'; c.fillRect(0, h * 0.985, w, h * 0.02);
+      c.drawImage(TLs.city, 0, TLs.cityY, TLs.city.width / TLs.pr, TLs.city.height / TLs.pr);
+      congresso(c, w * 0.5, h * 0.985, K, '#150a24', '#ffd27a', t, 2); // janelas que piscam
       // santinhos e notas voando para fora
       for (let i = 0; i < 34; i++) {
         const ph = (t * 0.22 + hash(i + 3)) % 1;
@@ -2282,14 +2581,16 @@
         const r = (40 + ph * 230) * u;
         c.save(); c.globalAlpha = Math.min(1, ph * 5) * (1 - ph);
         c.translate(cx + dx * r, cy + dy * r - Math.sin(ph * PI) * 40 * u); c.rotate(dx * ph * 7);
-        person(c, 0, 0, 46 * u, POL[k], { t: t + k, mood: k ? 'shock' : 'hurt', pose: 'up', autoLook: false });
+        person(c, 0, 0, 46 * u, POL[k], { t: t + k, mood: k ? 'shock' : 'hurt', pose: 'up', autoLook: false, cacheRes: TLs.pr });
         c.restore();
       }
       // o Fusca (girado em torno do meio da carroceria)
-      const len = Math.min(220 * u, w * 0.64);
-      c.save(); c.translate(cx, cy); c.rotate(-1.0 + Math.sin(t * 1.7) * 0.03);
-      fuscaSide(c, len * 0.1, len * 0.3, len, { t, flame: 2.6, lw: 3 * u });
-      c.restore();
+      const len = Math.min(220 * u, w * 0.64), rot = -1.0, fo = { t, flame: 2.6, lw: 3 * u };
+      const fs = len / 100, fx = len * 0.1, fy = len * 0.3;
+      c.save(); c.translate(cx, cy); c.rotate(rot); c.translate(fx, fy); c.scale(fs, fs); fuscaFlame(c, t, fo); c.restore();
+      const spr = fuscaTitleSprite(len, rot, fx, fy, fo, TLs.pr), pr = TLs.pr;
+      c.drawImage(spr.c, Math.round((cx + spr.ox) * pr) / pr, Math.round((cy + spr.oy) * pr) / pr, spr.c.width / pr, spr.c.height / pr);
+      c.save(); c.translate(cx, cy); c.rotate(rot); c.translate(fx, fy); c.scale(fs, fs); c.lineJoin = 'round'; c.lineCap = 'round'; fuscaFan(c, t, -0.16); c.restore();
     } catch (err) { G.reportError(err, 'art.titleArt'); }
     c.restore();
   }
@@ -2424,7 +2725,9 @@
     tint,
     mix,
     comicText,
+    prewarm,
+    fontsReady,
     // depuração: tamanho do cache de sprites dos personagens
-    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size }; },
+    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size }; },
   });
 })();

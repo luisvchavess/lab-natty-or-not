@@ -68,7 +68,7 @@
     S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.' },
     A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.' },
     B: { label: '2º TURNO', line: 'Uns arranhões, mas passou.' },
-    C: { label: 'SUPLENTE', line: 'Passou raspando. Igual orçamento.' },
+    C: { label: 'SUPLENTE', line: 'Passou raspando. Igual ao orçamento.' },
   };
   const RANK_ORDER = { S: 4, A: 3, B: 2, C: 1 };
   // Dados das fases (fallback quando stages.js ainda não carregou)
@@ -169,6 +169,7 @@
     if (/^(title|story|dlg|clear|roll|howto)$/.test(kind)) root.setAttribute('aria-live', 'off');
     if (u) { u.appendChild(root); u.classList.add('open'); u.setAttribute('data-screen', kind); }
     cur = { root, kind, alive: true, timers: [], cleanups: [], onKey: null, born: performance.now() };
+    flushToasts(); // conquistas guardadas durante a partida
     return cur;
   }
   function close() {
@@ -236,6 +237,11 @@
       G.safe(fn, 'ui.tap', e);
     });
   }
+  // rola a área da telinha até o elemento (ex.: confirmação que abre embaixo da dobra)
+  function reveal(el) {
+    if (!el) return;
+    requestAnimationFrame(() => { try { el.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }); } catch (e) { /* nada */ } });
+  }
   function focusEl(el) { if (el && kbdMode) { try { el.focus({ preventScroll: true }); } catch (e) { /* nada */ } } }
   function installGlobal() {
     const u = uiRoot();
@@ -244,7 +250,7 @@
     u.addEventListener('pointerdown', (e) => {
       kbdMode = false;
       G.call(G.Audio, 'unlock');
-      const k = e.target && e.target.closest ? e.target.closest('.key, .sant, .tog, .press') : null;
+      const k = e.target && e.target.closest ? e.target.closest('.key, .sant, .tog, .seg-b, .press') : null;
       if (k && !k.disabled) { if (downEl && downEl !== k) downEl.classList.remove('is-down'); k.classList.add('is-down'); downEl = k; downT = performance.now(); }
     });
     const up = () => {
@@ -636,7 +642,8 @@
       else { sfx('ui_confirm'); finish(); }
     };
     scr.root.addEventListener('click', advance);
-    onTap(q(scr.root, '.st-skip'), finish);
+    // o final abre logo depois do chefão: um toque perdido no canto não pula a cena
+    onTap(q(scr.root, '.st-skip'), () => { if (performance.now() - scr.born < 600) return; sfx('ui_click'); finish(); }, false);
     scr.onKey = (e, k) => {
       if (k === 'Enter' || k === ' ') { e.preventDefault(); advance(); }
       else if (k === 'Escape') { sfx('ui_back'); finish(); }
@@ -704,14 +711,20 @@
       if (changed) { frame.classList.remove('pop'); void frame.offsetWidth; frame.classList.add('pop'); }
     };
     const finish = () => { if (ending) return; ending = true; close(); fin(); };
+    // trava contra toques perdidos: diálogos abrem no meio da ação (chefão chegando,
+    // Lule voltando) com o dedão ainda pilotando ou batendo na DELAÇÃO
+    const ADV_GUARD = 450, SKIP_GUARD = 650;
+    const skipBtn = q(scr.root, '.dlg-skip');
+    skipBtn.classList.add('arming');
+    later(scr, SKIP_GUARD, () => skipBtn.classList.remove('arming'));
     const advance = () => {
-      if (ending || performance.now() - scr.born < 320) return; // evita pular sem querer (dedo ainda na tela)
+      if (ending || performance.now() - scr.born < ADV_GUARD) return;
       if (!typer.done) { typer.finish(); return; }
       if (i < lines.length - 1) { sfx('ui_click'); show(i + 1); }
       else { sfx('ui_click'); finish(); }
     };
     scr.root.addEventListener('click', advance);
-    onTap(q(scr.root, '.dlg-skip'), finish);
+    onTap(skipBtn, () => { if (performance.now() - scr.born < SKIP_GUARD) return; sfx('ui_click'); finish(); }, false);
     scr.onKey = (e, k) => {
       if (k === 'Enter' || k === ' ') { e.preventDefault(); advance(); }
       else if (k === 'Escape') { sfx('ui_back'); finish(); }
@@ -783,11 +796,14 @@
   function showStageClear(stats, done) {
     stats = stats || {};
     const fin = once(done);
+    const prevRank = ((uiSave().ranks || {})[String(stats.index | 0)]) || null;
     G.safe(recordRank, 'ui.recordRank', stats);
     const b = stats.bonus || {};
     const loopN = stats.loop || 1;
     const s = stageInfo(stats.index | 0, stats.stage);
     const rank = RANKS[stats.rank] ? stats.rank : 'C';
+    // subiu a nota desta fase? (só quando já havia uma nota antes)
+    const better = !!prevRank && (RANK_ORDER[rank] || 0) > (RANK_ORDER[prevRank] || 0);
     const rows = [
       { k: 'VOTOS', v: stats.score, cls: 'big' },
       { k: 'POLÍTICOS CASSADOS', v: stats.kills },
@@ -821,7 +837,8 @@
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p></div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
-      '<p class="rc-line">' + esc(RANKS[rank].line) + '</p></div>' +
+      '<p class="rc-line">' + esc(RANKS[rank].line) + '</p>' +
+      (better ? '<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
       '<div class="rc-foot"><i class="barcode"></i><span>CÓD. VERIFICAÇÃO 171-' + String(((stats.score || 0) % 9973) + 1000).slice(0, 4) + '-ZÉ</span><b>FIM</b></div>' +
       '</div></div></div>' +
       '<div class="cl-keys">' + keyHTML('confirma', 'CONTINUAR', 'CONFIRMA', 'k-next key-wide') + '</div>' +
@@ -997,6 +1014,27 @@
   // ==================================================================
   // GAME OVER
   // ==================================================================
+  // "Faltou pouco": quanto do chefão faltava quando o Fusca caiu
+  const BOSS_ART = { centrao: 'o Centrão', dilmae: 'a Dilmãe', bolsonario: 'o Capitão Bolsonário', lule: 'o Lule' };
+  function nearMiss() {
+    const g = G.game, b = g && g.boss;
+    if (!b || b.state !== 'fight' || !(b.maxHp > 0)) return '';
+    const pct = clamp(Math.ceil((b.hp / b.maxHp) * 100), 1, 100);
+    const firstLife = b.id === 'lule' && !(b.data && b.data.revived);
+    const who = BOSS_ART[b.id] || castName(b.id);
+    const close_ = pct <= 30 && !firstLife;
+    const txt = close_ ? 'Faltou pouco! Só ' + pct + '% para cassar ' + who + '.'
+      : 'Faltavam ' + pct + '% para cassar ' + who + '.';
+    return '<p class="go-near' + (close_ ? ' close' : '') + '"><i style="--p:' + (100 - pct) + '%"></i><span>' + esc(txt) + '</span></p>';
+  }
+  function cheapestBuy() {
+    let best = null;
+    for (const u of G.UPGRADES || []) {
+      const c = G.upgradeCost(u.id);
+      if (c != null && G.save.pix >= c && (!best || c < best.c)) best = { name: u.name, c };
+    }
+    return best;
+  }
   function showGameOver(info, h) {
     info = info || {};
     h = h || {};
@@ -1005,27 +1043,38 @@
     const scr = open('over');
     const left = Math.max(0, info.continuesLeft | 0);
     const record = info.score > 0 && info.score >= (info.best || 0);
+    const near = nearMiss();
+    const gain = Math.max(0, Math.round((G.run && G.run.pix) || 0));
+    const buy = cheapestBuy();
+    const note = (gain > 0 ? 'Nesta partida: <b>+' + money(gain) + '</b>. ' : '') +
+      (buy ? 'Já dá pra comprar <b>' + esc(buy.name) + '</b> na Lojinha!' : 'Seu Pix fica guardado para a Lojinha do Zé.');
     scr.root.innerHTML =
       '<div class="go-wrap">' +
       '<div class="go-title" aria-label="Derrotado nas urnas"><span>DERROTADO</span><span>NAS URNAS</span></div>' +
-      '<p class="go-joke">' + esc(pick(OVER_JOKES)) + '</p>' +
+      '<p class="go-joke">' + esc(pick(OVER_JOKES)) + '</p>' + near +
       '<div class="urna urna-compact">' + BRAND +
       '<div class="bezel"><div class="lcd lcd-stats">' +
       '<div class="lrow big"><span>VOTOS</span><b>' + fmt(info.score) + '</b></div>' +
       '<div class="lrow"><span>RECORDE</span><b>' + fmt(info.best) + (record ? ' <em class="new">NOVO!</em>' : '') + '</b></div>' +
       '<div class="lrow pix"><span>PIX NA CONTA</span><b>' + money(info.pix) + '</b></div>' +
-      '<small class="lnote">Seu Pix ficou guardado. Gaste na Lojinha do Zé.</small>' +
+      '<small class="lnote' + (buy ? ' can-buy' : '') + '">' + note + '</small>' +
       '</div></div>' +
       '<div class="go-keys">' +
       (left > 0
         ? '<button type="button" class="key key-confirma key-wide k-cont"><span class="kl">PEDIR RECONTAGEM</span><b class="kbadge">' + left + '</b><small class="ks">CONFIRMA</small></button>' +
           '<p class="go-explain">Continua daqui, com vidas e delações cheias. <b>O placar volta a zero.</b></p>'
         : '<p class="go-explain">Acabaram os pedidos de recontagem. A urna é soberana.</p>') +
-      keyHTML('corrige', 'VOLTAR AO MENU', 'CORRIGE', 'key-wide k-quit') +
+      '<div class="row go-quit">' + keyHTML('corrige', 'MENU', 'CORRIGE', 'k-quit') +
+      keyHTML('branco', 'LOJINHA', buy ? 'tem melhoria!' : 'melhorias', 'k-shop' + (buy ? ' has-buy' : '')) + '</div>' +
       '</div></div></div>';
     const cont = q(scr.root, '.k-cont'), quit = q(scr.root, '.k-quit');
     onTap(cont, () => choose(h.onContinue, 'ui.gameOver.onContinue'));
     onTap(quit, () => choose(h.onQuit, 'ui.gameOver.onQuit'));
+    // sai da partida e já abre a lojinha (melhorias valem a partir da próxima partida)
+    onTap(q(scr.root, '.k-shop'), () => choose(() => {
+      if (typeof h.onQuit === 'function') h.onQuit();
+      showShop({}, () => showTitle(true));
+    }, 'ui.gameOver.shop'));
     // trava curta: o dedo ainda estava pilotando quando o Fusca caiu
     scr.root.classList.add('arming');
     later(scr, 600, () => { scr.root.classList.remove('arming'); focusEl(cont || quit); });
@@ -1052,7 +1101,31 @@
       '<div class="sens"><span class="sens-end">0,8×</span><input type="range" min="0.8" max="2" step="0.05" value="' + v + '" aria-label="Sensibilidade do toque">' +
       '<output>' + fmtSens(v) + '</output></div></div>';
   }
+  // Qualidade gráfica (só aparece se o core tiver G.setQuality)
+  const QUALITY = [['auto', 'AUTO'], ['high', 'ALTA'], ['mid', 'MÉDIA'], ['low', 'LEVE']];
+  const QUALITY_NAME = { high: 'alta', mid: 'média', low: 'leve' };
+  function qualityHint() {
+    const sel = settings().quality || 'auto';
+    if (sel === 'auto') return 'Automático: agora em ' + (QUALITY_NAME[G.quality] || 'alta') + '. Desce sozinho se o celular engasgar.';
+    return 'Leve = mais rápido em celular simples.';
+  }
+  function qualityHTML() {
+    if (typeof G.setQuality !== 'function') return '';
+    const sel = settings().quality || 'auto';
+    return '<div class="set-row set-col"><div class="set-lbl"><b>QUALIDADE GRÁFICA</b><small class="q-hint">' + esc(qualityHint()) + '</small></div>' +
+      '<div class="seg" role="radiogroup" aria-label="Qualidade gráfica">' +
+      QUALITY.map(([v, l]) => '<button type="button" class="seg-b' + (v === sel ? ' on' : '') + '" role="radio" aria-checked="' + (v === sel) + '" data-q="' + v + '">' + l + '</button>').join('') +
+      '</div></div>';
+  }
   function bindSettings(root) {
+    qa(root, '.seg-b[data-q]').forEach((b) => onTap(b, () => {
+      const v = b.getAttribute('data-q');
+      G.call(G, 'setQuality', v);
+      const sel = settings().quality || 'auto';
+      qa(root, '.seg-b[data-q]').forEach((o) => { const on = o.getAttribute('data-q') === sel; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
+      const hint = q(root, '.q-hint');
+      if (hint) hint.textContent = qualityHint();
+    }));
     qa(root, '.tog').forEach((b) => onTap(b, () => {
       const k = b.getAttribute('data-set');
       const v = !settings()[k];
@@ -1111,7 +1184,7 @@
     bindSettings(scr.root);
     const conf = q(scr.root, '.pz-confirm'), quitRow = q(scr.root, '.pz-quit');
     onTap(q(scr.root, '.k-res'), () => choose(h.onResume, 'ui.pause.onResume'));
-    onTap(q(scr.root, '.k-quit'), () => { quitRow.hidden = true; conf.hidden = false; focusEl(q(conf, '.k-no')); });
+    onTap(q(scr.root, '.k-quit'), () => { quitRow.hidden = true; conf.hidden = false; reveal(conf); focusEl(q(conf, '.k-no')); });
     onTap(q(scr.root, '.k-no'), () => { conf.hidden = true; quitRow.hidden = false; focusEl(q(scr.root, '.k-quit')); });
     onTap(q(scr.root, '.k-yes'), () => choose(h.onQuit, 'ui.pause.onQuit'));
     // Esc/P: o core já chama G.resume() → hidePause()
@@ -1216,6 +1289,7 @@
         togHTML('shake', 'TREMOR DE TELA', 'Explosões sacodem a tela') +
         togHTML('hitbox', 'MOSTRAR PONTO BRANCO', 'O único ponto vulnerável do Fusca') +
         sensHTML() +
+        qualityHTML() +
         '<div class="set-danger">' +
         '<button type="button" class="key key-danger k-wipe"><span class="kl">APAGAR PROGRESSO</span></button>' +
         '<div class="wipe-confirm" hidden><p><b>Tem certeza?</b> Some tudo: Pix, melhorias, fases liberadas, recorde e conquistas. Não tem recontagem.</p>' +
@@ -1226,7 +1300,7 @@
     });
     bindSettings(scr.root);
     const wipe = q(scr.root, '.k-wipe'), conf = q(scr.root, '.wipe-confirm');
-    onTap(wipe, () => { wipe.hidden = true; conf.hidden = false; focusEl(q(conf, '.k-no')); });
+    onTap(wipe, () => { wipe.hidden = true; conf.hidden = false; reveal(conf); focusEl(q(conf, '.k-no')); });
     onTap(q(scr.root, '.k-no'), () => { conf.hidden = true; wipe.hidden = false; });
     onTap(q(scr.root, '.k-yes'), () => {
       G.resetSave();
@@ -1269,7 +1343,7 @@
     { t: 'TIRO AUTOMÁTICO', d: 'O Fusca atira sozinho. Sua única preocupação é desviar.', draw: 'fire' },
     { t: 'SÓ O PONTO BRANCO CONTA', d: 'O <b>ponto branco</b> no meio do Fusca é o único ponto vulnerável. O resto é lataria: o tiro passa.', draw: 'hitbox' },
     { t: 'RASPÃO DÁ VOTO', d: 'Passar <b>raspando</b> nos tiros dá pontos e carrega a Delação Premiada. Cheio = delação de graça.', draw: 'graze' },
-    { t: 'O ITEM P MUDA DE COR', d: 'Ele troca de arma a cada instante. Pegue na <b>cor da arma que você quer</b>. Mesma cor: sobe o nível.', draw: 'power', weapons: true },
+    { t: 'O ITEM P MUDA DE COR', d: 'Ele troca de arma a cada 3 segundos. Pegue na <b>cor da arma que você quer</b>. Mesma cor: sobe o nível.', draw: 'power', weapons: true },
     { t: 'DELAÇÃO PREMIADA', d: 'O botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Use quando apertar.', draw: 'bomb' },
     { t: 'APROVAÇÃO', d: 'Derrube políticos sem parar e a aprovação sobe, <b>multiplicando os votos</b> (até ×5). Levar tiro derruba ela.', draw: 'approval' },
     { t: 'PIX E LOJINHA', d: 'Político derrubado solta <b>Pix</b>. Junte e gaste em melhorias permanentes na Lojinha do Zé.', draw: 'pix' },
@@ -1330,9 +1404,16 @@
     power(c, w, h, t) {
       tileBG(c, w, h);
       const order = G.WEAPON_ORDER || ['voto', 'boca', 'panela', 'jato'];
-      const wt = order[Math.floor(t / 1.1) % order.length];
+      // mesmo ritmo do jogo: troca de arma a cada 3 s (anel mostra quanto falta)
+      const PER = 3, k = (t % PER) / PER;
+      const wt = order[Math.floor(t / PER) % order.length];
+      const cx = w / 2, cy = h * 0.44;
+      c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = 2.5;
+      c.beginPath(); c.arc(cx, cy, 27, 0, TAU); c.stroke();
+      c.strokeStyle = (G.WEAPONS && G.WEAPONS[wt] && G.WEAPONS[wt].color) || '#ffd23f';
+      c.beginPath(); c.arc(cx, cy, 27, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - k)); c.stroke();
       // o próprio item já mostra o nome curto da arma embaixo
-      c.save(); c.translate(w / 2, h * 0.44); c.scale(1.45, 1.45);
+      c.save(); c.translate(cx, cy); c.scale(1.45, 1.45);
       G.call(G.Art, 'pickup', c, 'power', 0, 0, t, { wtype: wt });
       c.restore();
     },
@@ -1438,8 +1519,28 @@
   // ==================================================================
   // TOASTS (conquistas)
   // ==================================================================
+  // Durante a partida os toasts esperam: no topo eles cobririam o chefão, o carimbo
+  // "CASSADO!" e os inimigos que entram. Aparecem na próxima tela (diálogo pós-chefão,
+  // boletim, pausa, game over…), um de cada vez.
+  const pendingToasts = [];
+  let toastFlushT = 0;
+  const inPlay = () => !!(document.body && document.body.classList.contains('in-play'));
+  function flushToasts() {
+    if (!pendingToasts.length || toastFlushT) return;
+    const l = pendingToasts.splice(0);
+    let i = 0;
+    const next = () => {
+      toastFlushT = 0;
+      if (i >= l.length) { if (pendingToasts.length) flushToasts(); return; }
+      if (inPlay()) { pendingToasts.unshift.apply(pendingToasts, l.slice(i)); return; } // a partida voltou: espera de novo
+      showToast(l[i++]);
+      toastFlushT = setTimeout(next, 650);
+    };
+    toastFlushT = setTimeout(next, 350);
+  }
   function showToast(o) {
     o = o || {};
+    if (inPlay()) { if (pendingToasts.length < 12) pendingToasts.push(o); return; }
     const host = document.getElementById('toasts');
     if (!host) return;
     const t = document.createElement('div');

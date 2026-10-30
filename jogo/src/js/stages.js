@@ -542,10 +542,11 @@
         yield 1.6;
         // recepção oficial
         yield* par(
-          once(() => { sp('lobista', W() / 2, -34, { ty: 130 }); sp('deputado', 80, -30, { ty: 160 }); sp('deputado', W() - 80, -30, { ty: 160 }); }),
+          // deputados blindados pelo marqueteiro: ficam menos tempo (a fase final não deve matar logo na entrada)
+          once(() => { sp('lobista', W() / 2, -34, { ty: 130 }); sp('deputado', 80, -30, { ty: 160, hold: L2 ? 6 : 4.6 }); sp('deputado', W() - 80, -30, { ty: 160, hold: L2 ? 6 : 4.6 }); }),
           after(1.3, once(() => sp('marqueteiro', W() / 2, -30, { ty: 85, hold: 8 }))),
-          after(3, swarm('cabo', 6, 0.34, path('uL'), 6, { fire: 1 })),
-          after(4.5, swarm('cabo', 6, 0.34, path('uL', true), 6, { fire: 1 })));
+          after(3, swarm('cabo', 6, 0.34, path('uL'), 6, { fire: 0.7 })),
+          after(7.5, swarm('cabo', 6, 0.34, path('uL', true), 6, { fire: 0.7 })));
         yield T(11);
         // --- MINISTROS em conga ---
         yield* swarm('ministro', 8, 0.34, path('conga'), 10, (i) => ({ conga: true, v: i, fire: i % 2 ? 0.8 : 0.4 }));
@@ -596,13 +597,12 @@
         yield T(88);
         yield* par(
           once(() => { sp('drone', 70, -24, { ty: 120 }); sp('drone', W() - 70, -24, { ty: 120 }); sp('drone', W() / 2, -24, { ty: 170 }); }),
-          after(1, moto(3, false, 130, 40, 0.45)),
           after(2, swarm('ministro', 8, 0.32, path('conga'), 10, (i) => ({ conga: true, v: i, fire: 0.6 }))));
         // --- RAMPA DO PLANALTO: corredor polonês ---
         yield T(96);
         yield* par(
-          drizzle('ministro', 7, L2 ? 0.4 : 0.55, (i) => ({ vy: M.rand(80, 100), v: i })),
-          after(1, once(() => { sp('sindicalista', 80, -30, { ty: 140 }); sp('sindicalista', W() - 80, -30, { ty: 140 }); })),
+          drizzle('ministro', 7, L2 ? 0.55 : 0.75, (i) => ({ vy: M.rand(80, 100), v: i })),
+          after(1, once(() => { sp('sindicalista', W() / 2, -30, { ty: 140 }); if (L2) sp('sindicalista', W() - 70, -30, { ty: 175 }); })),
           after(3, once(() => sp('leao', W() / 2, -30, { ty: H() * 0.2, pounces: 1 }))),
           after(5, once(() => sp('carro_som', W() / 2, -36, { vy: 30 }))));
         yield T(103);
@@ -644,7 +644,7 @@
         yield Rt(34);
         yield* par(
           once(() => vee('ministro', 9, W() / 2, (i) => ({ vy: 90, v: i }), 32, 22)),
-          after(1, drizzle('cabo', 7, 0.5, () => ({ vy: 95, fire: 1 }))),
+          after(1, drizzle('cabo', 7, L2 ? 0.55 : 0.7, () => ({ vy: 95, fire: 1 }))),
           after(2, once(() => { sp('drone', 60, -24, { ty: 130 }); sp('drone', W() / 2, -24, { ty: 170 }); sp('drone', W() - 60, -24, { ty: 130 }); })),
           after(4, side('assessor', 4, true, 120, 0.6, { spd: 110 })),
           after(5, side('assessor', 4, false, 160, 0.6, { spd: 110 })));

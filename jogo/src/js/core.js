@@ -66,15 +66,38 @@
   };
   window.addEventListener('error', (e) => G.reportError(e.error || e.message, 'window'));
   // Chama fn com proteção: um erro num módulo não derruba o jogo inteiro.
-  function safe(fn, where, ...args) {
+  // Sem "...args" (rest) para não alocar um array a cada chamada: até 6 argumentos vão direto.
+  function safe(fn, where, a, b, c, d, e, f) {
     if (typeof fn !== 'function') return undefined;
-    try { return fn(...args); } catch (err) { G.reportError(err, where); return undefined; }
+    try {
+      switch (arguments.length) {
+        case 2: return fn();
+        case 3: return fn(a);
+        case 4: return fn(a, b);
+        case 5: return fn(a, b, c);
+        case 6: return fn(a, b, c, d);
+        case 7: return fn(a, b, c, d, e);
+        case 8: return fn(a, b, c, d, e, f);
+        default: return fn.apply(null, Array.prototype.slice.call(arguments, 2));
+      }
+    } catch (err) { G.reportError(err, where); return undefined; }
   }
   // Chama obj[name](...args) preservando o this. Usado para módulos e defs.
-  function call(obj, name, ...args) {
-    const f = obj && obj[name];
-    if (typeof f !== 'function') return undefined;
-    try { return f.apply(obj, args); } catch (err) { G.reportError(err, (obj.__tag ? obj.__tag + '.' : '') + name); return undefined; }
+  function call(obj, name, a, b, c, d, e, f) {
+    const fn = obj && obj[name];
+    if (typeof fn !== 'function') return undefined;
+    try {
+      switch (arguments.length) {
+        case 2: return fn.call(obj);
+        case 3: return fn.call(obj, a);
+        case 4: return fn.call(obj, a, b);
+        case 5: return fn.call(obj, a, b, c);
+        case 6: return fn.call(obj, a, b, c, d);
+        case 7: return fn.call(obj, a, b, c, d, e);
+        case 8: return fn.call(obj, a, b, c, d, e, f);
+        default: return fn.apply(obj, Array.prototype.slice.call(arguments, 2));
+      }
+    } catch (err) { G.reportError(err, (obj.__tag ? obj.__tag + '.' : '') + name); return undefined; }
   }
   G.safe = safe;
   G.call = call;
@@ -85,7 +108,9 @@
     return {
       pix: 0, upgrades: {}, unlocked: 1, best: 0, cleared: false, cleared2: false, seenIntro: false,
       achievements: {}, counters: {},
-      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true },
+      // quality: 'auto' (o jogo escolhe pelo desempenho) | 'high' | 'mid' | 'low'
+      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto' },
+      qualityTier: 'high', // nível escolhido pelo modo automático (lembrado entre sessões)
     };
   }
   function loadSave() {
@@ -121,8 +146,46 @@
     G.save.upgrades[id] = G.upg(id) + 1;
     G.saveGame();
     call(G.Audio, 'sfx', 'buy');
+    // Comprou na "Parada na estrada" (entre fases): vale já para a partida em andamento.
+    if (G.run && G.state === 'clear') {
+      const r = G.run;
+      if (id === 'vida') { r.lives = Math.min(9, r.lives + 1); r.baseLives++; }
+      if (id === 'bomba') { r.bombs = Math.min(6, r.bombs + 1); r.baseBombs++; }
+      if (id === 'arma') { r.level = Math.min(G.MAX_LEVEL, r.level + 1); r.pp = 0; }
+    }
     return true;
   };
+
+  // ===================== Qualidade gráfica =====================
+  // G.quality: 'high' | 'mid' | 'low'. Os módulos leem G.quality na hora de desenhar
+  // (bg: menos camadas; art: sem halos; bosses: menos partículas decorativas; audio: sem reverb).
+  // O modo 'auto' mede o intervalo real entre quadros (inclui a rasterização) e desce um nível
+  // quando o jogo fica lento por 2,5 s seguidos. Sobe de novo só no começo de uma fase.
+  const Q_ORDER = ['low', 'mid', 'high'];
+  const Q_DPR = { high: 2, mid: 1.5, low: 1 };
+  const Q_PARTS = { high: 600, mid: 450, low: 300 };
+  function qualityFromSave() {
+    const s = G.save.settings.quality || 'auto';
+    if (s !== 'auto' && Q_DPR[s]) return s;
+    return Q_DPR[G.save.qualityTier] ? G.save.qualityTier : 'high';
+  }
+  G.quality = qualityFromSave();
+  G.qualityAuto = () => (G.save.settings.quality || 'auto') === 'auto' && !G.debug.qualityForced;
+  // ui.js chama: G.setQuality('auto'|'high'|'mid'|'low'). Escolher 'auto' de novo recomeça do 'high'.
+  G.setQuality = function (q) {
+    if (q !== 'auto' && !Q_DPR[q]) return;
+    G.save.settings.quality = q;
+    if (q === 'auto') G.save.qualityTier = 'high';
+    G.debug.qualityForced = false;
+    G.saveGame();
+    applyQuality();
+  };
+  function applyQuality() {
+    const q = G.debug.qualityForced || qualityFromSave();
+    if (q === G.quality) return;
+    G.quality = q;
+    if (canvas) resize();
+  }
 
   // ===================== Conquistas =====================
   G.unlock = function (id) {
@@ -156,14 +219,15 @@
   //        spin: gira sozinho (rad/s), paint(ctx, size, color) desenha centrado em (0,0) }
   const BS = (G.BulletStyles = {
     defs: {},
-    cache: {},
+    cache: {}, // cache[estilo][cor] (dois níveis: sem montar string a cada tiro, a cada quadro)
     define(name, def) {
       this.defs[name] = def;
-      for (const k in this.cache) if (k.indexOf(name + '|') === 0) delete this.cache[k];
+      delete this.cache[name];
     },
     sprite(name, color) {
-      const key = name + '|' + color;
-      let c = this.cache[key];
+      let byName = this.cache[name];
+      if (!byName) byName = this.cache[name] = {};
+      let c = byName[color];
       if (c) return c;
       const def = this.defs[name] || this.defs.orb;
       const k = 3; // resolução do sprite
@@ -176,7 +240,7 @@
       x.translate(s / 2, s / 2);
       try { def.paint(x, def.size, color); } catch (err) { G.reportError(err, 'bulletstyle ' + name); }
       c._s = s;
-      this.cache[key] = c;
+      byName[color] = c;
       return c;
     },
   });
@@ -459,12 +523,22 @@
   let canvas, ctx, viewEl;
   let scale = 1, dpr = 1;
   G.view = { x: 0, y: 0, w: 360, h: 640, scale: 1 };
+  let coarseMQ = null, wasPhoneLand = false;
   function resize() {
     const r = viewEl.getBoundingClientRect();
     const vw = Math.max(200, r.width), vh = Math.max(300, r.height);
+    // Celular deitado: o jogo é em pé. Pausa e pede para girar (a dica é um ::after do body).
+    try { if (!coarseMQ && window.matchMedia) coarseMQ = window.matchMedia('(pointer: coarse)'); } catch (e) { /* nada */ }
+    const land = vw > vh * 1.15 && !!(coarseMQ && coarseMQ.matches);
+    document.body.classList.toggle('rotate-hint', land);
+    // celular (tela baixa) acabou de deitar: pausa uma vez. Tablet deitado continua jogável (base.css só avisa).
+    const phoneLand = land && vh < 560;
+    if (phoneLand && !wasPhoneLand && G.state === 'play') G.pause();
+    wasPhoneLand = phoneLand;
     G.H = Math.round(M.clamp((G.W * vh) / vw, 600, 780));
     scale = Math.min(vw / G.W, vh / G.H);
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(window.devicePixelRatio || 1, Q_DPR[G.quality] || 2);
+    btnRect = null; frozenState = null; hudCache.k = 0;
     const cw = Math.round(G.W * scale), ch = Math.round(G.H * scale);
     const left = Math.round(r.left + (vw - cw) / 2), top = Math.round(r.top + (vh - ch) / 2);
     canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
@@ -485,25 +559,41 @@
   G.toLogical = (cx, cy) => ({ x: (cx - G.view.x) / G.view.scale, y: (cy - G.view.y) / G.view.scale });
 
   // ===================== Entrada =====================
-  const input = (G.input = { active: false, id: null, fx: 0, fy: 0, ax: 0, ay: 0, keys: {} });
+  // fx/fy: dedo no momento da âncora; ax/ay: carro no momento da âncora; lx/ly: última posição do dedo
+  const input = (G.input = { active: false, id: null, fx: 0, fy: 0, ax: 0, ay: 0, lx: 0, ly: 0, keys: {} });
+  let bombTap = null; // toque que começou no botão da Delação: vira bomba só se for um toque rápido e parado
+  function anchorTouch(e) {
+    const p = G.game.player;
+    const L = G.toLogical(e.clientX, e.clientY);
+    input.active = true; input.id = e.pointerId;
+    input.fx = input.lx = L.x; input.fy = input.ly = L.y; input.ax = p.x; input.ay = p.y;
+    p.tx = p.x; p.ty = p.y;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+  }
+  // O dedo que continuou na tela (morte, entrada do carro, recontagem, volta da pausa)
+  // passa a pilotar a partir de onde o carro está agora, sem pulo.
+  function reanchor() {
+    const g = G.game; if (!g || !input.active) return;
+    const p = g.player;
+    input.fx = input.lx; input.fy = input.ly; input.ax = p.x; input.ay = p.y;
+    p.tx = p.x; p.ty = p.y;
+  }
   function setupInput() {
     canvas.addEventListener('pointerdown', (e) => {
       call(G.Audio, 'unlock');
       if (G.state !== 'play' || !G.game) return;
       e.preventDefault();
       if (input.active && input.id !== e.pointerId) return; // um dedo pilota
-      const p = G.game.player;
-      const L = G.toLogical(e.clientX, e.clientY);
-      input.active = true; input.id = e.pointerId;
-      input.fx = L.x; input.fy = L.y; input.ax = p.x; input.ay = p.y;
-      p.tx = p.x; p.ty = p.y;
-      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      anchorTouch(e);
     }, { passive: false });
-    canvas.addEventListener('pointermove', (e) => {
+    const move = (e) => {
       if (!input.active || e.pointerId !== input.id || !G.game) return;
       e.preventDefault();
       const p = G.game.player;
       const L = G.toLogical(e.clientX, e.clientY);
+      input.lx = L.x; input.ly = L.y;
+      // carro morto, entrando ou mundo congelado (volta da pausa): só guarda onde o dedo está
+      if (!p.alive || p.entering || G.game.resumeT > 0 || (G.state !== 'play' && G.state !== 'clear')) return;
       const sens = G.save.settings.sens || 1.25;
       p.tx = input.ax + (L.x - input.fx) * sens;
       p.ty = input.ay + (L.y - input.fy) * sens;
@@ -511,8 +601,17 @@
       const cx = M.clamp(p.tx, 12, G.W - 12), cy = M.clamp(p.ty, 50, G.H - 24);
       if (cx !== p.tx) { input.ax += cx - p.tx; p.tx = cx; }
       if (cy !== p.ty) { input.ay += cy - p.ty; p.ty = cy; }
-    }, { passive: false });
-    const end = (e) => { if (e.pointerId === input.id) { input.active = false; input.id = null; } };
+    };
+    canvas.addEventListener('pointermove', move, { passive: false });
+    const end = (e) => {
+      if (bombTap && bombTap.id === e.pointerId) {
+        // toque rápido e parado no botão = Delação; se arrastou ou segurou, era só o dedão voltando a pilotar
+        const quick = e.type === 'pointerup' && performance.now() - bombTap.t < 300 && Math.hypot(e.clientX - bombTap.x, e.clientY - bombTap.y) < 14;
+        bombTap = null;
+        if (quick) G.bomb();
+      }
+      if (e.pointerId === input.id) { input.active = false; input.id = null; }
+    };
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -526,11 +625,28 @@
     });
     window.addEventListener('keyup', (e) => { if (map[e.code]) input.keys[map[e.code]] = false; });
     window.addEventListener('blur', () => { input.keys = {}; input.active = false; if (G.state === 'play') G.pause(); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden && G.state === 'play') G.pause(); });
+    // App para o fundo: pausa e grava o Pix da fase (o sistema do celular pode matar a aba lá atrás).
+    // Ao voltar: se o jogo entrou em 'play' escondido (cartão da fase avança sozinho), pausa também.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) { if (G.state === 'play') G.pause(); saveProgress(); }
+      else if (G.state === 'play') G.pause();
+    });
+    window.addEventListener('pagehide', () => { if (G.state === 'play') G.pause(); saveProgress(); });
 
     const bombBtn = document.getElementById('btnBomb');
     if (bombBtn) {
-      bombBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); call(G.Audio, 'unlock'); G.bomb(); }, { passive: false });
+      bombBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation(); call(G.Audio, 'unlock');
+        if (G.state !== 'play' || !G.game) return;
+        // segundo dedo (o outro já pilota) ou mouse: intenção clara, solta na hora
+        if ((input.active && input.id !== e.pointerId) || e.pointerType === 'mouse') { G.bomb(); return; }
+        // dedão que voltou à tela em cima do botão: começa a pilotar; vira bomba no pointerup se foi um toque
+        anchorTouch(e);
+        bombTap = { id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY };
+      }, { passive: false });
+      bombBtn.addEventListener('pointermove', move, { passive: false }); // caso a captura pelo canvas falhe
+      bombBtn.addEventListener('pointerup', end);
+      bombBtn.addEventListener('pointercancel', end);
     }
     const pauseBtn = document.getElementById('btnPause');
     if (pauseBtn) {
@@ -556,6 +672,7 @@
       approval: 30, approvalIdle: 0, delacao: 0,
       kills: 0, hits: 0, bombsUsed: 0, bombsUsedBoss: 0, grazes: 0, pixStage: 0, pixCommitted: 0,
       script: null, cleared: false, canFire: false, introT: 0, beam: null, grazeSfxT: 0, inDialogue: false,
+      resumeT: 0, rank: null,
     };
     return g;
   }
@@ -642,6 +759,8 @@
   };
 
   // Itens. type: pix|pix5|mala|power|bomb|shield|life|cafe
+  // o P troca de arma a cada G.POWER_CYCLE segundos (ui.js lê para o Como Jogar)
+  G.POWER_CYCLE = 3;
   G.drop = function (type, x, y, o) {
     const g = G.game; if (!g) return null;
     o = o || {};
@@ -650,6 +769,7 @@
       type, x, y, vx: o.vx != null ? o.vx : M.rand(-50, 50), vy: o.vy != null ? o.vy : M.rand(-170, -90),
       t: 0, r: type === 'pix' ? 7 : 11, dead: false, magnet: !!o.magnet,
       wtype: o.wtype || G.WEAPON_ORDER[(Math.random() * 4) | 0], cycle: o.cycle != null ? o.cycle : true,
+      restore: !!o.restore, // P que caiu na morte: devolve o nível perdido direto
     };
     g.pickups.push(it);
     return it;
@@ -666,13 +786,14 @@
 
   // ===================== Efeitos =====================
   G.part = function (o) {
-    const g = G.game; if (!g || g.parts.length > 900) return null;
+    const g = G.game; if (!g || g.parts.length >= (Q_PARTS[G.quality] || 600)) return null;
     const p = Object.assign({ x: 0, y: 0, vx: 0, vy: 0, life: 0.6, t: 0, size: 3, color: '#fff', type: 'dot', drag: 0.9, grav: 0, rot: 0, vr: 0, alpha: 1 }, o);
     g.parts.push(p);
     return p;
   };
   G.burst = function (x, y, n, o) {
     o = o || {};
+    if (G.quality === 'low') n = (n + 1) >> 1;
     const colors = o.colors || [o.color || '#ffd23f'];
     for (let i = 0; i < n; i++) {
       const a = o.angle != null ? o.angle + M.rand(-(o.spread || 0.6), o.spread || 0.6) : M.rand(0, TAU);
@@ -689,22 +810,23 @@
     G.part({ x, y, type: 'flash', size: 18 * size, life: 0.12 + size * 0.03, color: '#ffffff' });
     G.burst(x, y, 6 + size * 6, { colors: o.colors || ['#ffd23f', '#ff8c1a', '#ffffff', '#e63946'], speed: 120 + size * 70, size: 2 + size, life: 0.5 + size * 0.1 });
     for (let i = 0; i < size * 2; i++) G.part({ x: x + M.rand(-6, 6) * size, y: y + M.rand(-6, 6) * size, vx: M.rand(-30, 30), vy: M.rand(-40, 10), type: 'smoke', size: 6 + size * 4, life: 0.6 + size * 0.15, color: 'rgba(60,60,70,0.5)', drag: 0.95 });
-    if (o.confetti !== false) G.confetti(x, y, 3 + size * 3);
+    if (o.confetti !== false) G.confetti(x, y, Math.min(12, 3 + size * 3));
     if (size >= 2) G.shake(size * 2.5);
   };
   // Santinhos e notas voando (assinatura visual das "cassações")
+  const CONFETTI_COLORS = ['#ffffff', '#ffd23f', '#3ddc84', '#4cc9f0', '#ff5d8f'];
   G.confetti = function (x, y, n) {
-    const cs = ['#ffffff', '#ffd23f', '#3ddc84', '#4cc9f0', '#ff5d8f'];
+    if (G.quality === 'low') n = (n + 1) >> 1;
     for (let i = 0; i < n; i++) {
       const a = M.rand(0, TAU), sp = M.rand(40, 170);
-      G.part({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, type: 'paper', size: M.rand(3, 5), life: M.rand(0.8, 1.4), color: M.pick(cs), drag: 0.93, grav: 90, rot: M.rand(0, TAU), vr: M.rand(-12, 12) });
+      G.part({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, type: 'paper', size: M.rand(3, 5), life: M.rand(0.8, 1.4), color: M.pick(CONFETTI_COLORS), drag: 0.93, grav: 90, rot: M.rand(0, TAU), vr: M.rand(-12, 12) });
     }
   };
   G.text = function (x, y, str, o) {
     const g = G.game; if (!g) return;
     o = o || {};
     if (g.texts.length > 40) g.texts.shift();
-    g.texts.push({ x, y, str, color: o.color || '#fff', size: o.size || 12, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font: o.font || G.FONT_DISPLAY, stroke: o.stroke !== false });
+    g.texts.push({ x, y, str, color: o.color || '#fff', size: o.size || 12, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font: o.font || G.FONT_DISPLAY, stroke: o.stroke !== false && (G.quality !== 'low' || (o.size || 12) >= 16) });
   };
   G.shake = function (m) { const g = G.game; if (g && G.save.settings.shake) g.shake = Math.min(14, Math.max(g.shake, m)); };
   G.flash = function (a, c) { const g = G.game; if (g) { g.flashA = Math.max(g.flashA, a); g.flashC = c || '#fff'; } };
@@ -736,19 +858,23 @@
 
   // ===================== Placar / aprovação =====================
   G.mult = function () { const g = G.game; return g ? 1 + g.approval / 25 : 1; };
+  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que a recontagem
+  // NÃO zera: cada marca só dá vida uma vez por partida.
+  const EXTENDS = [500000, 1500000, 3000000, 6000000];
+  function checkExtends(run) {
+    while ((run.extGiven || 0) < EXTENDS.length && (run.total || 0) >= EXTENDS[run.extGiven || 0]) {
+      run.extGiven = (run.extGiven || 0) + 1;
+      run.lives = Math.min(9, run.lives + 1);
+      G.text(G.W / 2, G.H * 0.45, 'VIDA EXTRA!', { color: '#ff5d8f', size: 18, life: 1.6, vy: -20 });
+      call(G.Audio, 'sfx', 'extend');
+    }
+  }
   G.addScore = function (base, x, y, showText) {
     const run = G.run; if (!run) return 0;
     const pts = Math.round(base * G.mult());
-    const before = run.score;
     run.score += pts;
-    // vidas extras por pontuação
-    for (const ext of [500000, 1500000, 3000000, 6000000]) {
-      if (before < ext && run.score >= ext) {
-        run.lives = Math.min(9, run.lives + 1);
-        G.text(G.W / 2, G.H * 0.45, 'VIDA EXTRA!', { color: '#ff5d8f', size: 18, life: 1.6, vy: -20 });
-        call(G.Audio, 'sfx', 'extend');
-      }
-    }
+    run.total = (run.total || 0) + pts;
+    if (run.total >= EXTENDS[run.extGiven || 0]) checkExtends(run);
     if (showText && x != null) G.text(x, y, G.fmt(pts), { color: '#fff', size: 10, life: 0.7 });
     return pts;
   };
@@ -778,7 +904,7 @@
       if (e.pix > 0) G.dropPix(e.x, e.y, e.pix);
       if (e.drop) {
         const list = Array.isArray(e.drop) ? e.drop : [e.drop];
-        for (const d of list) G.drop(d, e.x, e.y, { vy: -120 });
+        for (const d of list) { const it = G.drop(d, e.x, e.y, { vy: -120, wtype: d === 'power' && e.dropW ? e.dropW : undefined }); if (it && d === 'power' && e.dropW) it.wtype0 = e.dropW; }
       }
       const sz = e.big ? 3 : e.r > 20 ? 2 : 1;
       G.explode(e.x, e.y, sz);
@@ -810,6 +936,15 @@
   };
 
   // ===================== Chefões =====================
+  // Caixas de colisão do chefão: as do módulo, ou um círculo padrão reaproveitado (sem alocar por tiro).
+  function bossBoxes(b) {
+    if (b.hitboxes) return b.hitboxes;
+    let d = b._hb;
+    if (!d) d = b._hb = [{ dx: 0, dy: 0, r: b.r }];
+    d[0].r = b.r;
+    return d;
+  }
+  G.bossBoxes = bossBoxes;
   G.spawnBoss = function (id, o) {
     const g = G.game; if (!g) return null;
     const def = G.Bosses.defs[id];
@@ -896,7 +1031,8 @@
       G.shake(5);
       G.flash(0.35, '#fff');
       const ph = b.phases[idx];
-      if (ph && ph.name) G.banner('FASE ' + (idx + 1), ph.name, { color: G.C.yellow, dur: 1.8, small: true });
+      // "º TURNO" (e não "FASE", que é o nome das etapas do jogo): ninguém aceita o resultado mesmo
+      if (ph && ph.name) G.banner((idx + 1) + 'º TURNO', ph.name, { color: G.C.yellow, dur: 1.8, small: true });
       call(G.Audio, 'sfx', 'phase');
       if (b.def.onPhase) call(b.def, 'onPhase', b, idx, G.game);
     }
@@ -934,6 +1070,7 @@
     setPlayButtons(false);
     call(G.UI, 'dialogue', lines, () => {
       if (g) g.inDialogue = false;
+      reanchor(); // um dedo que ficou na tela durante a conversa pilota de onde o carro está
       if (G.state === 'dialogue') G.state = prev === 'dialogue' ? 'play' : prev;
       if (G.state === 'play') setPlayButtons(true);
       if (done) safe(done, 'dialogue.done');
@@ -1009,22 +1146,27 @@
     return b;
   }
   const UP = -Math.PI / 2, DEG = Math.PI / 180;
+  // VOTO: pares [deslocamento x, ângulo em graus] por nível
+  const VOTO_SETS = [
+    [-5, 0, 5, 0],
+    [-8, 0, 0, 0, 8, 0],
+    [-10, 0, -3.5, 0, 3.5, 0, 10, 0],
+    [-10, 0, -3.5, 0, 3.5, 0, 10, 0, -14, -7, 14, 7],
+    [-12, 0, -6, 0, 0, 0, 6, 0, 12, 0, -15, -8, 15, 8],
+  ];
+  // BOCA DE URNA: leque (n, abertura em graus) + um feixe central reto (ns tiros) em todo nível,
+  // para não virar arma-armadilha contra chefão (o leque sozinho só acertava com o tiro do meio).
+  const BOCA_N = [3, 5, 5, 7, 9], BOCA_SPREAD = [28, 46, 52, 66, 84], BOCA_CORE = [2, 3, 3, 4, 4];
   function fireWeapon(p) {
     const run = G.run, lv = run.level, w = run.weapon;
     const x = p.x, y = p.y - 14;
     if (w === 'voto') {
-      const sets = [
-        [[-5, 0], [5, 0]],
-        [[-8, 0], [0, 0], [8, 0]],
-        [[-10, 0], [-3.5, 0], [3.5, 0], [10, 0]],
-        [[-10, 0], [-3.5, 0], [3.5, 0], [10, 0], [-14, -7], [14, 7]],
-        [[-12, 0], [-6, 0], [0, 0], [6, 0], [12, 0], [-15, -8], [15, 8]],
-      ][lv - 1];
-      for (const [dx, a] of sets) shot(x + dx, y, UP + a * DEG, 640, 1, 'voto');
+      const set = VOTO_SETS[lv - 1];
+      for (let i = 0; i < set.length; i += 2) shot(x + set[i], y, UP + set[i + 1] * DEG, 640, 1, 'voto');
     } else if (w === 'boca') {
-      const n = [3, 5, 5, 7, 9][lv - 1], spread = [28, 46, 52, 66, 84][lv - 1] * DEG;
-      for (let i = 0; i < n; i++) shot(x, y, UP - spread / 2 + (spread * i) / (n - 1), 560, 0.85, 'boca');
-      if (lv >= 3) { shot(x - 6, y, UP, 620, 0.8, 'boca'); shot(x + 6, y, UP, 620, 0.8, 'boca'); }
+      const n = BOCA_N[lv - 1], spread = BOCA_SPREAD[lv - 1] * DEG, ns = BOCA_CORE[lv - 1];
+      for (let i = 0; i < n; i++) shot(x, y, UP - spread / 2 + (spread * i) / (n - 1), 560, 0.7, 'boca');
+      for (let i = 0; i < ns; i++) shot(x + (i - (ns - 1) / 2) * 6, y, UP, 620, 1.0, 'boca');
     } else if (w === 'panela') {
       shot(x, y, UP, 640, 0.7, 'voto');
       if (lv >= 4) { shot(x - 9, y, UP, 640, 0.6, 'voto'); shot(x + 9, y, UP, 640, 0.6, 'voto'); }
@@ -1067,26 +1209,36 @@
     }
     return best;
   }
+  // LAVA-JATO: jato contínuo que atravessa a coluna. O primeiro alvo (o mais perto do carro) leva
+  // dano cheio; os de trás levam 60% (chefes intermediários, "big", sempre levam cheio).
+  const BEAM_HITS = [];
+  const byYDesc = (a, b) => b.y - a.y;
   function updateBeam(dt) {
     const g = G.game, p = g.player, run = G.run;
     if (run.weapon !== 'jato' || !p.alive || !g.canFire) { g.beam = null; return; }
     const lv = run.level;
     const w = 7 + lv * 2.6;
-    let dps = 30 + lv * 11;
+    let dps = 20 + lv * 11;
     dps *= 1 + 0.1 * G.upg('turbo');
     if (p.cafe > 0) dps *= 1.35;
     const x0 = p.x, y0 = p.y - 16;
     let top = -10;
-    const hits = [];
-    // atravessa todos os inimigos na coluna
+    const hits = BEAM_HITS;
+    hits.length = 0;
     for (const e of g.enemies) {
       if (e.dead || e.invuln || e.y > y0 || e.y < -20) continue;
       if (Math.abs(e.x - x0) < e.r + w / 2) hits.push(e);
     }
-    for (const e of hits) { G.hitEnemy(e, dps * dt); if (Math.random() < 0.35) G.part({ x: e.x + M.rand(-6, 6), y: e.y + e.r * 0.5, vx: M.rand(-80, 80), vy: M.rand(-20, 60), type: 'dot', size: 2.5, color: '#bdf3ff', life: 0.3, grav: 300 }); }
+    if (hits.length > 1) hits.sort(byYDesc);
+    for (let i = 0; i < hits.length; i++) {
+      const e = hits[i];
+      G.hitEnemy(e, dps * dt * (i === 0 || e.big ? 1 : 0.6));
+      if (Math.random() < 0.35) G.part({ x: e.x + M.rand(-6, 6), y: e.y + e.r * 0.5, vx: M.rand(-80, 80), vy: M.rand(-20, 60), type: 'dot', size: 2.5, color: '#bdf3ff', life: 0.3, grav: 300 });
+    }
+    hits.length = 0;
     const b = g.boss;
     if (b && b.state === 'fight') {
-      const boxes = b.hitboxes || [{ dx: 0, dy: 0, r: b.r }];
+      const boxes = bossBoxes(b);
       for (const hb of boxes) {
         const bx = b.x + hb.dx, by = b.y + hb.dy;
         if (by < y0 && Math.abs(bx - x0) < hb.r + w / 2) {
@@ -1097,7 +1249,8 @@
         }
       }
     }
-    g.beam = { x: x0, y0, top, w, t: (g.beam ? g.beam.t : 0) + dt };
+    const bm = g.beam || (g.beam = { x: 0, y0: 0, top: 0, w: 0, t: 0 });
+    bm.x = x0; bm.y0 = y0; bm.top = top; bm.w = w; bm.t += dt;
   }
 
   // ===================== Jogador: atualização =====================
@@ -1111,8 +1264,8 @@
       p.respawnT -= dt;
       if (p.respawnT <= 0) {
         if (run.lives <= 0) { gameOver(); return; }
+        // o dedo que ficou na tela continua valendo: reancora quando o carro terminar de entrar
         p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.tx = G.W / 2; p.ty = G.H * 0.8; p.inv = 3;
-        input.active = false;
       }
       return;
     }
@@ -1120,7 +1273,7 @@
       p.y = M.approach(p.y, G.H * 0.8, 260 * dt);
       p.x = M.approach(p.x, G.W / 2, 260 * dt);
       p.tx = p.x; p.ty = p.y;
-      if (Math.abs(p.y - G.H * 0.8) < 1) p.entering = false;
+      if (Math.abs(p.y - G.H * 0.8) < 1) { p.entering = false; reanchor(); }
     } else {
       const k = input.keys;
       const kx = (k.right ? 1 : 0) - (k.left ? 1 : 0), ky = (k.down ? 1 : 0) - (k.up ? 1 : 0);
@@ -1190,7 +1343,10 @@
     call(G.Audio, 'sfx', 'player_die');
     const lostLevel = run.level > 1;
     run.level = Math.max(1, run.level - 1);
-    if (lostLevel || M.chance(0.5)) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon });
+    run.pp = Math.min(run.pp || 0, Math.max(0, powerNeed(run.level) - 1));
+    // o nível perdido cai como um P "de volta" (cor da arma, sem piscar): pegou, recupera o nível na hora
+    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true });
+    else if (M.chance(0.5)) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon });
     run.bombs = Math.max(run.bombs, run.baseBombs);
     G.clearBullets(false);
     g.beam = null;
@@ -1203,8 +1359,14 @@
   // Bomba: DELAÇÃO PREMIADA
   G.bomb = function () {
     const g = G.game, run = G.run;
-    if (!g || G.state !== 'play' || !g.player.alive || g.player.entering) return false;
+    if (!g || G.state !== 'play' || !g.player.alive || g.player.entering || g.resumeT > 0) return false;
     if (run.bombs <= 0 || g.player.bombT > 0) { if (run.bombs <= 0) call(G.Audio, 'sfx', 'denied'); return false; }
+    // Não gasta à toa: cinemática da volta do Lule (invulnerável e inofensivo), chefão já caindo, fase acabando.
+    const bs = g.boss;
+    if (g.cleared || (bs && (bs.state === 'dying' || bs.state === 'leaving' || (bs.state === 'fight' && ((bs.invuln && bs.harmless) || (bs.data && bs.data.reviving)))))) {
+      call(G.Audio, 'sfx', 'denied');
+      return false;
+    }
     run.bombs--;
     g.bombsUsed++; g.bombsUsedBoss++;
     const p = g.player;
@@ -1223,6 +1385,10 @@
     return true;
   };
 
+  // Quantos P para subir do nível lv para lv+1
+  const POWER_NEED = [0, 1, 2, 3, 3];
+  function powerNeed(lv) { return POWER_NEED[lv] || 3; }
+  G.powerNeed = powerNeed;
   function collectPickup(it) {
     const g = G.game, run = G.run, p = g.player;
     it.dead = true;
@@ -1236,15 +1402,29 @@
         return;
       }
       case 'power': {
-        const before = run.level;
-        if (it.wtype === run.weapon) {
-          if (run.level >= G.MAX_LEVEL) { G.addScore(5000, it.x, it.y, true); G.text(p.x, p.y - 24, 'NÍVEL MÁXIMO', { color: G.WEAPONS[run.weapon].color, size: 12 }); }
-          else { run.level++; G.text(p.x, p.y - 24, 'NÍVEL ' + run.level + '!', { color: G.WEAPONS[run.weapon].color, size: 13 }); }
+        // Todo P fortalece a arma (barra de progresso: 1, 2, 3, 3 P por nível); a cor escolhe QUAL arma.
+        // O P "de volta" (caiu na morte) devolve um nível inteiro na hora, seja qual for a cor.
+        const wcol = (w) => (G.WEAPONS[w] || G.WEAPONS.voto).color;
+        let switched = false;
+        if (!it.restore && it.wtype && it.wtype !== run.weapon && G.WEAPONS[it.wtype]) { run.weapon = it.wtype; switched = true; }
+        let msg = null;
+        if (run.level >= G.MAX_LEVEL) {
+          G.addScore(5000, it.x, it.y, true);
+          msg = switched ? G.WEAPONS[run.weapon].name + '!' : 'NÍVEL MÁXIMO';
+        } else if (it.restore) {
+          run.level++;
+          msg = 'NÍVEL ' + run.level + ' DE VOLTA!';
         } else {
-          run.weapon = it.wtype;
-          if (run.level < G.MAX_LEVEL && before === 1) run.level = 2;
-          G.text(p.x, p.y - 24, G.WEAPONS[run.weapon].name + '!', { color: G.WEAPONS[run.weapon].color, size: 13 });
+          run.pp = (run.pp || 0) + 1;
+          const need = powerNeed(run.level);
+          if (run.pp >= need) {
+            run.pp = 0; run.level++;
+            msg = (switched ? G.WEAPONS[run.weapon].name + ' ' : '') + 'NÍVEL ' + run.level + '!';
+          } else {
+            msg = (switched ? G.WEAPONS[run.weapon].name + ' · ' : 'FORÇA ') + run.pp + '/' + need;
+          }
         }
+        G.text(p.x, p.y - 24, msg, { color: wcol(run.weapon), size: 13 });
         if (run.level >= G.MAX_LEVEL) G.unlock('arsenal');
         G.addScore(1000);
         call(G.Audio, 'sfx', 'powerup');
@@ -1277,6 +1457,9 @@
   }
   function updateGame(dt) {
     const g = G.game, p = g.player, run = G.run;
+    // volta da pausa: mundo congelado por ~1 s ("PRONTO? VAI!") para o dedão voltar à tela.
+    // Nada se mexe (nem o carro, então pausar não serve de truque); um toque novo já ancora o dedo.
+    if (g.resumeT > 0) { g.resumeT -= dt; reanchor(); return; }
     if (g.hitstop > 0) { g.hitstop -= dt; return; }
     g.t += dt; g.frame++;
     g.scrollY += g.scrollSpeed * dt;
@@ -1318,7 +1501,7 @@
         }
       }
       if (b.dead || !boss || boss.state !== 'fight') continue;
-      const boxes = boss.hitboxes || [{ dx: 0, dy: 0, r: boss.r }];
+      const boxes = bossBoxes(boss);
       for (const hb of boxes) {
         const rr = hb.r + b.r;
         if (M.dist2(b.x, b.y, boss.x + hb.dx, boss.y + hb.dy) < rr * rr) {
@@ -1350,7 +1533,7 @@
     if (boss) {
       updateBoss(dt);
       if (boss.state === 'fight' && p.alive && !boss.harmless) {
-        const boxes = boss.hitboxes || [{ dx: 0, dy: 0, r: boss.r }];
+        const boxes = bossBoxes(boss);
         for (const hb of boxes) {
           const rr = hb.r * 0.7 + p.r;
           if (M.dist2(boss.x + hb.dx, boss.y + hb.dy, p.x, p.y) < rr * rr) { hurtPlayer(); break; }
@@ -1369,7 +1552,7 @@
       if (b.turn) b.ang += b.turn * dt;
       if (b.accel || b.turn) { b.vx = Math.cos(b.ang) * b.spd; b.vy = Math.sin(b.ang) * b.spd; }
       if (b.ax || b.ay) { b.vx += b.ax * dt; b.vy += b.ay * dt; }
-      if (b.update) safe(b.update, 'bullet.update', b, dt, g);
+      if (b.update) { try { b.update(b, dt, g); } catch (err) { G.reportError(err, 'bullet.update'); b.update = null; } }
       b.x += b.vx * dt; b.y += b.vy * dt;
       if (b.spin) b.rot += b.spin * dt; else if (b.vx || b.vy) b.rot = Math.atan2(b.vy, b.vx);
       if (b.t > b.life || (!b.keep && b.t > 0.3 && (b.x < -50 || b.x > W + 50 || b.y < -80 || b.y > H + 50))) { b.dead = true; continue; }
@@ -1403,7 +1586,7 @@
     for (const l of g.lasers) {
       l.t += dt;
       if (l.owner) { l.x = l.owner.x + l.ox; l.y = l.owner.y + l.oy; if (l.owner.dead) l.t = Math.max(l.t, l.warn + l.life - 0.2); }
-      if (l.update) safe(l.update, 'laser.update', l, dt, g);
+      if (l.update) { try { l.update(l, dt, g); } catch (err) { G.reportError(err, 'laser.update'); l.update = null; } }
       l.ang += l.sweep * dt;
       if (l.t > l.warn + l.life) { l.dead = true; continue; }
       if (l.t >= l.warn && l.t < l.warn + l.life - 0.1 && p.alive && !p.entering) {
@@ -1415,18 +1598,21 @@
     }
 
     // --- itens ---
+    // o ímã (Chave Pix) e a coleta automática no alto da tela NÃO puxam o P: a cor é escolha do jogador
     const magR = 46 + G.upg('ima') * 28;
     const autoCollect = p.alive && p.y < H * 0.3;
     for (const it of g.pickups) {
       if (it.dead) continue;
       it.t += dt;
       if (it.type === 'power' && it.cycle && it.t > 0.5) {
-        const idx = Math.floor((it.t - 0.5) / 3) % 4;
+        const idx = Math.floor((it.t - 0.5) / G.POWER_CYCLE) % 4;
         const start = G.WEAPON_ORDER.indexOf(it.wtype0 || (it.wtype0 = it.wtype));
         it.wtype = G.WEAPON_ORDER[(start + idx) % 4];
       }
       const d2 = M.dist2(it.x, it.y, p.x, p.y);
-      if (p.alive && (it.magnet || autoCollect || d2 < magR * magR)) {
+      const isP = it.type === 'power' && !it.restore; // o P "de volta" (morte) pode ser puxado: cor não importa
+      const pull = isP ? 30 : magR;
+      if (p.alive && (it.magnet || (autoCollect && !isP) || d2 < pull * pull)) {
         const a = Math.atan2(p.y - it.y, p.x - it.x);
         const sp = 520;
         it.vx = M.lerp(it.vx, Math.cos(a) * sp, 0.25); it.vy = M.lerp(it.vy, Math.sin(a) * sp, 0.25);
@@ -1444,7 +1630,7 @@
     for (const q of g.parts) {
       q.t += dt;
       if (q.t >= q.life) { q.dead = true; continue; }
-      const k = Math.pow(q.drag, dt * 60);
+      const k = q.drag; // passo fixo de 1/60: pow(drag, dt*60) === drag
       q.vx *= k; q.vy = q.vy * k + q.grav * dt;
       q.x += q.vx * dt; q.y += q.vy * dt; q.rot += q.vr * dt;
     }
@@ -1463,10 +1649,12 @@
     // fim da fase
     if (g.cleared && G.state === 'play') {
       g.clearT -= dt;
-      for (const it of g.pickups) it.magnet = true;
+      for (const it of g.pickups) { it.magnet = true; if (it.type === 'power') lockPower(it); }
       if (g.clearT <= 0) G.stageClear();
     }
   }
+  // P puxado no fim da fase vira da arma atual (sobe o nível / vale pontos), sem trocar de arma sem querer
+  function lockPower(it) { if (!it.restore && G.run) { it.wtype = G.run.weapon; it.cycle = false; } }
   function hitSpark(b, tink) {
     const c = tink ? '#9ab' : b.type === 'voto' ? '#b9ffd6' : b.type === 'boca' ? '#fff1a8' : b.type === 'panela' ? '#ffffff' : '#bdf3ff';
     G.part({ x: b.x, y: b.y, type: 'dot', size: tink ? 1.5 : 2.5, color: c, life: 0.15, vy: 40 });
@@ -1530,7 +1718,9 @@
     if (p.alive) {
       const blink = p.inv > 0 && ((p.t * 16) | 0) % 2 === 0 && !p.entering;
       if (!blink) {
-        call(G.Art, 'player', ctx, p.x, p.y, { t: p.t, tilt: p.tilt, shield: p.shield, weapon: G.run.weapon, level: G.run.level, cafe: p.cafe > 0, bomb: p.bombT > 0 });
+        const po = PLAYER_DRAW_OPTS;
+        po.t = p.t; po.tilt = p.tilt; po.shield = p.shield; po.weapon = G.run.weapon; po.level = G.run.level; po.cafe = p.cafe > 0; po.bomb = p.bombT > 0;
+        call(G.Art, 'player', ctx, p.x, p.y, po);
       }
       if (p.shield) {
         ctx.strokeStyle = 'rgba(76,201,240,' + (0.55 + 0.25 * Math.sin(p.t * 8)) + ')'; ctx.lineWidth = 2;
@@ -1542,15 +1732,15 @@
       }
     }
     // partículas
-    drawParticles(g);
+    drawParticles(g, k, ox, oy);
+    // balões de fala (por baixo dos tiros inimigos: um balão nunca esconde uma bala)
+    for (const e of g.enemies) if (e.sayT > 0 && e.sayText) drawBubble(e.x, e.y - (e.bubbleY || e.r + 8), e.sayText);
+    if (b && b.sayT > 0 && b.sayText) drawBubble(b.x, b.y - (b.bubbleY || b.r + 14), b.sayText);
     // tiros inimigos (sempre por cima, para ficarem legíveis)
     drawEnemyBullets(g, k, ox, oy);
     ctx.setTransform(k, 0, 0, k, ox * k, oy * k);
     // lasers
     for (const l of g.lasers) drawLaser(l, g);
-    // balões de fala
-    for (const e of g.enemies) if (e.sayT > 0 && e.sayText) drawBubble(e.x, e.y - e.r - 8, e.sayText);
-    if (b && b.sayT > 0 && b.sayText) drawBubble(b.x, b.y - (b.bubbleY || b.r + 14), b.sayText);
     // textos flutuantes
     for (const tx of g.texts) {
       const a = M.clamp(1 - (tx.t / tx.life) * (tx.t / tx.life), 0, 1);
@@ -1570,14 +1760,31 @@
       ctx.beginPath(); ctx.arc(g.bombFx.x, g.bombFx.y, t * 700, 0, TAU); ctx.stroke();
     }
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    drawHUD(g);
+    drawHUD(g, k);
     if (g.banner) drawBanner(g.banner);
+    if (g.resumeT > 0 && G.state === 'play') drawResume(g.resumeT);
     if (b && b.state === 'warning') drawWarning(b.t);
     if (g.flashA > 0) { ctx.globalAlpha = Math.min(1, g.flashA); ctx.fillStyle = g.flashC; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
     if (G.debug.hitboxes) drawDebugHitboxes(g);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  const PLAYER_DRAW_OPTS = {};
+  // "PRONTO? ... VAI!" na volta da pausa
+  function drawResume(t) {
+    const go = t < RESUME_T * 0.4;
+    const txt = go ? 'VAI!' : 'PRONTO?';
+    const k = go ? 1 + (RESUME_T * 0.4 - t) * 1.2 : 1;
+    ctx.save();
+    ctx.fillStyle = 'rgba(8,12,22,' + (go ? 0.15 : 0.35) + ')'; ctx.fillRect(0, 0, G.W, G.H);
+    ctx.translate(G.W / 2, G.H * 0.45); ctx.scale(k, k);
+    ctx.globalAlpha = go ? Math.min(1, t / (RESUME_T * 0.4) + 0.2) : 1;
+    ctx.font = (go ? 44 : 34) + 'px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6; ctx.strokeStyle = '#000'; ctx.strokeText(txt, 0, 0);
+    ctx.fillStyle = go ? G.C.greenL : G.C.yellow; ctx.fillText(txt, 0, 0);
+    if (!go) { ctx.font = '700 14px ' + G.FONT_BODY; ctx.fillStyle = '#fff'; ctx.fillText('ENCOSTE O DEDO NA TELA', 0, 34); }
+    ctx.restore();
+  }
   function drawPlayerShots(g) {
     for (const b of g.pb) {
       if (b.type === 'voto') {
@@ -1666,10 +1873,20 @@
     }
     ctx.restore();
   }
-  function drawParticles(g) {
+  function drawParticles(g, k, ox, oy) {
+    const tx = ox * k, ty = oy * k;
+    let moved = false; // o 'paper' usa setTransform direto (sem save/restore por papel)
     for (const q of g.parts) {
       const f = 1 - q.t / q.life;
       ctx.globalAlpha = Math.max(0, Math.min(1, f * 1.4)) * q.alpha;
+      if (q.type === 'paper') {
+        const c = Math.cos(q.rot), sn = Math.sin(q.rot), sy = Math.abs(Math.cos(q.rot * 1.7)) + 0.2;
+        ctx.setTransform(k * c, k * sn, -k * sn * sy, k * c * sy, q.x * k + tx, q.y * k + ty);
+        ctx.fillStyle = q.color; ctx.fillRect(-q.size * 0.6, -q.size * 0.8, q.size * 1.2, q.size * 1.6);
+        moved = true;
+        continue;
+      }
+      if (moved) { ctx.setTransform(k, 0, 0, k, tx, ty); moved = false; }
       switch (q.type) {
         case 'spark': {
           ctx.strokeStyle = q.color; ctx.lineWidth = q.size * 0.7;
@@ -1689,17 +1906,12 @@
           ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, q.size * (1.4 - f * 0.6), 0, TAU); ctx.fill();
           break;
         }
-        case 'paper': {
-          ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.rot); ctx.scale(1, Math.abs(Math.cos(q.rot * 1.7)) + 0.2);
-          ctx.fillStyle = q.color; ctx.fillRect(-q.size * 0.6, -q.size * 0.8, q.size * 1.2, q.size * 1.6);
-          ctx.restore();
-          break;
-        }
         default: {
           ctx.fillStyle = q.color; ctx.beginPath(); ctx.arc(q.x, q.y, q.size * (0.4 + f * 0.6), 0, TAU); ctx.fill();
         }
       }
     }
+    if (moved) ctx.setTransform(k, 0, 0, k, tx, ty);
     ctx.globalAlpha = 1;
   }
   function roundRect(x, y, w, h, r) {
@@ -1726,10 +1938,14 @@
     const sc = t < 0.18 ? 2.4 - (t / 0.18) * 1.4 : 1;
     const a = t > 2.4 ? Math.max(0, 1 - (t - 2.4) / 0.6) : 1;
     ctx.save();
-    ctx.translate(M.clamp(st.x, 110, G.W - 110), M.clamp(st.y, 100, G.H * 0.5));
-    ctx.rotate(-0.22); ctx.scale(sc, sc); ctx.globalAlpha = a;
     ctx.font = '34px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    // mede antes: o carimbo inteiro (girado) sempre cabe na tela ("A CONTA CHEGOU!", "IMPEACHMENT!")
     const w = ctx.measureText(st.text).width + 30;
+    const rw = w * Math.cos(0.22) + 56 * Math.sin(0.22);
+    const fit = Math.min(1, (G.W - 24) / rw);
+    const hw = (rw * fit) / 2;
+    ctx.translate(M.clamp(st.x, hw + 12, G.W - hw - 12), M.clamp(st.y, 100, G.H * 0.5));
+    ctx.rotate(-0.22); ctx.scale(sc * fit, sc * fit); ctx.globalAlpha = a;
     ctx.strokeStyle = '#e63946'; ctx.lineWidth = 5; roundRect(-w / 2, -28, w, 56, 6); ctx.stroke();
     ctx.lineWidth = 2; roundRect(-w / 2 + 6, -22, w - 12, 44, 4); ctx.stroke();
     ctx.fillStyle = '#e63946'; ctx.fillText(st.text, 0, 2);
@@ -1768,43 +1984,73 @@
   function drawDebugHitboxes(g) {
     ctx.strokeStyle = '#0f0'; ctx.lineWidth = 1;
     for (const e of g.enemies) { ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, TAU); ctx.stroke(); }
-    if (g.boss) for (const hb of g.boss.hitboxes || [{ dx: 0, dy: 0, r: g.boss.r }]) { ctx.beginPath(); ctx.arc(g.boss.x + hb.dx, g.boss.y + hb.dy, hb.r, 0, TAU); ctx.stroke(); }
+    if (g.boss) for (const hb of bossBoxes(g.boss)) { ctx.beginPath(); ctx.arc(g.boss.x + hb.dx, g.boss.y + hb.dy, hb.r, 0, TAU); ctx.stroke(); }
     ctx.strokeStyle = '#f0f';
     for (const b of g.eb) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.8, 0, TAU); ctx.stroke(); }
   }
 
   // ---------- HUD ----------
-  function drawHUD(g) {
-    const run = G.run; if (!run) return;
-    const W = G.W;
-    // faixa de cima
-    const gr = ctx.createLinearGradient(0, 0, 0, 46);
-    gr.addColorStop(0, 'rgba(8,12,22,0.85)'); gr.addColorStop(1, 'rgba(8,12,22,0)');
-    ctx.fillStyle = gr; ctx.fillRect(0, 0, W, 46);
-    ctx.textBaseline = 'alphabetic';
+  // A faixa de cima (votos, Pix, vidas, aprovação) vai para um canvas guardado e só é redesenhada
+  // quando algum valor muda (no máximo ~15x/s para o placar). A barra do chefão e a arma são diretas.
+  const HUD_BAND_H = 48;
+  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1 };
+  function paintHudBand(g, run, k) {
+    const W = G.W, hc = hudCache;
+    if (!hc.c || hc.k !== k) {
+      if (!hc.c) hc.c = document.createElement('canvas');
+      hc.c.width = Math.ceil(W * k); hc.c.height = Math.ceil(HUD_BAND_H * k);
+      hc.x = hc.c.getContext('2d'); hc.k = k; hc.score = -1;
+      hc.grad = null;
+    }
+    const x = hc.x;
+    x.setTransform(k, 0, 0, k, 0, 0);
+    x.clearRect(0, 0, W, HUD_BAND_H);
+    if (!hc.grad) {
+      hc.grad = x.createLinearGradient(0, 0, 0, 46);
+      hc.grad.addColorStop(0, 'rgba(8,12,22,0.85)'); hc.grad.addColorStop(1, 'rgba(8,12,22,0)');
+    }
+    x.fillStyle = hc.grad; x.fillRect(0, 0, W, 46);
+    x.textBaseline = 'alphabetic';
     // placar = votos
-    ctx.textAlign = 'left';
-    ctx.font = '700 9px ' + G.FONT_BODY; ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillText('VOTOS', 8, 12);
-    ctx.font = '15px ' + G.FONT_DISPLAY; ctx.fillStyle = '#ffffff';
-    ctx.fillText(G.fmt(run.score), 8, 28);
+    x.textAlign = 'left';
+    x.font = '700 10px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.7)';
+    x.fillText('VOTOS', 8, 12);
+    x.font = '15px ' + G.FONT_DISPLAY; x.fillStyle = '#ffffff';
+    x.fillText(G.fmt(run.score), 8, 28);
     // pix (deixa espaço para o botão de pausa à direita)
-    ctx.textAlign = 'right';
-    ctx.font = '700 9px ' + G.FONT_BODY; ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillText('PIX', W - 50, 12);
-    ctx.font = '15px ' + G.FONT_DISPLAY; ctx.fillStyle = G.C.pix;
-    ctx.fillText(G.fmtMoney(run.pix), W - 50, 28);
+    x.textAlign = 'right';
+    x.font = '700 10px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.7)';
+    x.fillText('PIX', W - 50, 12);
+    x.font = '15px ' + G.FONT_DISPLAY; x.fillStyle = G.C.pix;
+    x.fillText(G.fmtMoney(run.pix), W - 50, 28);
     // vidas
-    for (let i = 0; i < Math.min(run.lives, 6); i++) call(G.Art, 'lifeIcon', ctx, 14 + i * 16, 40, 13);
-    if (run.lives > 6) { ctx.textAlign = 'left'; ctx.font = '700 11px ' + G.FONT_BODY; ctx.fillStyle = '#fff'; ctx.fillText('x' + run.lives, 14 + 6 * 16, 44); }
+    for (let i = 0; i < Math.min(run.lives, 6); i++) call(G.Art, 'lifeIcon', x, 14 + i * 16, 40, 13);
+    if (run.lives > 6) { x.textAlign = 'left'; x.font = '700 11px ' + G.FONT_BODY; x.fillStyle = '#fff'; x.fillText('x' + run.lives, 14 + 6 * 16, 44); }
     // aprovação (multiplicador)
     const ax = W / 2 - 50, ay = 36, aw = 100;
-    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(ax, ay, aw, 5);
-    const ap = g.approval / 100;
-    ctx.fillStyle = ap > 0.66 ? G.C.greenL : ap > 0.33 ? G.C.yellow : G.C.red;
-    ctx.fillRect(ax, ay, aw * ap, 5);
-    ctx.textAlign = 'center'; ctx.font = '700 9px ' + G.FONT_BODY; ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + G.mult().toFixed(1), W / 2, ay - 3);
+    x.fillStyle = 'rgba(255,255,255,0.15)'; x.fillRect(ax, ay, aw, 5);
+    const ap = Math.round(g.approval) / 100;
+    x.fillStyle = ap > 0.66 ? G.C.greenL : ap > 0.33 ? G.C.yellow : G.C.red;
+    x.fillRect(ax, ay, aw * ap, 5);
+    x.textAlign = 'center'; x.font = '700 10px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.85)';
+    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + G.mult().toFixed(1).replace('.', ','), W / 2, ay - 3);
+  }
+  function drawHUD(g, k) {
+    const run = G.run; if (!run) return;
+    const W = G.W, hc = hudCache;
+    k = k || scale * dpr;
+    // faixa de cima (guardada)
+    const apr = Math.round(g.approval);
+    const now = performance.now();
+    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives;
+    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || now - hc.t >= 66))) {
+      paintHudBand(g, run, k);
+      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.t = now;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(hc.c, 0, 0);
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.textBaseline = 'alphabetic';
     // chefão
     const b = g.boss;
     if (b && (b.state === 'fight' || b.state === 'talk' || b.state === 'enter')) {
@@ -1818,23 +2064,34 @@
       ctx.textAlign = 'left'; ctx.font = '10px ' + G.FONT_DISPLAY; ctx.fillStyle = '#ffffff';
       ctx.fillText(b.name, bx, by + 7);
       if (b.phases[b.phase] && b.phases[b.phase].name) {
-        ctx.textAlign = 'right'; ctx.font = '700 9px ' + G.FONT_BODY; ctx.fillStyle = '#ffd23f';
+        ctx.textAlign = 'right'; ctx.font = '700 10px ' + G.FONT_BODY; ctx.fillStyle = '#ffd23f';
         ctx.fillText(b.phases[b.phase].name.toUpperCase(), bx + bw, by + 7);
       }
     }
-    // arma (canto inferior esquerdo)
-    const wdef = G.WEAPONS[run.weapon];
+    // arma (canto inferior esquerdo); fica transparente quando o Fusca passa por baixo
+    const p = g.player;
+    const wdef = G.WEAPONS[run.weapon] || G.WEAPONS.voto;
     const wy = G.H - 14;
+    if (p.alive && p.y > G.H - 64 && p.x < 150) ctx.globalAlpha = 0.3;
     ctx.textAlign = 'left'; ctx.font = '11px ' + G.FONT_DISPLAY; ctx.fillStyle = wdef.color;
     ctx.fillText(wdef.name, 10, wy - 8);
+    const need = powerNeed(run.level);
     for (let i = 0; i < G.MAX_LEVEL; i++) {
       ctx.fillStyle = i < run.level ? wdef.color : 'rgba(255,255,255,0.18)';
       ctx.fillRect(10 + i * 12, wy - 3, 9, 5);
+      // progresso para o próximo nível (cada P enche um pedaço)
+      if (i === run.level && run.pp > 0) {
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = a * 0.6; ctx.fillStyle = wdef.color;
+        ctx.fillRect(10 + i * 12, wy - 3, 9 * Math.min(1, run.pp / need), 5);
+        ctx.globalAlpha = a;
+      }
     }
-    if (g.player.cafe > 0) { ctx.fillStyle = '#d4a373'; ctx.font = '700 9px ' + G.FONT_BODY; ctx.fillText('CAFEZINHO ' + Math.ceil(g.player.cafe) + 's', 74, wy + 2); }
+    if (p.cafe > 0) { ctx.fillStyle = '#d4a373'; ctx.font = '700 10px ' + G.FONT_BODY; ctx.fillText('CAFEZINHO ' + Math.ceil(p.cafe) + 's', 74, wy + 2); }
+    ctx.globalAlpha = 1;
     updateDomHud();
   }
-  let lastBombs = -1, lastFill = -1;
+  let lastBombs = -1, lastFill = -1, lastNear = false, btnRect = null;
   function updateDomHud() {
     const btn = document.getElementById('btnBomb');
     if (!btn || !G.run || !G.game) return;
@@ -1846,9 +2103,19 @@
     }
     const f = Math.round(G.game.delacao);
     if (f !== lastFill) { lastFill = f; btn.style.setProperty('--fill', f + '%'); }
+    // Fusca passando por baixo do botão da Delação: o botão fica quase transparente (continua apertável)
+    const p = G.game.player;
+    if (!btnRect || !btnRect.width) { const r = btn.getBoundingClientRect(); btnRect = r.width ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width } : null; }
+    let near = false;
+    if (btnRect && p.alive) {
+      const px = G.view.x + p.x * G.view.scale, py = G.view.y + p.y * G.view.scale, m = 28;
+      near = px > btnRect.left - m && px < btnRect.right + m && py > btnRect.top - m && py < btnRect.bottom + m;
+    }
+    if (near !== lastNear) { lastNear = near; btn.style.opacity = near ? '0.25' : ''; }
   }
   function setPlayButtons(show) {
     document.body.classList.toggle('in-play', !!show);
+    btnRect = null; // o botão só tem tamanho quando aparece
   }
 
   // ===================== Fluxo =====================
@@ -1866,11 +2133,13 @@
     const bombs = 2 + G.upg('bomba');
     G.run = {
       loop, stageIdx, startStage: stageIdx, score: 0, lives, baseLives: lives, bombs, baseBombs: bombs,
-      weapon: 'voto', level: 1 + G.upg('arma'), continues: 0, maxContinues: 3, grazes: 0, pix: 0, hits: 0,
+      weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, continues: 0, maxContinues: 3, grazes: 0, pix: 0, hits: 0,
+      total: 0, extGiven: 0, // pontos da partida inteira (a recontagem não zera) e vidas extras já dadas
     };
     G.count('runs');
     const go = () => G.startStage(stageIdx);
-    if (stageIdx === 0 && loop === 1 && !G.debug.skipStory) {
+    // a abertura em 6 painéis passa só na primeira vez (G.UI pode oferecer "rever a história")
+    if (stageIdx === 0 && loop === 1 && !G.debug.skipStory && !G.save.seenIntro) {
       G.state = 'intro';
       setPlayButtons(false);
       call(G.Audio, 'music', 'story');
@@ -1882,6 +2151,7 @@
     const st = G.Stages.list[idx];
     if (!st) { G.finishGame(); return; }
     G.run.stageIdx = idx;
+    qualityStageStart();
     const g = (G.game = newGame(idx));
     g.player = makePlayer();
     g.script = null;
@@ -1913,15 +2183,26 @@
     G.saveGame();
   }
   G.commitPix = commitPix;
+  // Grava o que já foi ganho (app indo para o fundo / aba fechando)
+  function saveProgress() { if (G.game && G.run) commitPix(); else G.saveGame(); }
+  // Nota da fase. S: sem morrer e no máximo 1 Delação (bomba não é pecado). A: sem morrer.
+  // B: até 1 / 2 / 4 / 6 mortes nas fases 1..4 (a régua acompanha a dificuldade; medido com o bot
+  // "humano": nas fases 3 e 4 um jogador bom morre 4 a 8 vezes). C: o resto.
+  const RANK_B = [1, 2, 4, 6];
+  G.rankFor = function (hits, bombs, stageIdx) {
+    if (hits === 0) return bombs <= 1 ? 'S' : 'A';
+    return hits <= RANK_B[M.clamp(stageIdx | 0, 0, RANK_B.length - 1)] ? 'B' : 'C';
+  };
   G.stageClear = function () {
     const g = G.game, run = G.run;
     if (!g || G.state === 'clear') return;
     G.state = 'clear';
     setPlayButtons(false);
     g.canFire = false; g.beam = null; g.player.inv = 999;
-    for (const it of g.pickups) if (!it.dead) collectPickup(it);
+    for (const it of g.pickups) if (!it.dead) { if (it.type === 'power') lockPower(it); collectPickup(it); }
     const noHit = g.hits === 0, noBomb = g.bombsUsed === 0;
-    const rank = noHit && noBomb ? 'S' : noHit ? 'A' : g.hits <= 2 ? 'B' : 'C';
+    const rank = G.rankFor(g.hits, g.bombsUsed, g.stageIdx);
+    g.rank = rank;
     const bonus = {
       fichaLimpa: noHit ? 50000 : 0,
       semDelacao: noBomb ? 20000 : 0,
@@ -1931,7 +2212,10 @@
     let total = 0; for (const k in bonus) total += bonus[k];
     total = Math.round(total * (run.loop > 1 ? 1.5 : 1));
     run.score += total;
-    const pixBonus = { S: 200, A: 120, B: 60, C: 25 }[rank] * (run.loop > 1 ? 2 : 1);
+    run.total = (run.total || 0) + total;
+    checkExtends(run);
+    // Pix da nota: cresce com a fase (fases difíceis pagam mais) e dobra no 2º Mandato
+    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (run.loop > 1 ? 2 : 1));
     run.pix += pixBonus; g.pixStage += pixBonus;
     commitPix();
     if (noHit) G.unlock('ficha_limpa');
@@ -1974,15 +2258,18 @@
     const g = G.game, run = G.run;
     if (!g || run.continues >= run.maxContinues) return false;
     run.continues++;
-    run.score = 0;
+    run.score = 0; // o placar zera; run.total não (vidas extras não se repetem)
     run.lives = run.baseLives;
     run.bombs = run.baseBombs;
     const p = g.player;
-    p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.inv = 3.5;
+    p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.tx = G.W / 2; p.ty = G.H * 0.8; p.inv = 3.5;
     G.clearBullets(false);
     G.state = 'play';
     setPlayButtons(true);
-    call(G.Audio, 'music', g.boss && g.boss.state === 'fight' ? g.boss.def.music || g.stage.bossMusic || 'boss' : g.stage.music || 'stage' + (g.stageIdx + 1));
+    // música certa para o momento: chefão chegando/caindo ou cinemática da volta do Lule = silêncio
+    const b = g.boss;
+    if (b && (b.state !== 'fight' || (b.data && b.data.reviving))) call(G.Audio, 'stopMusic');
+    else call(G.Audio, 'music', b ? (b.def.music || g.stage.bossMusic || 'boss') : (g.stage.music || 'stage' + (g.stageIdx + 1)));
     return true;
   };
   G.finishGame = function () {
@@ -2010,19 +2297,46 @@
   G.resume = function () {
     if (G.state !== 'pause') return;
     G.state = 'play';
+    if (G.game) G.game.resumeT = RESUME_T;
     setPlayButtons(true);
     call(G.UI, 'hidePause');
   };
+  const RESUME_T = 1.0;
 
   // ===================== Loop =====================
   let last = 0, acc = 0;
+  let frozenState = null; // pausa / fim de jogo parado: desenha uma vez e deixa a imagem quieta
+  // Medidor do modo de qualidade automático (intervalo real do rAF, que inclui rasterizar e compor)
+  const QM = { ema: 16.7, slowT: 0, stageMax: 0, stageN: 0 };
+  function qualityMeter(dtMs) {
+    if (G.state !== 'play' || !G.game || G.game.t <= 3 || dtMs >= 120 || dtMs <= 0 || document.hidden) return;
+    QM.ema += (dtMs - QM.ema) * 0.05;
+    QM.slowT = QM.ema > 22 ? QM.slowT + dtMs : 0;
+    QM.stageN++;
+    if (QM.stageN > 120 && QM.ema > QM.stageMax) QM.stageMax = QM.ema;
+    if (QM.slowT > 2500 && G.qualityAuto()) {
+      QM.slowT = 0; QM.ema = 16.7;
+      const i = Q_ORDER.indexOf(G.quality);
+      if (i > 0) { G.save.qualityTier = Q_ORDER[i - 1]; G.saveGame(); applyQuality(); }
+    }
+  }
+  // Começo de fase: sobe um nível se a fase anterior inteira rodou com folga (tela de 90/120 Hz)
+  function qualityStageStart() {
+    if (G.qualityAuto() && QM.stageN > 600 && QM.stageMax > 0 && QM.stageMax < 12) {
+      const i = Q_ORDER.indexOf(G.quality);
+      if (i >= 0 && i < Q_ORDER.length - 1) { G.save.qualityTier = Q_ORDER[i + 1]; G.saveGame(); applyQuality(); }
+    }
+    QM.stageMax = 0; QM.stageN = 0; QM.slowT = 0; QM.ema = 16.7;
+  }
   function frame(ts) {
     requestAnimationFrame(frame);
     if (!last) last = ts;
-    let dt = (ts - last) / 1000;
+    const dtMs = ts - last;
+    let dt = dtMs / 1000;
     last = ts;
     if (dt > 0.1) dt = 0.1;
     if (dt < 0) dt = 0;
+    qualityMeter(dtMs);
     const ts2 = G.debug.timeScale || 1;
     acc += dt * ts2;
     let steps = 0;
@@ -2033,6 +2347,13 @@
       steps++;
     }
     if (steps >= maxSteps) acc = 0;
+    // Telas de 90/120 Hz: sem passo de simulação, o quadro seria idêntico; não redesenha.
+    if (steps === 0 && (G.state === 'play' || G.state === 'clear')) return;
+    // Pausado (ou fim de jogo sem nada se mexendo): uma imagem só, o celular descansa.
+    if (G.state === 'pause' || (G.state === 'over' && (!G.game || G.game.parts.length === 0))) {
+      if (frozenState === G.state) return;
+      frozenState = G.state;
+    } else frozenState = null;
     try { render(); } catch (err) { G.reportError(err, 'render'); }
   }
   function step(dt) {
@@ -2055,6 +2376,8 @@
   // ===================== Debug / testes =====================
   G.debug = {
     god: false, auto: false, timeScale: 1, hitboxes: false, skipUI: false, skipDialogue: false, skipStory: false, autoContinue: false,
+    qualityForced: null, // ?quality=high|mid|low (testes): fixa a qualidade e desliga o modo automático
+    qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN }; },
     // pula direto para o chefão da fase atual
     toBoss() {
       const g = G.game; if (!g || !g.stage || !g.stage.boss) return;
@@ -2078,7 +2401,7 @@
     weapon(w, lv) { if (G.run) { G.run.weapon = w; G.run.level = lv || G.run.level; } },
     stats() {
       const g = G.game;
-      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase } : null, lives: G.run.lives, score: G.run.score, errors: G.errors.length } : { state: G.state, errors: G.errors.length };
+      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase } : null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length } : { state: G.state, quality: G.quality, errors: G.errors.length };
     },
   };
   function readParams() {
@@ -2139,6 +2462,11 @@
   }
 
   // ===================== Boot =====================
+  // Fontes chegaram depois do boot (main.js chama): redesenha o que tinha texto guardado em cache.
+  G.fontsReady = function () {
+    hudCache.k = 0;
+    call(G.BG, 'fontsReady'); call(G.Art, 'fontsReady'); call(G.UI, 'fontsReady');
+  };
   G.boot = function () {
     canvas = document.getElementById('game');
     viewEl = document.getElementById('viewport') || document.body;
@@ -2156,6 +2484,8 @@
       G.Stages.add({ id: 'teste', name: 'Fase de Teste', boss: 'teste', script: function* (S) { for (let i = 0; i < 6; i++) { S.spawn('dummy', 60 + i * 48, -20); yield 0.4; } yield S.clear(); yield S.boss('teste'); } });
     }
     const P = readParams();
+    // ?god=0 desliga (não liga): só para as chaves liga/desliga, nunca para stage/loop/ts
+    for (const k of ['god', 'auto', 'skipui', 'hitboxes', 'autocontinue', 'boss']) if (P[k] === '0' || P[k] === 'false') delete P[k];
     if (P.god) G.debug.god = true;
     if (P.auto) G.debug.auto = true;
     if (P.ts) G.debug.timeScale = +P.ts || 1;
@@ -2163,6 +2493,7 @@
     if (P.hitboxes) G.debug.hitboxes = true;
     if (P.autocontinue) G.debug.autoContinue = true;
     if (P.mods) G.debug.isolated = true;
+    if (P.quality && Q_DPR[P.quality]) { G.debug.qualityForced = P.quality; applyQuality(); }
     G.state = 'menu';
     requestAnimationFrame(frame);
     if (P.stage != null) {

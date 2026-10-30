@@ -15,6 +15,8 @@
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
   const L2 = () => !!(G.game && G.game.loop > 1);
   const clamp = M.clamp;
+  // qualidade 'low' (ENGINE §10): sem partículas puramente decorativas contínuas (fumacinha, respingos)
+  const deco = () => G.quality !== 'low';
 
   // Cores de tiro (saturadas, legíveis contra cenário e tiros do Zé)
   const COL = {
@@ -57,11 +59,11 @@
     G.text(x, y, str, { color: color || G.C.yellow, size: 13, life: 2.4, vy: -12 });
   }
   function say(b, s, dur) { G.say(b, s, dur || 2); }
-  // Cansaço (anti-empate): luta normal termina antes; se passar de ~95 s o político
-  // cansa e passa a levar mais dano (até 2× aos ~155 s). d.dmgBase = armadura própria da fase.
+  // Cansaço (anti-empate): luta normal termina antes; se passar de ~95 s (def.fatStart) o político
+  // cansa e passa a levar mais dano (até 2× 60 s depois). d.dmgBase = armadura própria da fase.
   const FAT_START = 95, FAT_FULL = 60;
   function fatigue(b, line) {
-    const d = b.data, f = clamp((b.ft - FAT_START) / FAT_FULL, 0, 1);
+    const d = b.data, f = clamp((b.ft - (b.def.fatStart || FAT_START)) / FAT_FULL, 0, 1);
     if (f > 0 && !d.fatSaid) { d.fatSaid = 1; say(b, line || 'CANSEI...', 2); G.text(b.x, b.y + 60, 'CANSOU!', { color: G.C.yellow, size: 14, life: 1.4 }); }
     d.fat = f;
     b.dmgMul = (d.dmgBase != null ? d.dmgBase : 1) * (1 + f);
@@ -242,10 +244,12 @@
     x.fillStyle = c; x.font = '900 ' + (s * 0.36) + 'px Arial Black, Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText('171', 0, s * 0.03, s * 0.6);
   } });
-  // moeda do toma-lá-dá-cá
+  // moeda do toma-lá-dá-cá (brilho rosa + aro vermelho: é tiro, não é item — o dinheiro do jogo é verde-água)
   BS.define('bs_moeda', { r: 5, size: 16, spin: 7, paint(x, s, c) {
-    glowOn(x, c, 7); x.fillStyle = c; x.beginPath(); x.ellipse(0, 0, s * 0.46, s * 0.46, 0, 0, TAU); x.fill();
-    x.shadowBlur = 0; x.strokeStyle = '#ffffff'; x.lineWidth = s * 0.08; x.beginPath(); x.arc(0, 0, s * 0.32, 0, TAU); x.stroke();
+    glowOn(x, '#ff3d7f', 7); x.fillStyle = c; x.beginPath(); x.ellipse(0, 0, s * 0.46, s * 0.46, 0, 0, TAU); x.fill();
+    x.shadowBlur = 0;
+    x.strokeStyle = '#ff2a4a'; x.lineWidth = s * 0.12; x.beginPath(); x.arc(0, 0, s * 0.47, 0, TAU); x.stroke();
+    x.strokeStyle = '#ffffff'; x.lineWidth = s * 0.08; x.beginPath(); x.arc(0, 0, s * 0.32, 0, TAU); x.stroke();
     x.fillStyle = '#ffffff'; x.font = '900 ' + (s * 0.44) + 'px Arial Black, Arial, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText('$', 0, s * 0.03);
   } });
@@ -297,9 +301,12 @@
   // cabecinha com gola (dentro do sistema local do Centrão)
   function cenHead(c, x, y, i, S, fl) {
     const sd = SIDE[S.side | 0], C = (col) => (fl ? WHITE : col);
-    c.beginPath(); c.moveTo(x - 10, y + 17); c.lineTo(x - 7.5, y + 7); c.lineTo(x + 7.5, y + 7); c.lineTo(x + 10, y + 17); c.closePath();
-    inked(c, C('#6b7384'), 1.6);
-    if (!fl) {
+    // gola (no reflexo translúcido ela some atrás do corpo: não desenha)
+    if (!S.ghost) {
+      c.beginPath(); c.moveTo(x - 10, y + 17); c.lineTo(x - 7.5, y + 7); c.lineTo(x + 7.5, y + 7); c.lineTo(x + 10, y + 17); c.closePath();
+      inked(c, C('#6b7384'), 1.6);
+    }
+    if (!fl && !S.ghost) {
       c.beginPath(); c.moveTo(x - 4, y + 7); c.lineTo(x, y + 13); c.lineTo(x + 4, y + 7); c.closePath(); c.fillStyle = '#f2f2f2'; c.fill();
       c.beginPath(); c.moveTo(x - 1.4, y + 8); c.lineTo(x + 1.4, y + 8); c.lineTo(x + 2, y + 15); c.lineTo(x - 2, y + 15); c.closePath(); c.fillStyle = sd.main; c.fill();
     }
@@ -335,12 +342,10 @@
       c.fillStyle = sd.main; c.fill();
     }
   }
-  function cenFace(c, S, sd, fl) {
-    const C = (col) => (fl ? WHITE : col);
-    const t = S.t || 0, mood = S.mood || 'smug', hp = S.hp;
-    // rostão
+  // rostão, parte fixa (vai para o sprite): pele, sombra, topete, bochechas e nariz
+  function cenFaceBase(c, fl) {
     c.beginPath(); E(c, 0, -2, 39, 34);
-    outl(c, C(CEN_SKIN), 3);
+    outl(c, fl ? WHITE : CEN_SKIN, 3);
     if (fl) return;
     c.save(); c.beginPath(); E(c, 0, -2, 39, 34); c.clip();
     c.fillStyle = 'rgba(120,60,30,0.14)'; c.beginPath(); E(c, 14, 10, 34, 30); c.fill();
@@ -351,9 +356,18 @@
     c.moveTo(-20, -31); c.quadraticCurveTo(2, -40, 27, -25); c.moveTo(-14, -33); c.quadraticCurveTo(6, -38, 29, -20); c.stroke();
     // bochechas
     c.fillStyle = 'rgba(255,90,90,0.28)'; c.beginPath(); E(c, -27, 5, 7, 4.5); E(c, 27, 5, 7, 4.5); c.fill();
+    // nariz de batata (não encosta nos olhos nem na boca)
+    c.beginPath(); E(c, 0, -1, 7, 6); inked(c, '#dc9c74', 1.6);
+  }
+  // rostão, parte viva (todo quadro): olhos, sobrancelhas, boca, suor e curativo
+  const EYE_SIDES = [-1, 1];
+  const LID_SMUG = Math.asin(0.3), LID_NORMAL = Math.asin(0.7); // linha da pálpebra 3 / 7 px acima do centro do olho (raio 10)
+  function cenFaceLive(c, S, fl) {
+    if (fl) return;
+    const t = S.t || 0, mood = S.mood || 'smug', hp = S.hp;
     // olhos
     const lx = (S.look ? S.look[0] : 0) * 3.5, ly = (S.look ? S.look[1] : 0) * 3;
-    for (const s of [-1, 1]) {
+    for (const s of EYE_SIDES) {
       const ex = s * 16, ey = -13;
       if (mood === 'hurt') {
         c.strokeStyle = INK; c.lineWidth = 2.6;
@@ -366,10 +380,10 @@
         c.fillStyle = INK; c.beginPath(); O(c, ex + lx, ey + 1 + ly, 4.2); c.fill();
         c.fillStyle = '#ffffff'; c.beginPath(); O(c, ex + lx - 1.4, ey - 0.6 + ly, 1.3); c.fill();
         if (mood === 'smug' || mood === 'normal') {
-          // pálpebra pesada (malandro)
-          c.save(); c.beginPath(); E(c, ex, ey, 8.5, 10); c.clip();
-          c.fillStyle = CEN_SKIN; c.fillRect(ex - 10, ey - 12, 20, mood === 'smug' ? 9 : 5);
-          c.restore();
+          // pálpebra pesada (malandro): o pedaço do olho acima da linha (arco + corda, sem clip)
+          const la = mood === 'smug' ? LID_SMUG : LID_NORMAL;
+          c.beginPath(); c.ellipse(ex, ey, 8.5, 10, 0, PI + la, TAU - la); c.closePath();
+          c.fillStyle = CEN_SKIN; c.fill();
           c.strokeStyle = INK; c.lineWidth = 2; c.beginPath(); c.moveTo(ex - 8, ey - (mood === 'smug' ? 3 : 7)); c.lineTo(ex + 8, ey - (mood === 'smug' ? 3 : 7)); c.stroke();
         }
       }
@@ -378,8 +392,6 @@
       c.strokeStyle = '#2f2f2f'; c.lineWidth = 4.6;
       c.beginPath(); c.moveTo(ex - s * 8, ey - 14 + tilt * 5); c.lineTo(ex + s * 7, ey - 15 - tilt * 4 * s * s); c.stroke();
     }
-    // nariz de batata
-    c.beginPath(); E(c, 0, -1, 7, 6); inked(c, '#dc9c74', 1.6);
     // sorrisão (boca grande com dente de ouro)
     const open = clamp((S.mouth || 0) + (mood === 'laugh' ? 0.55 : 0), 0, 1);
     const my = 8;
@@ -415,8 +427,62 @@
     }
   }
   function rr(c, x, y, w, h, r) { G.roundRect(c, x, y, w, h, r); }
+  // ---------- sprites na resolução do aparelho (desempenho) ----------
+  // Desenhos vetoriais caros e quase fixos (o corpo do Centrão, a maleta) vão para canvas fora da tela e são
+  // reaproveitados. Só no canvas do jogo e na escala 1 (o retrato do diálogo continua vetorial).
+  const sprCache = new Map();
+  let sprRes = 0;
+  function devRes() { return G.canvas && G.ctx ? G.canvas.width / G.W : 0; }
+  function fontKey() { return document.fonts ? document.fonts.status : ''; } // refaz o texto quando a fonte chegar
+  // sprGet: só consulta (sem alocar nada por quadro); sprite: cria. box = [x, y, w, h] em unidades locais.
+  function sprGet(key) {
+    const res = devRes();
+    if (res !== sprRes) { sprCache.clear(); sprRes = res; }
+    return sprCache.get(key) || null;
+  }
+  function sprite(key, box, paint) {
+    const res = devRes();
+    if (!(res > 0)) return null;
+    if (res !== sprRes) { sprCache.clear(); sprRes = res; }
+    let cv = sprCache.get(key);
+    if (cv) return cv;
+    if (sprCache.size >= 24) sprCache.clear();
+    cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(box[2] * res)); cv.height = Math.max(1, Math.ceil(box[3] * res));
+    const x = cv.getContext('2d');
+    if (!x) return null;
+    x.setTransform(res, 0, 0, res, -box[0] * res, -box[1] * res);
+    x.lineJoin = 'round'; x.lineCap = 'round';
+    try { paint(x); } catch (err) { G.reportError(err, 'bosses sprite ' + key); }
+    sprCache.set(key, cv);
+    return cv;
+  }
+  // Cola um sprite feito por sprite() no lugar do box. exact = a transformação atual não tem escala (só ±1):
+  // copia pixel a pixel, alinhado à grade do aparelho e sem suavização (bem mais barato na CPU; idêntico na tela).
+  function blitExact(c, spr, box, exact) {
+    if (exact && c.getTransform) {
+      const m = c.getTransform(), res = sprRes;
+      if (m.b === 0 && m.c === 0 && Math.abs(Math.abs(m.a) - res) < 0.02 && Math.abs(m.d - res) < 0.02) {
+        c.save();
+        c.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
+        c.imageSmoothingEnabled = false;
+        c.drawImage(spr, Math.round(box[0] * res), Math.round(box[1] * res));
+        c.restore();
+        return;
+      }
+    }
+    c.drawImage(spr, box[0], box[1], box[2], box[3]);
+  }
   // maleta (desenho compartilhado: na mão e sub-inimigo)
   function briefcase(c, x, y, w, rot, fl, label) {
+    if (c === G.ctx) {
+      const B = w * 0.7 + 2, key = 'case|' + w + '|' + (fl ? 1 : 0) + '|' + (label || '') + '|' + fontKey();
+      const spr = sprGet(key) || sprite(key, [-B, -B, 2 * B, 2 * B], (x2) => briefcaseVec(x2, 0, 0, w, 0, fl, label));
+      if (spr) { c.save(); c.translate(x, y); if (rot) c.rotate(rot); c.drawImage(spr, -B, -B, 2 * B, 2 * B); c.restore(); return; }
+    }
+    briefcaseVec(c, x, y, w, rot, fl, label);
+  }
+  function briefcaseVec(c, x, y, w, rot, fl, label) {
     const C = (col) => (fl ? WHITE : col);
     c.save(); c.translate(x, y); c.rotate(rot || 0);
     const h = w * 0.7;
@@ -448,29 +514,13 @@
     }
   }
 
-  /**
-   * Desenha o Centrão. k = escala (1 = jogo). S = estado visual:
-   * {t, flash, side, flipX, pops[8], hmood[8], warn[8], mood, mouth, look[2], hp, banner, armL, armR, holdCase, sq, alpha, ghost, orbit{ang,R}, noShadow}
-   */
-  function drawCentrao(c, x, y, k, S) {
-    const fl = !!S.flash, C = (col) => (fl ? WHITE : col);
-    const t = S.t || 0, hp = S.hp != null ? S.hp : 1;
-    const sd = SIDE[S.side | 0];
-    c.save();
-    c.translate(x, y);
-    if (S.alpha != null) c.globalAlpha *= S.alpha;
-    const sq = S.sq || 0;
-    c.scale(k * (S.flipX != null ? S.flipX : 1) * (1 + sq), k * (1 - sq));
-    c.lineJoin = 'round'; c.lineCap = 'round';
-    if (!S.ghost && !S.noShadow) { c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(0, 68, 66, 9, 0, 0, TAU); c.fill(); }
-    // sapatinhos (muitos pés)
-    c.beginPath();
-    for (let i = 0; i < 6; i++) { const sx = -42 + i * 16.8, hop = Math.max(0, Math.sin(t * 7 + i * 1.7)) * 2.5; E(c, sx, 62 - hop, 7, 4.2); }
-    inked(c, C('#2a1d18'), 2);
-    // cabecinhas atrás do corpo
-    if (!S.orbit) for (let i = 0; i < 8; i++) { const pop = S.pops ? S.pops[i] : 0.5; if (pop < 0.06) continue; const p = cenSlot(i, pop); cenHead(c, p[0], p[1], i, S, fl); }
-    // braço esquerdo atrás (segura a maleta)
-    const wob = (i, a) => 1 + 0.035 * Math.sin(t * 2.4 + i * 1.9 + a);
+  // corpo do Centrão (ternos fundidos, torsos, rasgos, faixa com o letreiro). wobble = balanço de cada calombo
+  // (só no desenho vetorial: o retrato do diálogo). Área ocupada: CEN_BOX.
+  const CEN_BOX = [-86, -56, 172, 126];
+  const NO_WOB = () => 1;
+  function cenBody(c, sd, fl, hp, t, wobble, banner) {
+    const C = (col) => (fl ? WHITE : col);
+    const wob = wobble ? (i, a) => 1 + 0.035 * Math.sin(t * 2.4 + i * 1.9 + a) : NO_WOB;
     // corpo: contorno único por fora + calombos
     c.beginPath();
     for (let i = 0; i < CEN_LUMPS.length; i++) { const L = CEN_LUMPS[i]; E(c, L[0], L[1], L[2] * wob(i, 0), L[3] * wob(i, 1.3)); }
@@ -496,23 +546,94 @@
     if (!fl) {
       c.beginPath(); c.moveTo(-58, 47); c.quadraticCurveTo(0, 65, 58, 47); c.lineTo(58, 49); c.quadraticCurveTo(0, 67, -58, 49); c.closePath();
       c.fillStyle = sd.dark; c.fill();
-      curvedText(c, S.banner || 'TOMA LÁ DÁ CÁ', 43.5, 8.6, 58, 8.4, sd.acc);
+      curvedText(c, banner, 43.5, 8.6, 58, 8.4, sd.acc);
     }
-    // rostão
-    cenFace(c, S, sd, fl);
-    // braços
-    const shL = [-62, 22], shR = [62, 22];
-    const aL = S.armL || 0, aR = S.armR || 0;
-    const hL = [M.lerp(-86, -82, aL), M.lerp(34, -26, aL) + Math.sin(t * 3) * 1.5];
-    const hR = [M.lerp(86, 84, aR), M.lerp(28, -20, aR) + Math.sin(t * 3 + 1) * 1.5];
+  }
+  // sprite do corpo + parte fixa do rosto: muda só com o lado, o estado de dano, o letreiro e o flash
+  function cenBodySprite(side, fl, hpSt, banner) {
+    const key = fl ? 'cenF' : 'cen|' + side + '|' + hpSt + '|' + banner + '|' + fontKey();
+    return sprGet(key) || sprite(key, CEN_BOX, (x) => {
+      cenBody(x, SIDE[side], fl, hpSt === 2 ? 0.2 : hpSt === 1 ? 0.4 : 1, 0, false, banner);
+      cenFaceBase(x, fl);
+    });
+  }
+
+  // sapatinhos (muitos pés), braços com maleta e bandeira
+  function cenShoes(c, t, fl) {
     c.beginPath();
-    c.moveTo(shL[0], shL[1]); c.quadraticCurveTo(M.lerp(-84, -76, aL), M.lerp(24, 4, aL), hL[0], hL[1]);
-    c.moveTo(shR[0], shR[1]); c.quadraticCurveTo(M.lerp(84, 76, aR), M.lerp(20, 2, aR), hR[0], hR[1]);
+    for (let i = 0; i < 6; i++) { const sx = -42 + i * 16.8, hop = Math.max(0, Math.sin(t * 7 + i * 1.7)) * 2.5; E(c, sx, 62 - hop, 7, 4.2); }
+    inked(c, fl ? WHITE : '#2a1d18', 2);
+  }
+  function cenArms(c, S, sd, fl, t) {
+    const C = (col) => (fl ? WHITE : col);
+    const aL = S.armL || 0, aR = S.armR || 0;
+    const hLx = M.lerp(-86, -82, aL), hLy = M.lerp(34, -26, aL) + Math.sin(t * 3) * 1.5;
+    const hRx = M.lerp(86, 84, aR), hRy = M.lerp(28, -20, aR) + Math.sin(t * 3 + 1) * 1.5;
+    c.beginPath();
+    c.moveTo(-62, 22); c.quadraticCurveTo(M.lerp(-84, -76, aL), M.lerp(24, 4, aL), hLx, hLy);
+    c.moveTo(62, 22); c.quadraticCurveTo(M.lerp(84, 76, aR), M.lerp(20, 2, aR), hRx, hRy);
     c.lineWidth = 15; c.strokeStyle = INK; c.stroke();
     c.lineWidth = 10; c.strokeStyle = C('#6b7384'); c.stroke();
-    if (S.holdCase) briefcase(c, hL[0] - 2, hL[1] + 9, 22, -0.15 + aL * 0.5, fl, 'EMENDA');
-    c.beginPath(); O(c, hL[0], hL[1], 6.2); O(c, hR[0], hR[1], 6.2); inked(c, C(CEN_SKIN), 2);
-    sideFlag(c, hR[0] - 2, hR[1], sd, t, fl);
+    if (S.holdCase) briefcase(c, hLx - 2, hLy + 9, 22, -0.15 + aL * 0.5, fl, 'EMENDA');
+    c.beginPath(); O(c, hLx, hLy, 6.2); O(c, hRx, hRy, 6.2); inked(c, C(CEN_SKIN), 2);
+    sideFlag(c, hRx - 2, hRy, sd, t, fl);
+  }
+  // O REFLEXO (fase 2) é translúcido e não leva dano: pés, corpo, rosto (sorrisinho olhando pra frente), braços em
+  // repouso e bandeira ficam todos num sprite só. As cabecinhas continuam ao vivo (elas avisam os tiros dele).
+  const GH_BOX = [-104, -58, 216, 130];
+  const GH_FACE = { t: 0, mood: 'smug', mouth: 0, look: [0, 0.25], hp: 1, armL: 0, armR: 0, holdCase: true };
+  function cenGhostSprite(side, hpSt, banner, holdCase) {
+    const key = 'cenG|' + side + '|' + hpSt + '|' + banner + '|' + (holdCase ? 1 : 0) + '|' + fontKey();
+    return sprGet(key) || sprite(key, GH_BOX, (x) => {
+      const sd = SIDE[side];
+      cenShoes(x, 0, false);
+      cenBody(x, sd, false, hpSt === 2 ? 0.2 : hpSt === 1 ? 0.4 : 1, 0, false, banner);
+      cenFaceBase(x, false);
+      GH_FACE.hp = hpSt ? 0.5 : 1; GH_FACE.holdCase = holdCase;
+      cenFaceLive(x, GH_FACE, false);
+      cenArms(x, GH_FACE, sd, false, 0);
+    });
+  }
+
+  /**
+   * Desenha o Centrão. k = escala (1 = jogo). S = estado visual:
+   * {t, flash, side, flipX, pops[8], hmood[8], warn[8], mood, mouth, look[2], hp, banner, armL, armR, holdCase, sq, alpha, ghost, orbit{ang,R}, noShadow}
+   * No jogo o corpo vem de um sprite (cenBodySprite); cabeças, olhos, boca, braços e bandeira são desenhados ao vivo.
+   * O reflexo (S.ghost) usa um sprite só (cenGhostSprite) + as cabecinhas.
+   */
+  function drawCentrao(c, x, y, k, S) {
+    const fl = !!S.flash;
+    const t = S.t || 0, hp = S.hp != null ? S.hp : 1;
+    const side = S.side | 0, sd = SIDE[side], banner = S.banner || 'TOMA LÁ DÁ CÁ';
+    const game = k === 1 && c === G.ctx;
+    // no jogo, o "amassadinho" de cada tiro (sq ≤ 0,03) é ignorado: assim o sprite do corpo é copiado pixel a pixel
+    // (sem filtro bilinear, que é o que mais pesa no celular sem GPU). O "pulo" dos anéis (sq 0,06) continua.
+    const sq = game && S.sq <= 0.03 ? 0 : S.sq || 0;
+    const fx = S.flipX != null ? S.flipX : 1;
+    c.save();
+    c.translate(x, y);
+    if (S.alpha != null) c.globalAlpha *= S.alpha;
+    c.scale(k * fx * (1 + sq), k * (1 - sq));
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    if (!S.ghost && !S.noShadow) { c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(0, 68, 66, 9, 0, 0, TAU); c.fill(); }
+    const hpSt = hp < 0.25 ? 2 : hp < 0.45 ? 1 : 0;
+    const exact = sq === 0 && (fx === 1 || fx === -1);
+    const ghostSpr = game && S.ghost && !S.orbit && !fl ? cenGhostSprite(side, hpSt, banner, !!S.holdCase) : null;
+    if (!ghostSpr) cenShoes(c, t, fl);
+    // cabecinhas atrás do corpo
+    if (!S.orbit) for (let i = 0; i < 8; i++) { const pop = S.pops ? S.pops[i] : 0.5; if (pop < 0.06) continue; const p = cenSlot(i, pop); cenHead(c, p[0], p[1], i, S, fl); }
+    if (ghostSpr) { blitExact(c, ghostSpr, GH_BOX, exact); c.restore(); return; }
+    // corpo + rosto
+    const spr = game ? cenBodySprite(side, fl, hpSt, banner) : null;
+    if (spr) {
+      blitExact(c, spr, CEN_BOX, exact);
+      cenFaceLive(c, S, fl);
+    } else {
+      cenBody(c, sd, fl, hp, t, true, banner);
+      cenFaceBase(c, fl);
+      cenFaceLive(c, S, fl);
+    }
+    cenArms(c, S, sd, fl, t);
     // cabeças em órbita (fúria final)
     if (S.orbit) {
       const n = 8;
@@ -645,7 +766,8 @@
     d.ty = b.homeY + Math.sin(b.ft * 1.1) * 8;
   }
   function cenHover(b, d) { d.ty = b.homeY + Math.sin(b.ft * 1.6) * 6; }
-  function cenVisible(b) { return b.data.nHeads === 8 ? [0, 1, 2, 3, 4, 5, 6, 7] : b.data.nHeads === 7 ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6]; }
+  const VIS8 = [0, 1, 2, 3, 4, 5, 6, 7], VIS7 = [0, 1, 2, 3, 4, 5, 6], VIS6 = [1, 2, 3, 4, 5, 6];
+  function cenVisible(b) { return b.data.nHeads === 8 ? VIS8 : b.data.nHeads === 7 ? VIS7 : VIS6; } // não alterar (use .slice())
   // fontes de tiro: o Centrão e (fase 2) o reflexo dele do outro lado
   function cenSources(b) {
     const d = b.data, out = [{ x: b.x, y: b.y, m: b.x < G.W / 2 ? 1 : -1, ghost: false }];
@@ -902,7 +1024,8 @@
 
   const CEN_HB = [[0, -6, 46], [-46, 16, 28], [46, 16, 28], [0, 38, 30]];
   G.Bosses.define('centrao', {
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 2200, r: 46, homeY: 165,
+    // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3400, r: 46, homeY: 165, fatStart: 85,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -912,6 +1035,7 @@
     ],
     init(b) {
       const d = b.data;
+      sprCache.clear();
       d.fx = []; d.side = 0; d.flipX = 1; d.nHeads = 6;
       d.pops = [0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0]; d.popT = d.pops.slice(); d.hold = [0, 0, 0, 0, 0, 0, 0, 0];
       d.hmood = ['smug', 'smug', 'smug', 'smug', 'smug', 'smug', 'smug', 'smug']; d.warn = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -943,7 +1067,7 @@
           const x = d.depSide < 0 ? -14 : G.W + 14, y = M.rand(G.H * 0.36, G.H * 0.5);
           G.spawnEnemy('bs_apoio', x, y, { side: d.depSide, spd: L2() ? 58 : 50 });
           if (!d.depHint) { d.depHint = 1; hint('apoio', G.W / 2, G.H * 0.56, 'NÃO DEIXE O APOIO CHEGAR!'); }
-          d.depT = L2() ? 1.6 : 2.1;
+          d.depT = L2() ? 1.9 : 2.5;
         }
       }
       // hitboxes acompanham as cabeças em órbita
@@ -952,10 +1076,11 @@
         for (let i = 0; i < 8; i++) { const a = d.orbit.ang + (i * TAU) / 8, h = b.hitboxes[4 + i]; h.dx = Math.cos(a) * d.orbit.R; h.dy = Math.sin(a) * d.orbit.R; }
       }
       // fumacinha quando está apanhando muito
-      if (b.hp / b.maxHp < 0.25 && Math.random() < dt * 6) G.part({ x: b.x + M.rand(-40, 40), y: b.y - 30, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(80,80,90,0.45)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.25 && deco() && Math.random() < dt * 6) G.part({ x: b.x + M.rand(-40, 40), y: b.y - 30, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(80,80,90,0.45)', drag: 0.95 });
     },
     onPhase(b, idx) {
       const d = b.data;
+      sprCache.clear(); // letreiro novo: os sprites da fase anterior não servem mais (memória do celular)
       for (let i = 0; i < 8; i++) { d.warn[i] = 0; d.hold[i] = 0; }
       d.armLT = 0; d.armRT = 0; d.flipX = 1; d.swapWarn = 0;
       if (idx === 1) { co(b, cenP2(b)); co(b, cenBg(b, 1.9), 1); }
@@ -967,7 +1092,9 @@
     heal(b, e) {
       const d = b.data;
       const cap = b.maxHp * (b.phases[b.phase] ? b.phases[b.phase].at : 1);
-      const amt = b.maxHp * (L2() ? 0.025 : 0.02);
+      // cura pequena (≈ 37 HP no 1º mandato, 60 no 2º): não cresce junto com o HP do chefão, senão
+      // ganharia da arma fraca (o jogador tem que derrubar o apoio, mas não precisa ser perfeito)
+      const amt = b.maxHp * (L2() ? 0.014 : 0.011);
       b.hp = Math.min(cap, b.hp + amt);
       G.text(e.x, e.y - 18, '+APOIO', { color: G.C.greenL, size: 13, life: 1.1, vy: -30 });
       G.burst(e.x, e.y, 8, { colors: [G.C.greenL, '#ffffff'], speed: 120 });
@@ -1558,7 +1685,7 @@
 
   const DIL_HB = [[0, -16, 30], [0, 24, 25]], DIL_HB_BIKE = [[0, -26, 26], [0, 10, 22], [-26, 38, 16], [26, 38, 16]];
   G.Bosses.define('dilmae', {
-    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3000, r: 40, homeY: 168, spdK: 1.06,
+    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.06,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
@@ -1568,6 +1695,7 @@
     ],
     init(b) {
       const d = b.data;
+      sprCache.clear(); // libera os sprites do Centrão
       d.fx = []; d.pose = 'idle'; d.glowT = 0; d.mouth = 0; d.mouthT = 0;
       d.jar = [0, 0]; d.jarT = [0, 0]; d.jarGlow = false; d.windy = false;
       d.wind = { dir: 1, str: 0, target: 0, warn: 0 };
@@ -1599,12 +1727,12 @@
         }
         const acc = W.dir * W.str * 1.3 * dt;
         for (const q of g.eb) if (!q.dead && q.data && q.data.wnd) { q.vx = clamp(q.vx + acc, -170, 170); }
-        if (Math.random() < dt * 30) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
+        if (Math.random() < dt * (deco() ? 30 : 12)) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
       }
       // hitboxes por pose
       const hb = d.bike ? DIL_HB_BIKE : DIL_HB;
       if (b.hitboxes.length !== hb.length) b.hitboxes = hb.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
-      if (b.hp / b.maxHp < 0.2 && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-20, 20), y: b.y - 40, vx: M.rand(-10, 10), vy: -35, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.2 && deco() && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-20, 20), y: b.y - 40, vx: M.rand(-10, 10), vy: -35, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
     },
     onPhase(b, idx) {
       const d = b.data;
@@ -2010,7 +2138,8 @@
     const h = bolHand(b);
     for (let i = 0; i < n; i++) {
       const x1 = clamp(p.x + (i - (n - 1) / 2) * 80 + M.rand(-14, 14), 26, G.W - 26);
-      const y1 = clamp(p.y - 6 + M.rand(-36, 16), H * 0.46, H * 0.74);
+      // cai no máximo em 0,62H: quem fica embaixo (≈0,8H) tem folga; quem sobe vê a sombra e o círculo de alcance
+      const y1 = clamp(p.y - 6 + M.rand(-36, 16), H * 0.46, H * 0.62);
       d.cans.push({ x0: h[0], y0: h[1], x1, y1, T: 1.12 + i * 0.13, t: 0, rot: M.rand(0, TAU) });
     }
     sfx('whoosh');
@@ -2022,13 +2151,20 @@
     // gruda no chão e some piscando no fim (fica translúcida e inofensiva)
     if (!q.data.fading && q.t > q.life - 0.55) { q.data.fading = 1; q.delay = 0.5; }
   }
+  // respingo: dois anéis que freiam e grudam no chão. SPLAT_V2 define o alcance (ver splatReach)
+  const SPLAT_V1 = 70, SPLAT_A1 = 150, SPLAT_V2 = 96, SPLAT_A2 = 165;
+  // raio máximo (px) que o respingo atinge — é o círculo desenhado na sombra da lata
+  function splatReach(b) {
+    const k = (b.def.spdK || 1) * (G.game ? G.game.diff : 1), v = SPLAT_V2 * k;
+    return (v * v) / (2 * SPLAT_A2) + 6;
+  }
   function bolSplat(b, x, y) {
     const d = b.data;
     d.puddles.push({ x, y, t: 0, life: 4.0, rot: Math.random() * TAU });
     if (d.puddles.length > 12) d.puddles.shift();
     const n1 = L2() ? 10 : 8, off = Math.random() * TAU;
-    for (let i = 0; i < n1; i++) shoot(x, y, off + (i * TAU) / n1, 70, { style: 'bs_leite', color: COL.hot, accel: -150, minSpd: 0, life: 3.6, update: stickyUpd });
-    for (let i = 0; i < 6; i++) shoot(x, y, off + PI / n1 + (i * TAU) / 6, 128, { style: 'bs_leite', color: COL.pink, accel: -165, minSpd: 0, life: 3.4, update: stickyUpd });
+    for (let i = 0; i < n1; i++) shoot(x, y, off + (i * TAU) / n1, SPLAT_V1, { style: 'bs_leite', color: COL.hot, accel: -SPLAT_A1, minSpd: 0, life: 3.6, update: stickyUpd });
+    for (let i = 0; i < 6; i++) shoot(x, y, off + PI / n1 + (i * TAU) / 6, SPLAT_V2, { style: 'bs_leite', color: COL.pink, accel: -SPLAT_A2, minSpd: 0, life: 3.4, update: stickyUpd });
     G.burst(x, y, 12, { colors: ['#fff4dc', '#ffffff', '#ffd9a0'], speed: 160, life: 0.45 });
     G.text(x, y - 18, 'PLOFT!', { color: '#fff4dc', size: 11, life: 0.7 });
     sfx('splash');
@@ -2156,7 +2292,7 @@
           shoot(b.x, b.y + 30, DOWN, 40, { style: 'bs_gota', color: COL.hot, ay: 115, data: { vmax: 165 }, update: smokeFall });
           shoot(b.x, b.y + 30, DOWN, 12, { style: 'bs_gota', color: COL.magenta, ay: 80, data: { vmax: 130 }, update: smokeFall });
         }
-        G.part({ x: b.x - dir * 30, y: b.y + 34, vx: -dir * M.rand(30, 90), vy: M.rand(-80, -20), type: 'dot', size: 3, life: 0.5, color: '#e8fbff', grav: 300 });
+        if (deco()) G.part({ x: b.x - dir * 30, y: b.y + 34, vx: -dir * M.rand(30, 90), vy: M.rand(-80, -20), type: 'dot', size: 3, life: 0.5, color: '#e8fbff', grav: 300 });
       }
     });
     b.x = dir > 0 ? -64 : G.W + 64;
@@ -2235,7 +2371,7 @@
   const BOL_HB_MOTO = [[-2, -23, 22], [0, 14, 30], [-30, 28, 16], [30, 28, 16]], BOL_HB_BOX = [[0, 0, 56]],
     BOL_HB_JET = [[-2, -23, 22], [0, 20, 32], [-36, 26, 18], [42, 22, 18]];
   G.Bosses.define('bolsonario', {
-    name: 'CAPITÃO BOLSONÁRIO', title: 'O Mito da Motociata', hp: 3400, r: 42, homeY: 170, spdK: 1.12,
+    name: 'CAPITÃO BOLSONÁRIO', title: 'O Mito da Motociata', hp: 3800, r: 42, homeY: 170, spdK: 1.12,
     score: 220000, pix: 180, music: 'boss', defeatText: 'INELEGÍVEL!',
     phases: [
       { at: 1, name: 'Motociata' },
@@ -2245,6 +2381,7 @@
     ],
     init(b) {
       const d = b.data;
+      sprCache.clear();
       d.fx = []; d.mode = 'moto'; d.dir = 1; d.lastX = b.x; d.th = 0; d.w = 0;
       d.helmet = true; d.mood = 'angry'; d.pose = 'drive'; d.mouth = 0; d.wheelie = 0; d.wheelieT = 0;
       d.cans = []; d.puddles = []; d.box = null; d.smokeOn = false; d.smT = 0; d.smK = 0; d.canHand = false;
@@ -2275,8 +2412,8 @@
           if (d.smK < 5) shoot(b.x - d.dir * 44, b.y + 22, DOWN - d.dir * 0.5, 28, { style: 'bs_fumaca', color: COL.ember, ay: 52, data: { vmax: d.fast ? 112 : 98 }, update: smokeFall, life: 9 });
         }
       }
-      if ((d.mode === 'moto' || d.mode === 'stun') && Math.random() < dt * (spd > 40 ? 14 : 4)) G.part({ x: b.x - d.dir * 46, y: b.y + 22, vx: -d.dir * M.rand(20, 60), vy: M.rand(-30, 0), type: 'smoke', size: M.rand(3, 6), life: 0.6, color: 'rgba(120,124,134,0.4)', drag: 0.94 });
-      if (d.mode === 'jet' && Math.random() < dt * 20) G.part({ x: b.x - d.dir * M.rand(30, 56), y: b.y + 34, vx: -d.dir * M.rand(10, 60), vy: M.rand(-60, -10), type: 'dot', size: M.rand(2, 3.5), life: 0.45, color: '#e8fbff', grav: 260 });
+      if ((d.mode === 'moto' || d.mode === 'stun') && deco() && Math.random() < dt * (spd > 40 ? 14 : 4)) G.part({ x: b.x - d.dir * 46, y: b.y + 22, vx: -d.dir * M.rand(20, 60), vy: M.rand(-30, 0), type: 'smoke', size: M.rand(3, 6), life: 0.6, color: 'rgba(120,124,134,0.4)', drag: 0.94 });
+      if (d.mode === 'jet' && deco() && Math.random() < dt * 20) G.part({ x: b.x - d.dir * M.rand(30, 56), y: b.y + 34, vx: -d.dir * M.rand(10, 60), vy: M.rand(-60, -10), type: 'dot', size: M.rand(2, 3.5), life: 0.45, color: '#e8fbff', grav: 260 });
       // latas no ar
       for (let i = d.cans.length - 1; i >= 0; i--) {
         const cn = d.cans[i];
@@ -2287,7 +2424,7 @@
       // hitboxes por modo
       const hb = d.mode === 'box' ? BOL_HB_BOX : d.mode === 'jet' ? BOL_HB_JET : BOL_HB_MOTO;
       if (d.hbSrc !== hb) { d.hbSrc = hb; b.hitboxes = hb.map((h) => ({ dx: h[0], dy: h[1], r: h[2] })); }
-      if (b.hp / b.maxHp < 0.3 && d.mode !== 'box' && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 10, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(60,60,70,0.45)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.3 && d.mode !== 'box' && deco() && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 10, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(60,60,70,0.45)', drag: 0.95 });
     },
     onPhase(b, idx, g) {
       const d = b.data;
@@ -2321,15 +2458,24 @@
         ctx.fill();
         ctx.restore();
       }
-      // sombras das latas (telegrafia)
-      for (const cn of d.cans) {
-        const u = cn.t / cn.T;
-        ctx.save();
-        ctx.globalAlpha = 0.25 + 0.5 * u; ctx.fillStyle = 'rgba(10,10,20,0.9)';
-        ctx.beginPath(); ctx.ellipse(cn.x1, cn.y1, 8 + 16 * u, 4 + 7 * u, 0, 0, TAU); ctx.fill();
-        ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(cn.t * 14)); ctx.strokeStyle = COL.hot; ctx.lineWidth = 1.6;
-        ctx.beginPath(); ctx.ellipse(cn.x1, cn.y1, 26, 12, 0, 0, TAU); ctx.stroke();
-        ctx.restore();
+      // sombras das latas (telegrafia): sombra crescendo + alvo piscando + círculo tracejado do alcance do respingo
+      if (d.cans.length) {
+        const reach = splatReach(b);
+        for (const cn of d.cans) {
+          const u = cn.t / cn.T;
+          ctx.save();
+          ctx.globalAlpha = 0.12 + 0.2 * u; ctx.fillStyle = COL.hot;
+          ctx.beginPath(); ctx.arc(cn.x1, cn.y1, reach, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 0.45 + 0.35 * u; ctx.strokeStyle = COL.pink; ctx.lineWidth = 1.4;
+          ctx.setLineDash([6, 5]); ctx.lineDashOffset = -cn.t * 30;
+          ctx.beginPath(); ctx.arc(cn.x1, cn.y1, reach, 0, TAU); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 0.25 + 0.5 * u; ctx.fillStyle = 'rgba(10,10,20,0.9)';
+          ctx.beginPath(); ctx.ellipse(cn.x1, cn.y1, 8 + 16 * u, 4 + 7 * u, 0, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 0.5 + 0.4 * Math.abs(Math.sin(cn.t * 14)); ctx.strokeStyle = COL.hot; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.ellipse(cn.x1, cn.y1, 26, 12, 0, 0, TAU); ctx.stroke();
+          ctx.restore();
+        }
       }
       drawFx(ctx, b, 'under');
       const S = d.S, hpF = b.hp / b.maxHp;

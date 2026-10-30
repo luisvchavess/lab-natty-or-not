@@ -17,11 +17,16 @@
   const G = (window.G = window.G || {});
   const AC = window.AudioContext || window.webkitAudioContext || null;
 
-  const LOOKAHEAD = 0.12;   // s agendados à frente
-  const TICK_MS = 25;       // intervalo do sequenciador
+  const LOOKAHEAD = 0.18;   // s agendados à frente
+  const TICK_MS = 40;       // intervalo do sequenciador (menos acordadas do relógio que os 25 ms de antes)
   const XFADE = 0.4;        // crossfade entre faixas (s)
   const MAX_SFX = 24;       // vozes simultâneas de SFX
   const MAX_MUSIC = 160;    // trava de segurança para notas da trilha
+
+  // qualidade gráfica baixa (G.quality === 'low'): sem reverb, sem camadas extras na trilha,
+  // golpes repetidos ('hit', 'tink', 'pan_hit', tiros) no máximo a cada 60 ms. Atualizado no tick.
+  let LOWQ = false;
+  const LOW_RATE = { hit: 0.06, tink: 0.06, pan_hit: 0.06, boss_hit: 0.06, shot_voto: 0.07, shot_boca: 0.07, shot_panela: 0.07, shot_jato: 0.07, enemy_shot: 0.07, enemy_shot2: 0.08, graze: 0.07, pix: 0.045 };
 
   // ===================== Utilidades =====================
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -192,14 +197,31 @@
     E.duckF = E.filt('lowpass', 20000, 0.5, E.duckG);
     E.musicOn = E.gain(1, E.duckF);
     E.musicBus = E.gain(0.32, E.musicOn);
-    // reverb global da música (só médios/agudos, para não embolar o grave)
-    if (opts.reverb !== false) try {
-      const len = Math.floor(sr * 1.5), ir = ac.createBuffer(2, len, sr);
-      for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
-      const hp = E.filt('highpass', 320, 0.7, null), cv = ac.createConvolver();
-      cv.buffer = ir;
-      E.musicBus.connect(hp); hp.connect(cv); cv.connect(E.gain(0.2, E.musicOn));
-    } catch (e) { /* sem reverb */ }
+    // reverb global da música (só médios/agudos, para não embolar o grave).
+    // Resposta ao impulso mono de 1 s com decaimento cúbico SEM Math.pow (antes: 1,5 s estéreo
+    // com pow por amostra — e o ConvolverNode prepara a FFT da resposta na thread principal).
+    // Ao vivo é criada depois do toque (ver buildEngine) e fica desligada na qualidade baixa.
+    E.rev = null;
+    E.addReverb = function () {
+      if (E.rev) return E.rev;
+      try {
+        const len = Math.floor(sr * 1.0), ir = ac.createBuffer(1, len, sr), inv = 1 / len;
+        const d = ir.getChannelData(0);
+        for (let i = 0; i < len; i++) { const u = 1 - i * inv; d[i] = (Math.random() * 2 - 1) * u * u * u; }
+        const hp = E.filt('highpass', 320, 0.7, null), cv = ac.createConvolver();
+        cv.buffer = ir;
+        hp.connect(cv); cv.connect(E.gain(0.2, E.musicOn));
+        E.rev = { hp, cv, on: false };
+        E.setReverb(true);
+      } catch (e) { E.rev = null; /* sem reverb */ }
+      return E.rev;
+    };
+    E.setReverb = function (on) {
+      const R = E.rev;
+      if (!R || R.on === !!on) return;
+      try { if (on) E.musicBus.connect(R.hp); else E.musicBus.disconnect(R.hp); R.on = !!on; } catch (e) { /* nada */ }
+    };
+    if (opts.reverb !== false && !opts.lazyReverb) E.addReverb();
 
     // ---- SFX: vozes com teto e "roubo" da mais antiga de prioridade <= ----
     E.playSfx = function (name, t, p) {
@@ -1740,7 +1762,7 @@
     // bateria
     for (let i = 0; i < sec.dk.length; i++) {
       const D = sec.dk[i];
-      if (D.hi && !tr.hi) continue;
+      if (D.hi && (!tr.hi || (LOWQ && !E.offline))) continue;
       let pat, idx;
       if (fillBar && D.fill) { pat = D.fill; idx = st; } else if (fillBar && sec.fillOnly) continue;
       else if (D.pat) { pat = D.pat; idx = ss; } else continue;
@@ -1767,8 +1789,8 @@
         for (let j = 0; j < ns.length; j++) K.fn(E, tt + j * (K.strum || 0), ns[j], d, v, dest);
       }
     }
-    // arpejo
-    const A = sec.arp;
+    // arpejo (fica de fora na qualidade baixa)
+    const A = LOWQ && !E.offline ? null : sec.arp;
     if (A) {
       const ev = A.at[ss % A.len];
       if (ev) {
@@ -1836,23 +1858,38 @@
   }
 
   // ===================== Controle ao vivo (G.Audio) =====================
-  const L = { E: null, cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0 };
+  const L = { E: null, ac: null, building: false, pend: [], cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0 };
   const musicOn = () => { const s = G.save && G.save.settings; return !s || s.music !== false; };
   const sfxOn = () => { const s = G.save && G.save.settings; return !s || s.sfx !== false; };
   function report(err, where) {
     if (L.errs++ > 5) return; // não inunda G.errors
     if (G.reportError) G.reportError(err, 'audio.' + where); else try { console.error(err); } catch (e) { /* nada */ }
   }
-  function ensure() {
-    if (L.E) return L.E;
+  // O toque só precisa criar/retomar o AudioContext e tocar 1 amostra de silêncio (iOS).
+  // O motor (barramentos, ruído, ondas) nasce logo depois, fora do gesto, e o reverb depois
+  // dele: o 1º toque (quase sempre o JOGAR) não trava mais ~250 ms a 4x.
+  function ensureCtx() {
+    if (L.ac) return L.ac;
     if (!AC) return null;
     let ac = null;
     try { ac = new AC({ latencyHint: 'interactive' }); } catch (e) { try { ac = new AC(); } catch (e2) { ac = null; } }
+    L.ac = ac;
+    return ac;
+  }
+  function buildEngine() {
+    L.building = false;
+    if (L.E) return L.E;
+    const ac = L.ac;
     if (!ac) return null;
-    try { L.E = Engine(ac); } catch (err) { report(err, 'engine'); try { ac.close(); } catch (e) { /* nada */ } return null; }
+    try { L.E = Engine(ac, { lazyReverb: true }); } catch (err) { report(err, 'engine'); try { ac.close(); } catch (e) { /* nada */ } L.ac = null; L.pend.length = 0; return null; }
     L.mOn = L.sOn = null;
     applySettings(true);
     L.timer = setInterval(tick, TICK_MS);
+    if (L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
+    // sons pedidos enquanto o motor nascia (ex.: o clique do próprio toque)
+    const pend = L.pend.splice(0);
+    for (const nm of pend) api.sfx(nm);
+    setTimeout(() => { try { applyQuality(); } catch (err) { report(err, 'reverb'); } }, 0);
     return L.E;
   }
   function fadeOut(tr, dur) {
@@ -1882,6 +1919,12 @@
     }
     if (force || s !== L.sOn) { L.sOn = s; E.sfxOn.gain.setTargetAtTime(s ? 1 : 0, now, 0.02); }
   }
+  function applyQuality() {
+    const E = L.E;
+    LOWQ = G.quality === 'low';
+    if (!E) return;
+    if (!LOWQ) { if (!E.rev) E.addReverb(); else E.setReverb(true); } else E.setReverb(false);
+  }
   // chefão nos últimos 34% de vida = trilha no clímax (camadas extras)
   function bossCritical() {
     const g = G.game, b = g && g.boss;
@@ -1903,6 +1946,7 @@
     if (!E) return;
     try {
       applySettings(false);
+      if ((G.quality === 'low') !== LOWQ) applyQuality();
       const ac = E.ac, now = ac.currentTime;
       const duck = G.state === 'pause'; // pausa: música abafada e mais baixa
       if (duck !== L.duck) {
@@ -1953,9 +1997,9 @@
     // Chamado no primeiro toque/tecla (e depois, sempre que preciso): cria/retoma o contexto.
     unlock() {
       if (!AC) return;
-      const E = ensure();
-      if (!E) return;
-      const ac = E.ac;
+      const ac = ensureCtx();
+      if (!ac) return;
+      if (!L.E && !L.building) { L.building = true; setTimeout(() => { try { buildEngine(); } catch (err) { L.building = false; report(err, 'engine'); } }, 0); }
       if (ac.state !== 'running' || L.first) {
         L.first = false;
         if (!(typeof document !== 'undefined' && document.hidden)) {
@@ -1965,17 +2009,19 @@
         try { const b = ac.createBuffer(1, 1, ac.sampleRate), s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); } catch (e) { /* nada */ }
       }
       L.susByUs = false;
-      if (L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
+      if (L.E && L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
     },
     sfx(name) {
       const E = L.E;
-      if (!E || !sfxOn()) return;
+      if (!E) { if (L.building && SFX[name] && L.pend.length < 3 && L.pend.indexOf(name) < 0) L.pend.push(name); return; }
+      if (!sfxOn()) return;
       const d = SFX[name];
       if (!d) return; // nome desconhecido: ignora
       const ac = E.ac;
       if (ac.state !== 'running') return;
       const now = ac.currentTime, lt = L.last[name];
-      if (lt !== undefined && now >= lt && now - lt < d.rate) return; // limite por nome
+      const rate = LOWQ && LOW_RATE[name] ? Math.max(d.rate, LOW_RATE[name]) : d.rate;
+      if (lt !== undefined && now >= lt && now - lt < rate) return; // limite por nome
       L.last[name] = now;
       let p;
       if (name === 'pix') { L.pixStreak = now - L.pixT < 0.35 ? Math.min(L.pixStreak + 1, 10) : 0; L.pixT = now; p = L.pixStreak; }
@@ -2000,7 +2046,7 @@
       return {
         ctxState: E ? E.ac.state : AC ? 'none' : 'unsupported',
         track: L.cur ? L.cur.name : null, wanted: L.wanted,
-        voices: E ? E.voices.length : 0, musicVoices: E ? E.mv : 0,
+        voices: E ? E.voices.length : 0, musicVoices: E ? E.mv : 0, reverb: !!(E && E.rev && E.rev.on), low: LOWQ,
         music: musicOn(), sfx: sfxOn(), climax: !!(L.cur && L.cur.hi), ducked: L.duck,
         time: E ? +E.ac.currentTime.toFixed(2) : 0,
       };

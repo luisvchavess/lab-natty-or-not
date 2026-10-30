@@ -70,9 +70,10 @@
   const player = () => G.game && G.game.player;
   const bossDying = () => !!(G.game && G.game.boss && G.game.boss.state === 'dying');
   function farFromPlayer(x, y, d) { const p = player(); return !p || !p.alive || M.dist2(x, y, p.x, p.y) > d * d; }
-  // Pode atirar? Na tela, acima de 68% da altura e longe do jogador (nada de tiro "na cara").
+  // Pode atirar? Na tela, abaixo da faixa do HUD (y 0-48), acima de 68% da altura e longe do
+  // jogador (nada de tiro "na cara" nem nascendo escondido atrás do placar).
   function okShot(e, minD) {
-    if (e.y < 24 || e.y > G.H * 0.68 || e.x < 6 || e.x > G.W - 6) return false;
+    if (e.y < 52 || e.y > G.H * 0.68 || e.x < 6 || e.x > G.W - 6) return false;
     return farFromPlayer(e.x, e.y, minD || 95);
   }
   const aim = (e) => G.aim(e.x, e.y);
@@ -225,16 +226,16 @@
     cabo: ['CABO ELEITORAL', 'distribui santinho do 171'],
     fantasma: ['VEREADOR FANTASMA', 'só aparece pra receber'],
     deputado: ['DEPUTADO DO CENTRÃO', 'apoia quem pagar mais'],
-    assessor: ['ASSESSOR DA RACHADINHA', 'acerta que ele racha!'],
-    lobista: ['LOBISTA', 'derruba e a mala é sua'],
+    assessor: ['ASSESSOR DA RACHADINHA', 'derrube e ele racha em dois!'],
+    lobista: ['LOBISTA', 'derrube e a mala é sua'],
     marqueteiro: ['MARQUETEIRO', 'blinda os aliados: mire nele!'],
     bot: ['BOT DE FAKE NEWS', 'vem em bando e mergulha'],
     carro_som: ['CARRO DE SOM', 'passe pela brecha da onda'],
-    sindicalista: ['SINDICALISTA', 'GREVE! em leque'],
-    leao: ['LEÃO DA RECEITA', 'morde seu Pix! derrube e restitui'],
+    sindicalista: ['SINDICALISTA', 'atira em leque: GREVE!'],
+    leao: ['LEÃO DA RECEITA', 'morde seu Pix! Derrube e ganhe a restituição'],
     ministro: ['MINISTRO', 'são 38. Por enquanto.'],
     motoqueiro: ['MOTOCIATA', 'passa jogando tiro pra baixo'],
-    drone: ['DRONE DO GABINETE', 'piscou vermelho? sai da mira'],
+    drone: ['DRONE DO GABINETE', 'piscou vermelho? Saia da mira'],
   };
   function introduce(e) {
     const run = G.run, info = INTRO[e.kind];
@@ -271,9 +272,26 @@
     for (const k of ['life', 'power', 'shield', 'bomb', 'cafe']) if (l.indexOf(k) >= 0) return k;
     return null;
   }
+  // O "P" do carregador troca de cor a cada 3 s (o mesmo ritmo do item solto) e o item cai
+  // COM a cor mostrada: dá para escolher a hora de derrubar o carregador.
+  const CARRIER_CYCLE = 3;
+  function carrierWeapon(g) {
+    const W = G.WEAPON_ORDER || ['voto'];
+    return W[Math.floor((g ? g.t : 0) / CARRIER_CYCLE) % W.length];
+  }
   function carrierColor(type, g) {
-    if (type === 'power') return (G.WEAPONS[G.WEAPON_ORDER[Math.floor(g.t / 0.6) % 4]] || {}).color || '#fff';
+    if (type === 'power') return ((G.WEAPONS || {})[carrierWeapon(g)] || {}).color || '#fff';
     return { life: '#ff5d8f', shield: '#4cc9f0', bomb: '#f4f1e8', cafe: '#d4a373' }[type] || '#fff';
+  }
+  // chamado logo depois do core soltar os itens do carregador (killEnemy solta antes do onDeath)
+  function syncCarrierDrop(e, g) {
+    if (!g || !g.pickups || e.big || carrierType(e) !== 'power') return;
+    const w = carrierWeapon(g);
+    const P = g.pickups;
+    for (let i = P.length - 1, n = 0; i >= 0 && n < 40; i--, n++) {
+      const it = P[i];
+      if (it.type === 'power' && !it.restore && it.t === 0 && it.x === e.x && it.y === e.y) { it.wtype = w; it.wtype0 = w; }
+    }
   }
   function drawCarrierUnder(ctx, e, g, type) {
     const pulse = 0.5 + 0.5 * Math.sin(g.t * 8);
@@ -290,14 +308,23 @@
   function drawCarrierBadge(ctx, e, g, type) {
     const bx = M.clamp(e.x + e.r + 7, 9, G.W - 9), by = e.y - e.r - 2 + Math.sin(g.t * 5) * 1.5;
     BADGE_ITEM.type = type; BADGE_ITEM.t = g.t;
-    BADGE_ITEM.wtype = G.WEAPON_ORDER[Math.floor(g.t / 0.6) % 4];
+    let t = g.t;
+    if (type === 'power') {
+      // mesma cor que o item vai ter ao cair; o anel do pickup mostra quanto falta para trocar
+      BADGE_ITEM.wtype = carrierWeapon(g); BADGE_ITEM.cycle = true;
+      t = (g.t % CARRIER_CYCLE) + 0.5;
+    } else { BADGE_ITEM.cycle = false; }
     ctx.save(); ctx.translate(bx, by); ctx.scale(0.62, 0.62);
-    G.call(G.Art, 'pickup', ctx, type, 0, 0, g.t, BADGE_ITEM);
+    G.call(G.Art, 'pickup', ctx, type, 0, 0, t, BADGE_ITEM);
     ctx.restore();
   }
   // Define com moldura: chama introdução, desenha carregador/etiqueta em volta do desenho próprio
   function define(kind, def) {
-    const draw = def.draw, update = def.update, init = def.init;
+    const draw = def.draw, update = def.update, init = def.init, onDeath = def.onDeath;
+    def.onDeath = function (e, g, opts) {
+      if (!(opts && opts.silent)) syncCarrierDrop(e, g || G.game);
+      if (onDeath) return onDeath.call(this, e, g, opts);
+    };
     def.init = function (e, o, g) {
       // fases mais adiantadas: inimigos comuns mais resistentes (o Zé também chega mais forte)
       if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * (g.stageIdx || 0); e.hp *= k; e.maxHp = e.hp; }
@@ -333,7 +360,7 @@
     if (label) {
       ctx.font = '9px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.strokeText(label, x, y - 4);
-      ctx.fillStyle = '#ffffff'; ctx.fillText(label, x, y - 4);
+      ctx.fillStyle = label === 'VAI FUGIR!' ? G.C.orange : '#ffffff'; ctx.fillText(label, x, y - 4);
     }
     ctx.restore();
   }
@@ -812,7 +839,7 @@
           const p = player();
           if (p && p.alive && farFromPlayer(e.x, e.y, 140) && (d.dive === true || Math.random() < d.dive)) { d.state = 'aim'; d.st = 0.5; }
         }
-        if (d.fire && !d.fired && e.t > d.fireAt && e.y > 30) { d.fired = true; if (okShot(e, 110)) G.pat.aimed(e.x, e.y, spd(112), { style: 'small', color: COL.magenta }); }
+        if (d.fire && !d.fired && e.t > d.fireAt && e.y > 52) { d.fired = true; if (okShot(e, 110)) G.pat.aimed(e.x, e.y, spd(112), { style: 'small', color: COL.magenta }); }
         if (Math.random() < dt * 0.35) talk(e, BOT_LINES, 0.5, 1.1);
       } else if (d.state === 'aim') {
         d.st -= dt;
@@ -971,8 +998,12 @@
       } else if (d.cyc === 'fire') {
         d.bt -= dt;
         if (d.bt <= 0) {
-          const n = 9 + Math.round(lvl()), spread = 1.45;
-          if (okShot(e, 90)) G.pat.fan(e.x, e.y + 6, d.aimA + (d.burst % 2 ? spread / (n - 1) / 2 : 0), n, spread, spd(100 + d.burst * 9), { style: 'rice', color: COL.orange });
+          // nº ímpar: o grão do meio vem em você e as 3 rajadas saem nas MESMAS direções (corredores):
+          // um passo pro lado e você fica no vão. No 2º Mandato a rajada do meio sai desencontrada (rede).
+          const L2 = loop2();
+          const n = 9 + (lvl() >= 2 ? 2 : 0) + (L2 && lvl() >= 3.5 ? 2 : 0), spread = 1.45;
+          const off = L2 && d.burst % 2 ? spread / (n - 1) / 2 : 0;
+          if (okShot(e, 90)) G.pat.fan(e.x, e.y + 6, d.aimA + off, n, spread, spd(100 + d.burst * 9), { style: 'rice', color: COL.orange });
           d.burst++; d.bt = 0.24;
           if (d.burst >= 3) { d.cyc = 'wait'; d.ct = ivl(2.0); }
         }
@@ -1064,7 +1095,8 @@
     const d = e.data;
     if (d.bit) return;
     d.bit = true;
-    let steal = Math.max(5, Math.round(run.pix * 0.15));
+    // 15% do Pix ganho NESTA fase, entre R$ 5 e R$ 40: dói, mas não leva um upgrade inteiro da Lojinha
+    let steal = M.clamp(Math.round((g.pixStage || 0) * 0.15), 5, 40);
     steal = Math.min(steal, Math.max(0, run.pix));
     run.pix = Math.max(0, run.pix - steal);
     // tira também do que ainda não foi pro cofre (o save), sem ficar negativo
@@ -1081,7 +1113,7 @@
     G.vibrate(80);
     sfx('bite');
     e.vx *= -0.15; e.vy = -110; // quica pra trás e foge com o dinheiro
-    talk(e, steal > 0 ? ['NHAC! Imposto pago!', 'Mordida de 15%!', 'Leão agradece!'] : 'Sem Pix? Que pena.', 1, 1.6, true);
+    talk(e, steal > 0 ? ['NHAC! Imposto pago!', 'Mordida de 15%!', 'Leão agradece!', 'Caiu na malha fina!'] : 'Sem Pix? Que pena.', 1, 1.6, true);
     d.st = 'flee';
   }
   define('leao', {
@@ -1273,10 +1305,13 @@
       d.bounce = Math.abs(Math.sin(e.t * 9 + d.ph)) * 1.6;
       d.ft -= dt;
       if (d.ft <= 0) {
-        d.ft = ivl(0.44) / d.fire;
-        if (d.fire && e.x > 14 && e.x < G.W - 14 && e.y > 30 && e.y < G.H * 0.6) {
-          const o = { style: 'small', color: COL.orange, accel: 170, maxSpd: spd(210) };
-          if (lvl() >= 2) { G.fire(e.x - d.dir * 6, e.y + 10, DOWN - 0.22, spd(55), o); G.fire(e.x - d.dir * 6, e.y + 10, DOWN + 0.22, spd(55), o); }
+        // da fase 3 em diante sai em par (V aberto): intervalo maior para a chuva continuar legível
+        const pair = lvl() >= 2;
+        d.ft = ivl(pair ? 0.6 : 0.44) / (d.fire || 1);
+        if (d.fire && e.x > 14 && e.x < G.W - 14 && e.y > 52 && e.y < G.H * 0.6 && farFromPlayer(e.x, e.y, 80)) {
+          // grão de arroz laranja (lê bem), acelera até ~190-205 px/s nas fases 3-4
+          const o = { style: 'rice', color: COL.orange, accel: 130, maxSpd: spd(170) };
+          if (pair) { G.fire(e.x - d.dir * 6, e.y + 10, DOWN - 0.22, spd(55), o); G.fire(e.x - d.dir * 6, e.y + 10, DOWN + 0.22, spd(55), o); }
           else G.fire(e.x - d.dir * 6, e.y + 10, DOWN, spd(55), o);
         }
       }
@@ -1401,6 +1436,28 @@
     d.pat = p; d.patT = durs[p] || 4; d.pt = 0.6; d.pn = 0;
     return p;
   }
+  // Cansaço: a partir de 55% do tempo de luta o chefe intermediário vai cansando e passa a levar
+  // até 2,2× de dano no fim (quem chega fraco ainda consegue derrubar; quem chega forte nem percebe).
+  const MB_TIRED_AT = 0.55, MB_TIRED_MAX = 1.2;
+  function mbTiredK(e) {
+    const d = e.data;
+    if (d.st !== 'fight' || !d.dur) return 1;
+    const a = d.dur * MB_TIRED_AT;
+    return d.fightT <= a ? 1 : 1 + MB_TIRED_MAX * Math.min(1, (d.fightT - a) / (d.dur - a));
+  }
+  // onHit comum: aplica o cansaço (o core já tirou o dano normal antes de chamar o onHit)
+  function mbOnHit(e, dmg) {
+    const k = mbTiredK(e);
+    if (k > 1 && dmg > 0) e.hp -= dmg * (k - 1);
+    const d = e.data;
+    if (k > 1 && !d.saidTired) { d.saidTired = true; talk(e, ['Ufa... tô cansado!', 'Preciso de um recesso!', 'Cadê meu cafezinho?'], 1, 1.8, true); }
+  }
+  // rótulo da barra: nos últimos 7 s pisca o aviso de fuga
+  function mbLabel(e, label) {
+    const d = e.data;
+    if (d.st === 'fight' && d.dur && d.dur - d.fightT < 7 && ((d.fightT * 3) | 0) % 2 === 0) return 'VAI FUGIR!';
+    return label;
+  }
   function mbFlee(e, text) {
     const d = e.data;
     d.st = 'leave'; d.stT = 0;
@@ -1500,12 +1557,12 @@
       ctx.fillStyle = '#e63946'; ctx.fillText('TRIO', -46, 1); ctx.fillText('171', 46, 1);
     }
     ctx.restore();
-    if (d.st === 'fight') mbBar(ctx, e.x, e.y - 112, 110, e.hp / e.maxHp, 'TRIO ELÉTRICO');
+    if (d.st === 'fight') mbBar(ctx, e.x, e.y - 112, 110, e.hp / e.maxHp, mbLabel(e, 'TRIO ELÉTRICO'));
   }
   define('trio', {
-    hp: 480, r: 42, score: 15000, pix: 40, big: true, keepOffscreen: true,
+    hp: 900, r: 42, score: 15000, pix: 40, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 45, 172);
+      mbStart(e, o, 50, 172);
       const d = e.data;
       d.kids = [];
       for (const side of [-1, 1]) { const k = G.spawnEnemy('trio_caixa', e.x + side * 92, e.y - 4, { parent: e, side }); if (k) d.kids.push(k); }
@@ -1550,6 +1607,7 @@
       }
     },
     draw(ctx, e, g) { drawTrio(ctx, e, g); },
+    onHit(e, dmg) { mbOnHit(e, dmg); },
     onDeath(e) {
       for (const k of e.data.kids) if (!k.dead) G.killEnemy(k);
       if (!bossDying()) mbDeath(e, 'O TRIO PAROU!');
@@ -1601,9 +1659,9 @@
   const LOBMOR_LINES = ['Todo mundo tem seu preço!', 'Aceita uma malinha?', 'Pode contar, tá tudo aí!', 'É só um agrado, campeão!', 'Isso aqui é consultoria!'];
   const LOBMOR_DUR = { mala: 3.4, maletas: 2.8, propina: 2.8 };
   define('lobista_mor', {
-    hp: 700, r: 40, score: 20000, pix: 50, big: true, keepOffscreen: true,
+    hp: 1050, r: 40, score: 20000, pix: 50, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 45, 165);
+      mbStart(e, o, 50, 165);
       const d = e.data;
       d.open = 0; d.dir = 1; d.ang = 0;
       if (!o.drop) e.drop = ['power', 'shield'];
@@ -1652,8 +1710,9 @@
       const d = e.data, fl = G.isFlash(e);
       G.Art.person(ctx, e.x, e.y, 112, LOBMOR, { t: e.t, flash: fl, pose: 'hold', mood: d.open > 0.4 ? 'laugh' : d.pat === 'propina' ? 'smug' : 'normal', mouth: d.open * 0.6 });
       drawBriefcase(ctx, e.x, e.y + 54, 62, 36, d.open, e.t, fl, 'MALA');
-      if (d.st === 'fight') mbBar(ctx, e.x, e.y - 72, 110, e.hp / e.maxHp, 'LOBISTA-MOR');
+      if (d.st === 'fight') mbBar(ctx, e.x, e.y - 92, 110, e.hp / e.maxHp, mbLabel(e, 'LOBISTA-MOR')); // acima do balão de fala
     },
+    onHit(e, dmg) { mbOnHit(e, dmg); },
     onDeath(e) { if (!bossDying()) mbDeath(e, 'A MALA É DO POVO!'); },
   });
   // malinha arremessada: atire nela (vira Pix) antes que estoure em anel
@@ -1767,12 +1826,12 @@
       ctx.fillText('GABINETE', 0, 38);
     }
     ctx.restore();
-    if (d.st === 'fight') mbBar(ctx, e.x, e.y - 98, 110, e.hp / e.maxHp, 'SERVIDOR DO GABINETE');
+    if (d.st === 'fight') mbBar(ctx, e.x, e.y - 98, 110, e.hp / e.maxHp, mbLabel(e, 'SERVIDOR DO GABINETE'));
   }
   define('servidor', {
-    hp: 820, r: 44, score: 25000, pix: 55, big: true, keepOffscreen: true,
+    hp: 1400, r: 44, score: 25000, pix: 55, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 46, 168);
+      mbStart(e, o, 52, 168);
       e.data.gapI = 9;
       G.banner('SERVIDOR DO GABINETE', 'FÁBRICA DE FAKE NEWS', { small: true, color: G.C.orange, dur: 2.2 });
       sfx('charge');
@@ -1830,6 +1889,7 @@
       }
     },
     draw(ctx, e, g) { drawServer(ctx, e, g); },
+    onHit(e, dmg) { mbOnHit(e, dmg); },
     onDeath(e) { if (!bossDying()) mbDeath(e, 'SERVIDOR DERRUBADO!'); },
   });
 
@@ -1854,10 +1914,10 @@
     return out;
   }
   define('comitiva', {
-    hp: 260, r: 19, score: 20000, pix: 40, big: true, keepOffscreen: true,
+    hp: 460, r: 19, score: 20000, pix: 40, big: true, keepOffscreen: true,
     init(e, o) {
       const d = e.data;
-      d.st = 'enter'; d.fightT = 0; d.dur = o.dur || 48; d.tau = 0; d.ripCd = 0;
+      d.st = 'enter'; d.fightT = 0; d.dur = o.dur || 54; d.tau = 0; d.ripCd = 0;
       d.hx = new Float32Array(HIST); d.hy = new Float32Array(HIST); d.hi = 0;
       for (let i = 0; i < HIST; i++) { d.hx[i] = e.x; d.hy[i] = e.y; }
       d.ft = 1.5; d.rt = 4.5; d.facing = 1; d.photoT = 6; d.pause = 0;
@@ -1877,6 +1937,7 @@
       const d = e.data;
       // sem a fila (menos de 6 ministros), o chefe entra em pânico: anda devagar e posa mais (recompensa por limpar a conga)
       let alive = 0; for (const sg of d.segs) if (!sg.dead) alive++;
+      d.aliveN = alive;
       const lonely = alive < 6;
       if (lonely && d.st === 'fight' && !d.saidLonely) { d.saidLonely = true; talk(e, 'Cadê meus ministros?!', 1, 1.8, true); }
       const v = lonely && d.st === 'fight' ? COMI_V * 0.65 : COMI_V;
@@ -1908,7 +1969,7 @@
         if (d.fightT > d.dur) { d.st = 'leave'; talk(e, 'Acabou a viagem oficial!', 1, 2, true); }
         // ataques do chefe
         d.ft -= dt; d.rt -= dt;
-        if (d.ft <= 0) { d.ft = ivl(1.4); if (okShot(e)) { G.pat.aimedFan(e.x, e.y, 3, 0.36, spd(122), { style: 'rice', color: COL.pink }); sfx('enemy_shot2'); } }
+        if (d.ft <= 0) { d.ft = ivl(1.6); if (okShot(e)) { G.pat.aimedFan(e.x, e.y, 3, 0.36, spd(112), { style: 'rice', color: COL.pink }); sfx('enemy_shot2'); } }
         if (d.rt <= 0) { d.rt = ivl(4.6); if (okShot(e, 90)) { G.pat.ring(e.x, e.y, 14, spd(88), { style: 'orb', color: COL.orange }, Math.random() * TAU); sfx('enemy_shot2'); } }
         if (Math.random() < dt * 0.2) talk(e, COMI_LINES, 0.6);
       } else { // 'leave': sai por cima e espera a fila toda sair
@@ -1922,6 +1983,13 @@
     },
     onHit(e, dmg, g) {
       const d = e.data;
+      // a fila protege o chefe: o jato d'água (que atravessa tudo e sempre acerta o chefe em cheio)
+      // só tira 65% enquanto houver 6+ ministros. Limpe a conga e ele fica exposto.
+      const bm = g && g.beam;
+      if (bm && G.run && G.run.weapon === 'jato' && dmg < 6 && (d.aliveN || 0) >= 6 && e.y < bm.y0 && Math.abs(e.x - bm.x) < e.r + bm.w / 2) {
+        e.hp += dmg * 0.35; dmg *= 0.65;
+      }
+      mbOnHit(e, dmg);
       if (g.t < d.ripCd || d.st !== 'fight') return;
       d.ripCd = g.t + ivl(1.7);
       let k = 0;
@@ -1934,7 +2002,7 @@
       if (d.st === 'fight') {
         let hp = Math.max(0, e.hp), n = 1;
         for (const s of d.segs) if (!s.dead) { hp += Math.max(0, s.hp); n++; }
-        mbBar(ctx, e.x, e.y - 46, 96, hp / d.total, n + (n === 1 ? ' MINISTRO' : ' MINISTROS'));
+        mbBar(ctx, e.x, e.y - 66, 96, hp / d.total, mbLabel(e, n + (n === 1 ? ' MINISTRO' : ' MINISTROS'))); // acima do balão de fala
       }
     },
     onDeath(e, g) {

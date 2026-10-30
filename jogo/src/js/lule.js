@@ -1,7 +1,7 @@
 /* ============================================================
    FUSCA A JATO — lule.js
    Chefão final: LULE, "O Picanheiro" — e, depois que ele "volta",
-   LULE 3.0 — TERCEIRO MANDATO.
+   LULE 4.0 — QUARTO MANDATO (a história se passa depois da eleição de 2026).
    (+ retrato do diálogo, estilos de tiro 'lule_' e o sub-inimigo
    'lule_companheiro'). Contrato: docs/ENGINE.md §5.
 
@@ -22,10 +22,15 @@
   const INK = '#101418', WHITE = '#ffffff';
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
   const L2 = () => !!(G.game && G.game.loop > 1);
+  // qualidade 'low' (ENGINE §10): sem partículas puramente decorativas contínuas
+  const deco = () => G.quality !== 'low';
 
-  // HP medido com o piloto automático (VOTO nv.3 ≈ 44 dps, quase todo tiro acertando):
-  // ~90 s na 1ª vida + ~55 s na 2ª. Com gente de verdade desviando, a luta fica em 2,5–3,5 min.
-  const HP1 = 3600, HP2 = 2200, HOME_Y = 178;
+  // HP medido com o bot "humano" (tools/humanbot.js): jogador bom com VOTO nv.5 (≈ 56 dps) leva ~80 s na
+  // 1ª vida + ~55 s na 2ª — a luta mais longa do jogo, como deve ser. Quem chega fraco (nv.1–2) não fica
+  // preso para sempre: o Lule CANSA (veja FAT1/FAT2) e passa a levar até 2× de dano.
+  const HP1 = 4600, HP2 = 3000, HOME_Y = 178;
+  // Cansaço (anti-empate), contado por vida: começa aos FAT1 s na 1ª vida / FAT2 s na 2ª, chega a 2× em FAT_RAMP s.
+  const FAT1 = 115, FAT2 = 75, FAT_RAMP = 60;
   // Lule (G.Art.person) é desenhado com este tamanho, centrado em (0, PY) relativo ao chefão
   const PS = 136, PY = -30, GY = 6; // GY: churrasqueira um pouco mais baixa
 
@@ -47,7 +52,7 @@
 
   // Falas (≤ 28 caracteres; só slogans e memes públicos)
   const TAUNTS = ['COMPANHEIRO!', 'FAZ O L!', 'O AMOR VENCEU!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!', 'O BRASIL VOLTOU!', 'PICANHA E CERVEJINHA!'];
-  const TAUNTS2 = ['TERCEIRO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'O AMOR VENCEU!', 'VOU TAXAR!'];
+  const TAUNTS2 = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'O AMOR VENCEU!', 'VOU TAXAR!'];
 
   // Fases (o core usa 'at' em ordem decrescente)
   const PH1 = [
@@ -58,8 +63,8 @@
   ];
   const PH2 = [
     { at: 1, name: 'Volta por Cima' },
-    { at: 0.5, name: 'Picanha Infinita' },
-    { at: 0.2, name: 'A Última Picanha' },
+    { at: 0.62, name: 'Picanha Infinita' },
+    { at: 0.32, name: 'A Última Picanha' }, // o clímax precisa durar: ~1/3 da 2ª vida
   ];
 
   // ======================================================================
@@ -209,8 +214,9 @@
     x.beginPath(); x.arc(-2.2, -8.6, 2.4, 0, TAU); x.arc(1.4, -9.4, 2.8, 0, TAU); x.arc(3.6, -7.8, 2, 0, TAU);
     x.fillStyle = '#ffffff'; x.fill();
   } });
-  BS.define('lule_espuma', { r: 3.4, size: 11, paint(x, s, c) {
-    gl(x, c, 6); x.fillStyle = c; x.beginPath(); x.arc(0, 0, 4.8, 0, TAU); x.fill(); nogl(x);
+  // espuma de cerveja: miolo branco com aro VERMELHO (amarelo confundiria com os tiros da BOCA DE URNA)
+  BS.define('lule_espuma', { r: 3.4, size: 13, paint(x, s, c) {
+    gl(x, c, 6); x.fillStyle = c; x.beginPath(); x.arc(0, 0, 5.6, 0, TAU); x.fill(); nogl(x);
     x.fillStyle = '#ffffff'; x.beginPath(); x.arc(0, 0, 3.5, 0, TAU); x.fill();
     x.fillStyle = 'rgba(255,214,120,0.9)'; x.beginPath(); x.arc(1.2, 1.2, 1.3, 0, TAU); x.fill();
   } });
@@ -338,7 +344,7 @@
         bl.dead = true;
         if (canShoot() && G.game.eb.length < 430) {
           const n = 5, off = M.rand(0, TAU);
-          for (let i = 0; i < n; i++) G.fire(bl.x, bl.y, off + (i * TAU) / n, 70, { style: 'lule_espuma', color: COL.gold, accel: 14, maxSpd: 108 });
+          for (let i = 0; i < n; i++) G.fire(bl.x, bl.y, off + (i * TAU) / n, 70, { style: 'lule_espuma', color: COL.red, accel: 14, maxSpd: 108 });
           G.part({ x: bl.x, y: bl.y, type: 'ring', size: 5, life: 0.25, color: '#fff4c2' });
           G.burst(bl.x, bl.y, 5, { colors: ['#ffffff', '#fff4c2'], speed: 90, life: 0.3, size: 2.5 });
         }
@@ -571,7 +577,7 @@
           bl.ang += M.clamp(M.wrapAngle(want - bl.ang), -1.35 * dt, 1.35 * dt);
         }
         bl.vx = Math.cos(bl.ang) * sp; bl.vy = Math.sin(bl.ang) * sp;
-        if (Math.random() < 0.25) G.part({ x: bl.x + M.rand(-14, 14), y: bl.y - 16, vx: M.rand(-10, 10), vy: -50, type: 'smoke', size: 4, life: 0.5, color: 'rgba(230,230,240,0.35)' });
+        if (deco() && Math.random() < 0.25) G.part({ x: bl.x + M.rand(-14, 14), y: bl.y - 16, vx: M.rand(-10, 10), vy: -50, type: 'smoke', size: 4, life: 0.5, color: 'rgba(230,230,240,0.35)' });
       },
     });
   }
@@ -833,12 +839,12 @@
       // ELE VOLTOU!
       G.flash(0.85, '#ff2a4a'); G.shake(13); G.hitstop(0.12);
       sfx('laugh'); sfx('explode_l');
-      G.banner('ELE VOLTOU!', 'LULE 3.0 — TERCEIRO MANDATO', { color: '#ff3b4e', dur: 3.2 });
-      b.name = 'LULE 3.0';
+      G.banner('ELE VOLTOU!', 'LULE 4.0 — QUARTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
+      b.name = 'LULE 4.0';
       d.life = 2; d.slumpTo = 0;
       b.maxHp = HP2 * d.hpMul; b.hp = 0;
       d.refill0 = t;
-      say(b, 'TERCEIRO MANDATO!', 2.6);
+      say(b, 'QUARTO MANDATO!', 2.6);
       for (let i = 0; i < 26; i++) {
         const a = (i * TAU) / 26;
         G.part({ x: b.x, y: b.y - 20, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, type: 'spark', size: 4, life: 0.7, color: i % 2 ? '#ff2a4a' : '#ffd23f', drag: 0.92 });
@@ -868,6 +874,7 @@
     if (!g || g.boss !== b) return;
     d.reviving = false; d.revived = true; d.life = 2;
     d.dim = 0; d.slumpTo = 0; d.pinGlow = 0;
+    d.lifeT0 = b.ft; b.dmgMul = 1; d.fat = 0; // o cansaço recomeça na 2ª vida
     b.invuln = false; b.harmless = false;
     G.setBossPhases(b, PH2, 1);
     b.invulnT = 1.2;
@@ -1197,11 +1204,11 @@
     }
   }
 
-  // 3 estrelas douradas girando em volta da cabeça: "terceiro mandato" (side -1 = metade de trás)
+  // 4 estrelas douradas girando em volta da cabeça: "quarto mandato" (side -1 = metade de trás)
   function halo(c, t, fl, side) {
     const hy = PY - 14 * PS / 100 - 44;
-    for (let i = 0; i < 3; i++) {
-      const a = t * 2 + (i * TAU) / 3, sn = Math.sin(a);
+    for (let i = 0; i < 4; i++) {
+      const a = t * 2 + (i * TAU) / 4, sn = Math.sin(a);
       if ((sn >= 0) !== (side > 0)) continue;
       const sx = Math.cos(a) * 46, sy = hy + sn * 7, k = 0.85 + 0.2 * sn;
       c.beginPath(); starP(c, sx, sy, 8 * k, 3.6 * k, 5); c.lineWidth = 2.6; c.strokeStyle = INK; c.lineJoin = 'round'; c.stroke();
@@ -1233,7 +1240,7 @@
     }
     drawLanes(c, d);
     drawSmoke(c, d);
-    // aura do 3º mandato
+    // aura do 4º mandato
     if (d.life === 2 && !fl) {
       const pul = 0.85 + 0.15 * Math.sin(t * 5);
       glow(c, b.x, b.y - 14, 160 * pul, 'rgba(255,36,56,0.95)', 1);
@@ -1342,6 +1349,14 @@
       const heat = d.life === 2 ? 0.6 : M.clamp((0.5 - b.hp / b.maxHp) * 2, 0, 1);
       updSmoke(d, b, dt, heat);
       if (d.reviving) { updateRevive(b, dt, g); return; }
+      // cansaço por vida: a luta de quem chega fraco não vira um moedor sem fim (bons jogadores nem percebem)
+      const lf = b.ft - (d.lifeT0 || 0), fat = M.clamp((lf - (d.life === 1 ? FAT1 : FAT2)) / FAT_RAMP, 0, 1);
+      b.dmgMul = 1 + fat; d.fat = fat;
+      if (fat > 0 && d.fatSaid !== d.life) {
+        d.fatSaid = d.life;
+        say(b, d.life === 1 ? 'TÔ CANSADO, COMPANHEIRO...' : 'ESSE MANDATO TÁ PESADO...', 2.2);
+        G.text(b.x, b.y + 84, 'CANSOU!', { color: G.C.yellow, size: 14, life: 1.4 });
+      }
       const frac = b.hp / b.maxHp;
       d.dmg = d.life === 1 ? (frac < 0.25 ? 2 : frac < 0.5 ? 1 : 0) : 2;
       // movimento suave
@@ -1349,8 +1364,8 @@
       b.x += (M.clamp(d.tx, 80, G.W - 80) - b.x) * f;
       b.y += (d.ty - b.y) * f;
       d.compA += dt * (L2() ? 1.05 : 0.85);
-      // 3º mandato: faíscas vermelhas e douradas subindo em volta dele
-      if (d.life === 2 && Math.random() < dt * 10) {
+      // 4º mandato: faíscas vermelhas e douradas subindo em volta dele
+      if (d.life === 2 && deco() && Math.random() < dt * 10) {
         const a = M.rand(0, TAU);
         G.part({ x: b.x + Math.cos(a) * 78, y: b.y - 10 + Math.sin(a) * 70, vx: 0, vy: M.rand(-70, -40), type: 'spark', size: 2.4, life: 0.55, color: Math.random() < 0.7 ? '#ff3b4e' : '#ffd23f', drag: 0.96 });
       }
@@ -1404,12 +1419,12 @@
   G.Portraits.define('lule', function (ctx, x, y, size, o) {
     o = o || {};
     const t = o.t || 0, mood = o.mood || 'smug';
-    const g = G.game, three = !!(g && g.boss && g.boss.id === 'lule' && g.boss.data && g.boss.data.life === 2);
+    const g = G.game, four = !!(g && g.boss && g.boss.id === 'lule' && g.boss.data && g.boss.data.life === 2);
     ctx.save();
     ctx.beginPath(); ctx.rect(x - size / 2, y - size / 2, size, size); ctx.clip();
-    if (three) glow(ctx, x, y - size * 0.05, size * 0.6, 'rgba(255,40,60,0.5)', 1);
+    if (four) glow(ctx, x, y - size * 0.05, size * 0.6, 'rgba(255,40,60,0.5)', 1);
     const sp = size * 1.2, py = y + size * 0.14;
-    G.Art.person(ctx, x, py, sp, three ? Object.assign({}, SPEC_PORTRAIT, { sweat: true }) : SPEC_PORTRAIT,
+    G.Art.person(ctx, x, py, sp, four ? Object.assign({}, SPEC_PORTRAIT, { sweat: true }) : SPEC_PORTRAIT,
       { t, mood: mood === 'normal' ? 'smug' : mood, mouth: o.mouth, pose: 'up', lookX: o.lookX != null ? o.lookX : -0.3, lookY: 0.1, autoLook: false });
     // espeto de picanha na mão erguida
     const s = sp / 100;
@@ -1417,9 +1432,9 @@
     ctx.save(); ctx.translate(hx, hy); ctx.scale(s * 0.72, s * 0.72);
     drawSkewerProp(ctx, 0, 0, -1.72 + Math.sin(t * 3) * 0.06, false);
     ctx.restore();
-    if (three) {
-      for (let i = 0; i < 3; i++) {
-        const a = t * 2.2 + (i * TAU) / 3;
+    if (four) {
+      for (let i = 0; i < 4; i++) {
+        const a = t * 2.2 + (i * TAU) / 4;
         if (Math.sin(a) < -0.2) continue;
         ctx.beginPath(); starP(ctx, x + Math.cos(a) * 34 * s, py - 50 * s + Math.sin(a) * 7 * s, 7 * s, 3.2 * s, 5);
         ctx.lineWidth = 2 * s; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = '#ffd23f'; ctx.fill();

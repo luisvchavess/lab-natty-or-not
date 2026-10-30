@@ -31,6 +31,8 @@ A syntax error in your file only disables your module (separate `<script>` tags 
 - Origin top-left, y grows down. Angles in radians: `0` = right, `Math.PI/2` = **down** (toward the player), `-Math.PI/2` = up.
 - Speeds in px/s, time in seconds. Fixed step `G.DT = 1/60`.
 - The player lives in the bottom area (~`G.H*0.8`). Bosses sit near the top (`homeY` ≈ 130–170). HUD occupies y 0–48 (top) and the bottom-left corner (weapon), plus a 74 px round bomb button bottom-right. Keep important things out of y<50.
+  The bomb button fires on a quick tap (or at once when another finger is already steering); a touch that lands on it and drags
+  or holds becomes steering. Both the button and the weapon label fade when the car passes under them.
 
 ## 3. Globals you can use
 
@@ -42,11 +44,19 @@ G.FONT_DISPLAY // '"Bungee", ...'  (loud headings, numbers)
 G.FONT_BODY    // '"Barlow Semi Condensed", ...' (dialogue, labels; use weight 700/800 on canvas)
 G.game         // current stage state (see §6) or null
 G.run          // current run: { loop, score, lives, bombs, weapon, level, pix, grazes, continues, maxContinues, ... }
-G.save         // persisted: { pix, upgrades, unlocked, best, cleared, cleared2, achievements, counters, settings{music,sfx,sens,vibrate,shake,hitbox} }
+G.save         // persisted: { pix, upgrades, unlocked, best, cleared, cleared2, seenIntro, qualityTier, achievements, counters,
+               //              settings{music,sfx,sens,vibrate,shake,hitbox,quality} }
 G.saveGame()   // persist G.save (localStorage, wrapped in try/catch)
 G.state        // 'menu'|'intro'|'play'|'dialogue'|'pause'|'clear'|'over'|'ending'
 G.fmt(n)       // 1234567 -> "1.234.567"     G.fmtMoney(n) -> "R$ 1.234"
-G.call(obj, 'method', ...args)  // safe call (errors are logged into G.errors, never thrown)
+G.call(obj, 'method', ...args)  // safe call (errors are logged into G.errors, never thrown). No allocation for ≤ 6 args.
+G.quality      // 'high' | 'mid' | 'low' — current graphics tier (read it while drawing, see §10)
+G.setQuality(q)// 'auto' | 'high' | 'mid' | 'low' (UI setting "Qualidade"). Persists in G.save.settings.quality.
+G.bossBoxes(b) // b.hitboxes, or a reused default [{dx:0,dy:0,r:b.r}] (never allocate one per bullet)
+G.rankFor(hits, bombs, stageIdx)  // stage rank 'S'|'A'|'B'|'C' (see §9)
+G.powerNeed(lv)                   // how many P items to go from level lv to lv+1 (1, 2, 3, 3)
+G.fontsReady() // main.js calls it if the web fonts arrive after boot; core then calls the OPTIONAL hooks
+               // G.BG.fontsReady(), G.Art.fontsReady(), G.UI.fontsReady() so text baked into caches can be redrawn
 ```
 
 ### Spawning & bullets
@@ -77,7 +87,8 @@ Bullet colors: enemy bullets must read clearly against the background and agains
 
 ### Items, score, effects
 ```js
-G.drop(type, x, y, o)     // type: pix|pix5|mala|power|bomb|shield|life|cafe ; o: {vx, vy, magnet, wtype, cycle}
+G.drop(type, x, y, o)     // type: pix|pix5|mala|power|bomb|shield|life|cafe ; o: {vx, vy, magnet, wtype, cycle, restore}
+                          //   power + restore:true = the level lost on death (gives +1 level directly, any colour)
 G.dropPix(x, y, amount)   // spreads coins worth `amount` reais
 G.addScore(base, x, y, showText)   // base × approval multiplier
 G.addApproval(v)
@@ -119,7 +130,13 @@ G.drawPortrait(ctx, id, x, y, size, o)          // what UI calls
 `G.UI.title()`, `story(panels, done)`, `stageIntro(info, done)`, `dialogue(lines, done)`, `stageClear(stats, done)`,
 `shop(opts, done)`, `gameOver(info, {onContinue, onQuit})`, `pause({onResume, onQuit})`, `hidePause()`,
 `ending(info, done)`, `toast({title, text, kind})`. Flow functions UI calls: `G.startRun(stageIdx, loop)`, `G.toMenu()`,
-`G.resume()`, `G.buyUpgrade(id)`, `G.upgradeCost(id)`, `G.upg(id)`, `G.resetSave()`.
+`G.resume()`, `G.buyUpgrade(id)`, `G.upgradeCost(id)`, `G.upg(id)`, `G.resetSave()`, `G.setQuality(q)`.
+- `G.startRun(0, 1)` plays the 6-panel intro story only while `G.save.seenIntro` is false. To rewatch it, the UI calls
+  `G.UI.story(G.STORY.intro, done)` itself.
+- `G.buyUpgrade(id)` during the between-stages shop (`G.state === 'clear'`) also applies vida/bomba/arma to the current run.
+- `G.resume()` freezes the world for 1 s ("PRONTO? VAI!", `G.game.resumeT`) so the thumb can get back to the screen.
+- The core toggles `body.rotate-hint` when a touch device is in landscape (base.css shows the hint) and pauses the
+  game once when a phone (viewport height < 560) turns sideways.
 
 ### Background (implemented by bg.js)
 `G.BG.draw(ctx, id, scrollY, t, W, H)` must paint the **entire** canvas every frame. ids: `menu rodoviaria esplanada paranoa planalto`.
@@ -162,9 +179,15 @@ Boss fields: `x y homeX homeY r hitboxes([{dx,dy,r}] optional) hp maxHp t ft sta
 flash invuln invulnT phase phases dmgMul data mood mouth sayText bubbleY`.
 - Core: warning banner → slides boss from y=-160 to homeY → pre-fight dialogue from `G.STORY.boss[id].pre` → `start()` → `update()`.
 - Phase = highest index whose `at` ≥ current hp fraction (list `at` in descending order). HP bar shows phase ticks.
-- On death core does the explosion sequence, the "CASSADO!" stamp (`defeatText`), drops Pix, unlocks the achievement with the boss id, then the boss flies away.
+- On death core does the explosion sequence, the "CASSADO!" stamp (`defeatText`, auto-scaled to fit the screen), drops Pix, unlocks the achievement with the boss id, then the boss flies away.
+- Phase change banner: `"2º TURNO"`, `"3º TURNO"`… + the phase name (stages are called "FASE", so phases are "turnos").
+- `G.bomb()` is refused (sfx `denied`, no bomb spent) while the boss is `dying`/`leaving`, after the stage script ended,
+  and during a cinematic where the boss is in `fight` with `b.invuln && b.harmless` (or `b.data.reviving`), e.g. Lule's revival.
 - `G.setBossPhases(b, phases, hpFrac)` replaces phases and sets hp (for revivals). `b.dmgMul` = armor. `b.invuln` for invulnerable moments (shots "tink").
-- Player damage reference (dps): VOTO L1≈22, L3≈44, L5≈66; BOCA DE URNA similar total but spread; PANELAÇO ≈27→60 homing; LAVA-JATO beam 41→85 single-column piercing. Bomb = 4.5% boss hp (max 220).
+- Player damage reference, single target from the bottom of the screen (dps, L1/L3/L5): VOTO 22/44/56; BOCA DE URNA ≈24/33/42
+  (a straight centre stream + a wide fan of 0.7 pellets for crowds); PANELAÇO 18/35/74 homing; LAVA-JATO beam 31/53/75
+  (pierces the column: the nearest target takes full damage, the ones behind 60%, `big` enemies always full).
+  Bomb = 4.5% boss hp (max 220). `G.upg('turbo')` adds +10% fire rate per level, cafezinho ×1.5.
 
 ## 6. Stages
 
@@ -186,7 +209,9 @@ Stage ids, order and bosses are fixed: `rodoviaria → centrao`, `esplanada → 
 Dialogue text for stage intros / boss pre/post lives in `data.js` (`G.STORY`) and is played by the core automatically.
 `g.loop` is 2 on the "2º Mandato" (new game+): add density there.
 
-`G.game` fields of interest: `t frame stageIdx stage loop diff player{x,y,r,alive,inv,...} enemies eb pb pickups parts texts lasers boss scrollY approval`.
+`G.game` fields of interest: `t frame stageIdx stage loop diff player{x,y,r,alive,inv,...} enemies eb pb pickups parts texts lasers boss scrollY approval resumeT rank`.
+`G.run` also has `pp` (P items collected toward the next level), `total` (points of the whole run, not reset by a continue)
+and `extGiven` (score extends already given: 500k / 1,5M / 3M / 6M, once per run).
 
 ## 7. Tone & content rules (important)
 
@@ -236,11 +261,28 @@ Cast (keep these traits consistent everywhere — in-game sprite, portrait, stor
 - Escalation: stage 1 teaches, stage 4 is a real test. Bosses have 3–5 phases, each with a distinct idea.
 - Reward: Pix drops everywhere, carriers drop power items regularly (≈ 1 per 20–25 s in stages, plus before bosses),
   occasional bomb/shield/cafe/life items.
+- Power: EVERY P item adds progress (1, 2, 3, 3 items for levels 2..5); its colour picks the weapon. A death costs 1 level,
+  which drops as a non-cycling "restore" P (+1 level when caught). The magnet upgrade and the top-of-screen auto-collect
+  never pull P items (the colour is the player's choice); at stage clear leftover P items count for the current weapon.
+- Stage rank: S = no deaths and ≤ 1 bomb; A = no deaths; B = deaths ≤ 1 / 2 / 4 / 6 (stages 1..4); C = the rest.
+  Rank Pix = {S 250, A 160, B 90, C 40} × (1 + 0,25 × stage index), ×2 on the 2º Mandato.
+- Economy: the Lojinha costs R$ 22.700 in total (target: fully upgraded after ~6 runs for a good player, ~9 casual).
 
 ## 10. Performance
 
 Target 60 fps on a mid phone at devicePixelRatio 2. Avoid `shadowBlur` and `ctx.filter` in per-frame drawing (fine inside
 `BulletStyles.paint` or your own pre-rendered offscreen canvases). Cache gradients/patterns. Avoid allocating in hot loops.
+
+Quality tiers (`G.quality`). In `auto` mode (default) the core measures the real rAF interval (which includes raster and
+compositing) during play and steps down one tier after 2,5 s with a smoothed interval > 22 ms; it steps back up only at a
+stage start, after a whole stage under 12 ms (90/120 Hz screens). The chosen tier is remembered in `G.save.qualityTier`.
+When the tier changes the core calls `resize()` (canvas resolution changes: re-key caches by resolution).
+| tier | core does | modules should |
+|---|---|---|
+| `high` | canvas dpr ≤ 2, ≤ 600 particles | everything |
+| `mid` | canvas dpr ≤ 1,5, ≤ 450 particles | skip purely decorative extras (ghost copies, extra glows) |
+| `low` | canvas dpr 1, ≤ 300 particles, half bursts/confetti, no stroke on small floating texts | bg: drop cloud/tint layers; art: no glow halos; bosses: no decorative particles; audio: no convolver; ui: 30 fps title loop |
+Other core rules: a frame with no simulation step is not redrawn (90/120 Hz screens); while paused the canvas is drawn once.
 
 ## 11. Testing
 
@@ -252,7 +294,12 @@ node tools/play.js --q "stage=0&bossid=lule&god=1&auto=1&ts=3&skipui=1&mods=lule
 node tools/play.js --page index --seconds 4 --shots 1 --out /tmp/<you>/title    # full build, title screen
 ```
 URL params: `stage` (0-3), `loop`, `boss` (jump to the stage's boss), `bossid` (spawn that boss now, works without stages.js), `god`, `auto` (autopilot), `ts` (time scale), `skipui`
-(skip all screens/dialogue), `hitboxes`, `autocontinue`, `mods` (comma list of modules to load in dev.html, e.g. `mods=art,bg`).
+(skip all screens/dialogue), `hitboxes`, `autocontinue`, `mods` (comma list of modules to load in dev.html, e.g. `mods=art,bg`),
+`quality` (`high|mid|low`: force a tier and disable auto). Flags accept `0`/`false` to stay off (`god=0`).
+`tools/play.js`, `tools/fullrun.js` and `tools/humanbot.js` add `quality=high` unless you pass one (this sandbox rasters on the CPU,
+so `auto` would drop the resolution); pass `quality=auto` to test the automatic tier.
+`G.debug.qualityMeter()` shows the auto-quality meter. `tools/humanbot.js` plays like a human (reaction time, limited view)
+to measure difficulty: `--mode run|ttk|mid|dps`, see the header of the file.
 `--eval "G.debug.hurtBoss(0.4)" --at 10` runs JS at second 10. `G.debug` has `toBoss() killBoss() hurtBoss(frac) spawnBoss(id)
-stage(i) give(type, wtype) weapon(w, lv) stats()`. Read the PNGs you produce to check your visuals. Your module must finish with
+stage(i, loop) give(type, wtype) weapon(w, lv) stats() qualityMeter()`. Read the PNGs you produce to check your visuals. Your module must finish with
 **zero entries in `G.errors`** and no page errors. Other modules may be half-written while you work: test with `mods=` to isolate.
