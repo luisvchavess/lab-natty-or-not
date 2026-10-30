@@ -1,0 +1,25 @@
+<title>Fusca a Jato</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Shoot'em up de paródia política: pilote o Fusca a jato do Zé Contribuinte até o Planalto.">
+<meta name="theme-color" content="#0b1022">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Barlow+Semi+Condensed:wght@400;600;700;800&display=swap">
+<!--CSS-->
+<!--BODY-->
+<div id="viewport"></div>
+<canvas id="game" aria-label="Tela do jogo Fusca a Jato"></canvas>
+<div id="hud" aria-hidden="false">
+  <button id="btnPause" type="button" aria-label="Pausar">
+    <span class="bar"></span><span class="bar"></span>
+  </button>
+  <button id="btnBomb" type="button" aria-label="Usar Delação Premiada">
+    <span class="ring"></span>
+    <span class="label">DELAÇÃO</span>
+    <span class="count">2</span>
+  </button>
+</div>
+<div id="ui" role="dialog" aria-live="polite"></div>
+<div id="toasts" aria-live="polite"></div>
+<noscript>Este jogo precisa de JavaScript.</noscript>
+<!--SCRIPTS-->
