@@ -299,7 +299,12 @@
       const b = g.boss;
       if (opts && opts.silent) return;
       G.text(e.x, e.y - 12, M.pick(['VOLTA AQUI!', 'COMPANHEIRO!', 'FUI!']), { color: '#ffd23f', size: 10, life: 0.8 });
-      if (b && b.id === 'lule' && fighting(b) && b.data.wantComps) b.data.respawn.push(5.2);
+      if (b && b.id === 'lule' && fighting(b) && b.data.wantComps) {
+        b.data.respawn.push(5.2);
+        // derrubar um companheiro tira apoio do Lule: ~60% da vida dele passa para o chefão (as panelas
+        // teleguiadas miram no alvo mais perto; sem isso a Companheirada virava um moedor com a arma fraca)
+        G.hitBoss(b, 11);
+      }
     },
   });
 

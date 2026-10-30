@@ -1856,7 +1856,7 @@
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
-    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.06,
+    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.12,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
