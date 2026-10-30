@@ -141,8 +141,11 @@ body.rotate-hint::after {
     font: 800 14px/1.2 var(--font-body);
     letter-spacing: 0.04em;
     pointer-events: none;
+    /* some depois de 5 s (volta a cada vez que o tablet deitar): não fica por cima do placar */
+    animation: hint-out 0.4s 5s forwards;
   }
 }
+@keyframes hint-out { to { opacity: 0; visibility: hidden; } }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

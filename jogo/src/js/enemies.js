@@ -237,16 +237,40 @@
     motoqueiro: ['MOTOCIATA', 'passa jogando tiro pra baixo'],
     drone: ['DRONE DO GABINETE', 'piscou vermelho? Saia da mira'],
   };
-  function introduce(e) {
+  // Uma etiqueta por vez: várias espécies novas entrando juntas (fases 3 e 4 pelo menu) se
+  // cobriam umas às outras. A espécie que ficou na fila se apresenta num inimigo dela que ainda
+  // esteja no alto da tela assim que a etiqueta atual some, ou no próximo que entrar.
+  const TAG_DUR = 3.4;
+  function tagBusy(g) {
+    const o = g && g._tagE;
+    if (!o) return false;
+    if (!o.dead && o.data && o.data.tag && o.data.tagT <= TAG_DUR && g.t < g._tagMax) return true;
+    g._tagE = null; // morreu, saiu da tela ou a etiqueta acabou
+    return false;
+  }
+  function introduce(e, g) {
     const run = G.run, info = INTRO[e.kind];
+    e.data.tagWait = false;
     if (!info || !run || run.loop > 1) return;
     const seen = run._enSeen || (run._enSeen = {});
     if (seen[e.kind]) return;
+    g = g || G.game;
+    if (tagBusy(g)) { e.data.tagWait = true; return; }
     seen[e.kind] = 1;
     e.data.tag = info; e.data.tagT = 0;
+    if (g) { g._tagE = e; g._tagMax = g.t + TAG_DUR + 3; } // teto: a etiqueta só conta tempo depois de y > 26
+  }
+  // último inimigo (vivo, com a moldura deste arquivo) desenhado no quadro: calculado uma vez por quadro
+  function lastDrawn(g) {
+    if (g._tagFrame !== g.frame || !g._tagLast || g._tagLast.dead) {
+      g._tagFrame = g.frame; g._tagLast = null;
+      const l = g.enemies;
+      for (let i = l.length - 1; i >= 0; i--) { const e = l[i]; if (!e.dead && e.def && e.def.__tagDraw) { g._tagLast = e; break; } }
+    }
+    return g._tagLast;
   }
   function drawTag(ctx, e) {
-    const d = e.data, T = d.tagT || 0, DUR = 3.4;
+    const d = e.data, T = d.tagT || 0, DUR = TAG_DUR;
     if (!d.tag || T <= 0 || T > DUR) return;
     const a = Math.min(1, T / 0.25, (DUR - T) / 0.4);
     ctx.save();
@@ -322,12 +346,13 @@
       if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * (g.stageIdx || 0); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
-      introduce(e);
+      introduce(e, g);
       syncCarrierDrop(e, g);
     };
     def.update = function (e, dt, g) {
       if (update) update.call(this, e, dt, g); else { e.x += e.vx * dt; e.y += e.vy * dt; }
       if (e.data.tag && e.y > 26) e.data.tagT += dt;
+      else if (e.data.tagWait && e.y > 26 && e.y < G.H * 0.5 && e.t < 8) introduce(e, g); // na fila: a etiqueta da vez acabou?
       if (e.drop || e.dropW) syncCarrierDrop(e, g);
     };
     def.draw = function (ctx, e, g) {
@@ -337,8 +362,11 @@
       if (draw) draw.call(this, ctx, e, g);
       ctx.restore();
       if (ct) drawCarrierBadge(ctx, e, g, ct);
-      if (e.data.tag) drawTag(ctx, e);
+      // a etiqueta sai por cima de todos os inimigos (por baixo dos tiros, que o core desenha depois):
+      // quem a desenha é o último inimigo vivo da lista neste quadro
+      if (g && g._tagE && e === lastDrawn(g)) { const o = g._tagE; if (!o.dead && o.data.tag) drawTag(ctx, o); }
     };
+    def.__tagDraw = true;
     G.Enemies.define(kind, def);
   }
 

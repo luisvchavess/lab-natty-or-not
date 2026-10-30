@@ -65,9 +65,10 @@
     'A sessão volta assim que alguém achar o quórum.',
   ];
   const RANKS = {
-    // S aceita até 1 Delação (G.rankFor): lineBomb é a frase quando houve uma
+    // frase do boletim (rankLine): lineHit quando perdeu vida, lineBomb quando usou Delação.
+    // S = sem perder vida e até 1 Delação; A = sem perder vida (com mais delações) ou 1 vida com até 1 (G.rankFor)
     S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.', lineBomb: 'Ficha limpa, só uma delaçãozinha. O povo agradece.' },
-    A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.' },
+    A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.', lineBomb: 'Nenhum arranhão, mas delatou geral.', lineHit: 'Um arranhão só. Quase um santo.' },
     B: { label: '2º TURNO', line: 'Uns arranhões, mas passou.' },
     C: { label: 'SUPLENTE', line: 'Passou raspando. Igual ao orçamento.' },
   };
@@ -171,6 +172,7 @@
     if (u) { u.appendChild(root); u.classList.add('open'); u.setAttribute('data-screen', kind); }
     cur = { root, kind, alive: true, timers: [], cleanups: [], onKey: null, born: performance.now() };
     flushToasts(); // conquistas guardadas durante a partida
+    placeToastsSoon(); // toasts que já estavam na tela vão para o lugar certo da tela nova
     return cur;
   }
   function close() {
@@ -183,6 +185,7 @@
     }
     const u = uiRoot();
     if (u) { u.innerHTML = ''; u.classList.remove('open'); u.removeAttribute('data-screen'); }
+    if (s) placeToastsSoon();
   }
   function later(scr, ms, fn) {
     const id = setTimeout(() => { if (scr.alive) G.safe(fn, 'ui.timer ' + scr.kind); }, ms);
@@ -231,16 +234,54 @@
     if (el.classList.contains('key-corrige')) return 'ui_back';
     return 'ui_click';
   }
+  // Toques. O Chromium não gera 'click' para um toque feito enquanto outro dedo segura a
+  // tela (o dedão que continua pilotando no diálogo do chefão, na pausa, no game over).
+  // Por isso teclas e áreas de "toque para continuar" agem já no pointerup do mesmo dedo,
+  // se ele quase não andou (< 14 px) e foi rápido (< 0,5 s). O 'click' que o navegador ainda
+  // manda depois de um toque comum é engolido (mesmo dedo ou mesmo lugar, até 0,6 s): sem
+  // isso a ação valeria duas vezes, ou cairia na tela nova que abriu embaixo do dedo.
+  // Mouse e teclado (Enter/Espaço numa tecla focada) continuam pelo 'click'.
+  const TAP_SLOP = 14, TAP_MS = 500, GHOST_MS = 600;
+  let lastTap = null; // { id, x, y, t } do último toque que já agiu no pointerup
+  function bindTap(el, fn, isKey) {
+    let d = null;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') d = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() };
+    });
+    el.addEventListener('pointercancel', (e) => { if (d && d.id === e.pointerId) d = null; });
+    el.addEventListener('pointerup', (e) => {
+      const s = d;
+      if (!s || s.id !== e.pointerId) return;
+      d = null;
+      if (e.__uiTap) return; // uma tecla dentro desta área já cuidou deste toque
+      // área: toque numa tecla (ou no slider) não é "toque para continuar" (no 'click' a tecla segura o evento)
+      if (!isKey) {
+        const c = e.target && e.target.closest ? e.target.closest('button, input, select, textarea, a') : null;
+        if (c && c !== el && el.contains(c)) return;
+      }
+      const now = performance.now();
+      if (now - s.t > TAP_MS || Math.hypot(e.clientX - s.x, e.clientY - s.y) > TAP_SLOP) return;
+      e.__uiTap = true;
+      lastTap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: now };
+      fn(e);
+    });
+    el.addEventListener('click', (e) => {
+      if (isKey) { e.preventDefault(); e.stopPropagation(); }
+      fn(e);
+    });
+  }
   // Liga um botão: som + ação. sound=false → sem som automático
   function onTap(el, fn, sound) {
     if (!el) return;
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTap(el, (e) => {
       if (el.disabled) return; // .off é só visual (ex.: sem saldo ainda dá o aviso)
       if (sound !== false) sfx(sound || soundFor(el));
       G.safe(fn, 'ui.tap', e);
-    });
+    }, true);
+  }
+  // "Toque em qualquer lugar" de uma tela (história, diálogo, abertura, boletim, créditos)
+  function onArea(el, fn) {
+    if (el) bindTap(el, (e) => G.safe(fn, 'ui.area', e), false);
   }
   // rola a área da telinha até o elemento (ex.: confirmação que abre embaixo da dobra)
   function reveal(el) {
@@ -265,6 +306,17 @@
     };
     u.addEventListener('pointerup', up);
     u.addEventListener('pointercancel', up);
+    // engole o 'click' que segue um toque que já agiu no pointerup (ver bindTap). Teclado
+    // (detail 0) passa sempre; o mesmo dedo (pointerId) ou o mesmo lugar identifica o fantasma.
+    window.addEventListener('click', (e) => {
+      const t = lastTap;
+      if (!t || !e.isTrusted || e.detail === 0) return;
+      if (performance.now() - t.t > GHOST_MS) { lastTap = null; return; }
+      if (e.pointerId !== t.id && (Math.abs(e.clientX - t.x) > 24 || Math.abs(e.clientY - t.y) > 24)) return;
+      lastTap = null;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Tab' || e.key.indexOf('Arrow') === 0) kbdMode = true;
       const s = cur;
@@ -670,7 +722,7 @@
       if (idx < panels.length - 1) { sfx('ui_click'); show(idx + 1); }
       else { sfx('ui_confirm'); finish(); }
     };
-    scr.root.addEventListener('click', advance);
+    onArea(scr.root, advance);
     // o final abre logo depois do chefão: um toque perdido no canto não pula a cena
     onTap(q(scr.root, '.st-skip'), () => { if (performance.now() - scr.born < 600) return; sfx('ui_click'); finish(); }, false);
     scr.onKey = (e, k) => {
@@ -754,7 +806,7 @@
       if (i < lines.length - 1) { sfx('ui_click'); show(i + 1); }
       else { sfx('ui_click'); finish(); }
     };
-    scr.root.addEventListener('click', advance);
+    onArea(scr.root, advance);
     onTap(skipBtn, () => { if (performance.now() - scr.born < SKIP_GUARD) return; sfx('ui_click'); finish(); }, false);
     scr.onKey = (e, k) => {
       if (k === 'Enter' || k === ' ') { e.preventDefault(); advance(); }
@@ -803,7 +855,7 @@
       sfx('whoosh');
       later(scr, reducedMotion() ? 0 : 360, () => { close(); fin(); });
     };
-    scr.root.addEventListener('click', () => { if (performance.now() - scr.born > 300) leave(); });
+    onArea(scr.root, () => { if (performance.now() - scr.born > 300) leave(); });
     scr.onKey = (e, k) => { if (k === 'Enter' || k === ' ' || k === 'Escape') { e.preventDefault(); leave(); } };
     later(scr, 2500, leave);
     later(scr, 420, () => sfx('stamp'));
@@ -824,21 +876,33 @@
     if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
   }
   function fmtTime(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
-  // Dica da próxima nota, tirada das regras do próprio core (G.rankFor), sem copiar números
+  function rankLine(rank, stats) {
+    const R = RANKS[rank];
+    if ((stats.hits | 0) > 0 && R.lineHit) return R.lineHit;
+    if ((stats.bombsUsed | 0) > 0 && R.lineBomb) return R.lineBomb;
+    return R.line;
+  }
+  // Dica da próxima nota, tirada das regras do próprio core (G.rankFor), sem copiar números:
+  // pergunta ao core quantas vidas perdidas e quantas delações ainda dão a nota seguinte.
   function rankTip(rank, idx) {
-    if (typeof G.rankFor !== 'function' || rank === 'S') return '';
+    if (typeof G.rankFor !== 'function' || !RANK_ORDER[rank] || rank === 'S') return '';
     try {
+      const ANY = 9; // "qualquer número de delações"
+      const at = (h, b) => RANK_ORDER[G.rankFor(h, b, idx)] || 0;
       const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
-      if (rank === 'A') {
-        let b = -1;
-        for (let n = 0; n <= 9; n++) if (G.rankFor(0, n, idx) === 'S') b = n;
-        if (b < 0) return '';
-        return 'Nota S: sem perder vida e ' + (b === 0 ? 'sem Delação.' : 'no máximo ' + plural(b, 'Delação.', 'Delações.'));
-      }
-      if (rank === 'B') return G.rankFor(0, 99, idx) === 'A' ? 'Nota A: termine a fase sem perder vida.' : '';
-      let h = 0;
-      for (let n = 1; n <= 20; n++) if (G.rankFor(n, 0, idx) === 'B') h = n;
-      return h ? 'Nota B: perca no máximo ' + plural(h, 'vida', 'vidas') + ' nesta fase.' : '';
+      const dels = (n) => 'no máximo ' + plural(n, 'Delação', 'Delações');
+      const want = RANK_ORDER[rank] + 1, next = rank === 'A' ? 'S' : rank === 'B' ? 'A' : 'B';
+      let h = -1; // mais vidas perdidas que ainda dão a nota (sem delação)
+      for (let n = 0; n <= 20; n++) if (at(n, 0) >= want) h = n;
+      if (h < 0) return '';
+      const bombsWith = (hits) => { let b = -1; for (let n = 0; n <= ANY; n++) if (at(hits, n) >= want) b = n; return b; };
+      const b = bombsWith(h), b0 = bombsWith(0);
+      const lives = h === 0 ? 'sem perder vida' : 'perdendo no máximo ' + plural(h, 'vida', 'vidas');
+      let txt;
+      if (b >= ANY) txt = h === 0 ? 'termine a fase sem perder vida' : 'perca no máximo ' + plural(h, 'vida', 'vidas') + ' nesta fase';
+      else if (h > 0 && b0 >= ANY) txt = 'não perca vida, ou perca ' + (h === 1 ? 'só 1' : 'até ' + h) + ' e use ' + (b === 0 ? 'nenhuma Delação' : dels(b)); // regra atual da nota A
+      else txt = lives + ' e ' + (b === 0 ? 'sem Delação' : dels(b));
+      return 'Nota ' + next + ': ' + txt + '.';
     } catch (e) { return ''; }
   }
   function showStageClear(stats, done) {
@@ -858,7 +922,7 @@
       { k: 'POLÍTICOS CASSADOS', v: stats.kills },
       { k: 'RASPÕES', v: stats.grazes },
       { k: 'DELAÇÕES USADAS', v: stats.bombsUsed },
-      { k: 'TIROS LEVADOS', v: stats.hits },
+      { k: 'VIDAS PERDIDAS', v: stats.hits },
       { k: 'TEMPO DE SESSÃO', txt: fmtTime(stats.time) },
       { sep: 'BÔNUS' + (loopN > 1 ? ' (2º MANDATO ×1,5)' : '') },
       { k: 'FICHA LIMPA', v: b.fichaLimpa, plus: 1 },
@@ -886,9 +950,9 @@
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p></div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
-      '<p class="rc-line">' + esc((stats.bombsUsed > 0 && RANKS[rank].lineBomb) || RANKS[rank].line) + '</p>' +
+      '<p class="rc-line">' + esc(rankLine(rank, stats)) + '</p>' +
       (tip ? '<p class="rc-tip">' + esc(tip) + '</p>' : '') +
-      (better ?'<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
+      (better ? '<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
       '<div class="rc-foot"><i class="barcode"></i><span>CÓD. VERIFICAÇÃO 171-' + String(((stats.score || 0) % 9973) + 1000).slice(0, 4) + '-ZÉ</span><b>FIM</b></div>' +
       '</div></div></div>' +
       '<div class="cl-keys">' + keyHTML('confirma', 'CONTINUAR', 'CONFIRMA', 'k-next key-wide') + '</div>' +
@@ -918,7 +982,7 @@
     };
     const finish = () => { if (ended || !scr.root.classList.contains('ready')) return; ended = true; close(); fin(); };
     onTap(nextKey, finish);
-    scr.root.addEventListener('click', () => {
+    onArea(scr.root, () => {
       if (performance.now() - scr.born < 450) return;
       if (phase !== 'done') stamp();
       else if (scr.root.classList.contains('ready')) { sfx('ui_confirm'); finish(); }
@@ -1291,7 +1355,7 @@
     const finish = () => { if (ended) return; ended = true; close(); fin(); };
     onTap(q(scr.root, '.roll-skip'), showFinal);
     onTap(q(scr.root, '.k-menu'), finish);
-    scr.root.addEventListener('click', () => { if (!shown && performance.now() - scr.born > 400) showFinal(); });
+    onArea(scr.root, () => { if (!shown && performance.now() - scr.born > 400) showFinal(); });
     scr.onKey = (e, k) => {
       if (k === 'Enter' || k === ' ' || k === 'Escape') { e.preventDefault(); if (!shown) showFinal(); else if (k !== 'Escape') { sfx('ui_confirm'); finish(); } }
     };
@@ -1623,6 +1687,32 @@
   const pendingToasts = [];
   let toastFlushT = 0;
   const inPlay = () => !!(document.body && document.body.classList.contains('in-play'));
+  // Na pausa e no boletim o topo é o título da tela ("SESSÃO SUSPENSA", "BOLETIM DE URNA"):
+  // lá os toasts vão para perto das teclas (embaixo delas quando sobra espaço, senão logo
+  // acima; na pausa, se o alto da urna tiver espaço, por cima da marca) e saem um de cada vez.
+  const TOAST_SPOT = { clear: '.cl-keys', pause: '.pz-keys' };
+  const toastSpot = () => !!(cur && cur.alive && TOAST_SPOT[cur.kind]);
+  let placeQ = 0;
+  function placeToastsSoon() { if (!placeQ) placeQ = requestAnimationFrame(() => { placeQ = 0; G.safe(placeToasts, 'ui.toasts'); }); }
+  function placeToasts() {
+    const host = document.getElementById('toasts');
+    if (!host) return;
+    const keys = toastSpot() ? q(cur.root, TOAST_SPOT[cur.kind]) : null;
+    if (!keys) { host.style.top = ''; host.style.bottom = ''; return; }
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
+    const gap = Math.round(0.6 * rem);
+    const need = (host.firstElementChild ? host.firstElementChild.offsetHeight : 5.8 * rem) + gap * 2;
+    let ty = 0; // as teclas do boletim entram subindo (translateY): mede onde elas param
+    try { const tf = getComputedStyle(keys).transform; if (tf && tf !== 'none') ty = new DOMMatrixReadOnly(tf).m42 || 0; } catch (e) { /* nada */ }
+    const r = keys.getBoundingClientRect(), kTop = r.top - ty, kBot = r.bottom - ty;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    const title = cur.kind === 'pause' ? q(cur.root, '.lcd-titles') : null;
+    if (vh - kBot >= need) { host.style.top = Math.round(kBot + gap) + 'px'; host.style.bottom = 'auto'; }
+    else if (title && title.getBoundingClientRect().top >= need) { host.style.top = gap + 'px'; host.style.bottom = 'auto'; }
+    else { host.style.top = 'auto'; host.style.bottom = Math.round(vh - kTop + gap) + 'px'; }
+  }
+  window.addEventListener('resize', placeToastsSoon);
+  const toastBusy = () => { const h = document.getElementById('toasts'); return !!(h && h.firstElementChild); };
   function flushToasts() {
     if (!pendingToasts.length || toastFlushT) return;
     const l = pendingToasts.splice(0);
@@ -1631,14 +1721,23 @@
       toastFlushT = 0;
       if (i >= l.length) { if (pendingToasts.length) flushToasts(); return; }
       if (inPlay()) { pendingToasts.unshift.apply(pendingToasts, l.slice(i)); return; } // a partida voltou: espera de novo
-      showToast(l[i++]);
+      if (toastSpot() && toastBusy()) { toastFlushT = setTimeout(next, 250); return; } // pausa/boletim: um de cada vez
+      renderToast(l[i++]);
       toastFlushT = setTimeout(next, 650);
     };
     toastFlushT = setTimeout(next, 350);
   }
   function showToast(o) {
     o = o || {};
-    if (inPlay()) { if (pendingToasts.length < 12) pendingToasts.push(o); return; }
+    // durante a partida espera; na pausa e no boletim entra na fila (um de cada vez)
+    if (inPlay() || (toastSpot() && (toastFlushT || toastBusy()))) {
+      if (pendingToasts.length < 12) pendingToasts.push(o);
+      if (!inPlay()) flushToasts();
+      return;
+    }
+    renderToast(o);
+  }
+  function renderToast(o) {
     const host = document.getElementById('toasts');
     if (!host) return;
     const t = document.createElement('div');
@@ -1647,6 +1746,7 @@
     t.innerHTML = '<i class="toast-ico" aria-hidden="true"></i><span class="toast-txt"><small>' + esc(o.title || '') + '</small><b>' + esc(o.text || '') + '</b></span>';
     host.appendChild(t);
     while (host.children.length > 3) host.removeChild(host.firstChild);
+    G.safe(placeToasts, 'ui.toasts');
     setTimeout(() => t.classList.add('out'), 2900);
     setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 3400);
   }

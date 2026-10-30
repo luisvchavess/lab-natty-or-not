@@ -724,14 +724,15 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .rc-sep span { position: absolute; left: 50%; top: 0; padding: 0 .6rem; background: #fbfaf3; font-size: .95rem; font-weight: 700; letter-spacing: .12em; white-space: nowrap; transform: translate(-50%, -55%); }
 #ui .rc-sep span:empty { display: none; }
 #ui .rc-stamp-area { position: relative; min-height: 9.4rem; margin-top: .8rem; padding-top: .8rem; border-top: .15rem dashed rgba(42, 45, 49, .5); }
-#ui .rc-line { max-width: 46%; margin: .2rem 0 0; font-size: 1.1rem; line-height: 1.35; opacity: 0; transition: opacity .3s .2s; }
+#ui .rc-line { max-width: 42%; margin: .2rem 0 0; font-size: 1.1rem; line-height: 1.35; opacity: 0; transition: opacity .3s .2s; }
 #ui .stamped .rc-line { opacity: 1; }
-#ui .rc-tip { max-width: 46%; margin: .45rem 0 0; font: 700 1rem/1.3 var(--font-body); color: #3c4a40; opacity: 0; transition: opacity .3s .35s; }
+#ui .rc-tip { max-width: 42%; margin: .45rem 0 0; font: 700 1rem/1.3 var(--font-body); color: #3c4a40; opacity: 0; transition: opacity .3s .35s; }
 #ui .stamped .rc-tip { opacity: 1; }
 #ui .rc-best { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; margin: .6rem 0 0; padding: .4rem .7rem .4rem; border-radius: .5rem; background: #121519; color: var(--u-yel); opacity: 0; transform: scale(.6) rotate(-2deg); transform-origin: left center; transition: opacity .2s .45s, transform .3s cubic-bezier(.3, 1.6, .5, 1) .45s; }
 #ui .rc-best small { font: 900 1rem/1 var(--font-display); white-space: nowrap; }
 #ui .rc-best b { font: 900 1.6rem/1 var(--font-display); color: #fff; white-space: nowrap; }
-#ui .rc-best s { color: rgba(255, 255, 255, .5); }
+/* sem risco: um C riscado vira "€" (a seta já diz nota antiga → nova) */
+#ui .rc-best s { color: rgba(255, 255, 255, .45); text-decoration: none; }
 #ui .stamped .rc-best { opacity: 1; transform: rotate(-2deg); }
 #ui .stamp {
   --st: #c8323e;

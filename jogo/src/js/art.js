@@ -951,7 +951,11 @@
   // (balanço, piscada, boca, olhar) são quantizadas; gotas de suor e a veia de raiva continuam ao vivo.
   const pcache = new Map(), pseen = new Map();
   let pRes = 0, pPixels = 0;
-  const P_MAX = 600, P_BUDGET = 5.5e6; // no máximo ~22 MB de sprites
+  // P_MAX: com braços erguidos, piscadas e flash aquecidos, cada combinação tem 17 a 33 imagens;
+  // com 600 a fase 4 (e a 2) girava o LRU e repintava no quadro o que ainda estava na tela
+  // (partida inteira a ts 3: 572 sprites pintados em quadros com 600, 181 com 900). A memória
+  // continua presa pelo P_BUDGET.
+  const P_MAX = 900, P_BUDGET = 5.5e6; // no máximo ~22 MB de sprites
   // Troca de resolução do canvas (degrau da qualidade automática, giro da tela): o cache antigo
   // vira "velho" (pStale) em vez de ser jogado fora. Um sprite velho continua sendo desenhado,
   // escalado pelo caminho não exato, até ser repintado na resolução nova: nos primeiros ~10 s só

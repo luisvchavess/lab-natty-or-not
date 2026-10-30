@@ -37,12 +37,12 @@
   // ---------- Lojinha do Zé (melhorias permanentes, pagas com Pix) ----------
   G.UPGRADES = [
     // Custos pensados para ~6 partidas (jogador bom) a ~9 (casual) até comprar tudo (total R$ 22.700).
-    // Comprado na parada entre fases já vale na partida em andamento (vida, delação e nível na hora).
-    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida no começo da partida',             costs: [900, 2700] },
-    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação Premiada no começo',             costs: [700, 2100] },
+    // A compra vale na hora: na parada entre fases a vida, a delação e o nível entram na partida em andamento.
+    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida em toda partida',                  costs: [900, 2700] },
+    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação em toda partida',                costs: [700, 2100] },
     { id: 'turbo',  name: 'Gatilho Turbinado',       desc: 'Atira 10% mais rápido por nível',           costs: [600, 1700, 3600] },
     { id: 'ima',    name: 'Chave Pix Aleatória',     desc: 'Puxa Pix e itens (menos o P) de mais longe', costs: [600, 1100, 2200] },
-    { id: 'arma',   name: 'Emenda Bélica',           desc: 'Começa com a arma um nível acima',           costs: [1200, 3400] },
+    { id: 'arma',   name: 'Emenda Bélica',           desc: '+1 nível de arma em toda partida',           costs: [1200, 3400] },
     { id: 'habeas', name: 'Habeas Corpus Preventivo', desc: 'Começa cada fase com escudo',               costs: [1900] },
   ];
 
@@ -50,7 +50,7 @@
   // counter/goal: liberada automaticamente quando G.count(counter) chega na meta.
   G.ACHIEVEMENTS = [
     { id: 'primeiro_voto', name: 'Primeiro Voto',    desc: 'Derrube seu primeiro político',               counter: 'kills', goal: 1 },
-    { id: 'ficha_limpa',   name: 'Ficha Limpa',      desc: 'Termine uma fase sem levar nenhum tiro' },
+    { id: 'ficha_limpa',   name: 'Ficha Limpa',      desc: 'Termine uma fase sem perder vida' },
     { id: 'bico_calado',   name: 'Bico Calado',      desc: 'Vença um chefão sem usar Delação' },
     { id: 'rachou',        name: 'Rachou!',          desc: 'Divida 30 Assessores da Rachadinha',            counter: 'rachadinha', goal: 30 },
     { id: 'por_um_fio',    name: 'Por um Fio',       desc: 'Faça 300 raspões numa partida' },
@@ -100,7 +100,7 @@
           { who: 'ze', text: 'Pode deixar, vó. Rodoviária do Plano à vista. Tá lotada de cabo eleitoral.' },
           { who: 'vo', text: 'Arraste o dedo em qualquer lugar da tela. O Fusca copia o movimento: não precisa encostar nele.' },
           { who: 'vo', text: 'Ele atira sozinho. Todo "P" deixa a arma mais forte, e a cor dele escolhe qual arma você usa.' },
-          { who: 'vo', text: 'Se apertar, aperta o botão da Delação Premiada: todo mundo entrega todo mundo e a tela fica limpa.' },
+          { who: 'vo', text: 'Apertou? Dê um toque rápido no botão da Delação Premiada: todo mundo entrega todo mundo e a tela fica limpa.' },
         ],
       },
       esplanada: {

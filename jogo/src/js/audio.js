@@ -4,12 +4,15 @@
    trilha procedural (bossa, valsinha, baião, samba, rock-sertanejo,
    frevo, funk carioca e marchinha). Nenhum arquivo de áudio.
 
-   - O AudioContext só nasce no primeiro toque/tecla (unlock()).
+   - O AudioContext só nasce no primeiro toque/tecla (unlock()); o motor
+     é montado logo depois em fatias curtas e o reverb ≥ 1,5 s depois.
    - Barramentos: master -> limitador -> saída; música (0,32) e SFX (0,55).
-   - Sequenciador "look-ahead": setInterval de 25 ms agenda 0,12 s à
+   - Sequenciador "look-ahead": setInterval de 40 ms agenda 0,18 s à
      frente no relógio do áudio (aguenta quedas de frame).
    - O motor (Engine) funciona com qualquer BaseAudioContext, então
      dá para renderizar tudo num OfflineAudioContext nos testes.
+   - SFX frequentes e golpes de bateria são pré-renderizados (Offline-
+     AudioContext) e tocados como buffer; o sintetizador fica de reserva.
    - Todas as melodias são originais.
    ============================================================ */
 (function () {
@@ -30,8 +33,11 @@
 
   // ===================== Utilidades =====================
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  // FIX >= 0 fixa o sorteio de rnd()/pick() (variações pré-renderizadas, ver "Sons pré-renderizados")
+  let FIX = -1;
+  const R = () => (FIX >= 0 ? FIX : Math.random());
+  const rnd = (a, b) => a + R() * (b - a);
+  const pick = (arr) => arr[(R() * arr.length) | 0];
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   // 'C#5' -> 73 (C4 = 60). Retorna null se não for nota.
@@ -95,10 +101,14 @@
   const DIST_SOFT = curve(3, 512);
 
   // ===================== Motor (qualquer BaseAudioContext) =====================
+  // opts: reverb:false (sem reverb), lazyReverb (reverb só com addReverb()), lazy (ruído preenchido aos
+  // poucos com fillWhite(); implica lazyReverb), white (reusa um buffer de ruído), bare (sem barramentos:
+  // pré-renderização), meter (ensaio: anota em tEnd/types até quando o som toca e os osciladores usados)
   function Engine(ac, opts) {
     opts = opts || {};
     const sr = ac.sampleRate;
-    const E = { ac, mv: 0, cur: null, voices: [], dying: [] };
+    const E = { ac, mv: 0, cur: null, voices: [], dying: [], tEnd: 0, types: {}, bank: null, hit: null };
+    const METER = !!opts.meter;
 
     // ---- primitivas ----
     E.gain = function (v, dest) { const g = ac.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; };
@@ -120,14 +130,16 @@
       if (dest) o.connect(dest);
       o.start(t0); o.stop(t1);
       if (E.cur) E.cur.srcs.push(o);
+      if (METER) { if (t1 > E.tEnd) E.tEnd = t1; E.types[typeof type === 'string' ? type : 'pulse'] = 1; }
       return o;
     };
     E.noise = function (t0, t1, dest) {
       const s = ac.createBufferSource();
       s.buffer = E.white; s.loop = true;
       if (dest) s.connect(dest);
-      s.start(t0, Math.random() * 1.8); s.stop(t1);
+      s.start(t0, Math.random() * E.white.duration * 0.95); s.stop(t1);
       if (E.cur) E.cur.srcs.push(s);
+      if (METER && t1 > E.tEnd) E.tEnd = t1;
       return s;
     };
     // envelope percussivo
@@ -174,17 +186,37 @@
     E.fin = function (src, g) { src.onended = function () { E.mv--; try { g.disconnect(); } catch (e) { /* nada */ } }; };
 
     // ---- buffers e formas de onda (criados uma vez) ----
-    E.white = (function () {
-      const len = Math.floor(sr * 2), b = ac.createBuffer(1, len, sr), d = b.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      return b;
-    })();
+    // ruído branco de 1 s, tocado em loop a partir de um ponto sorteado (os chiados longos dão a volta).
+    // fillWhite(n) preenche n amostras por chamada: o motor ao vivo faz isso em fatias depois do toque.
+    E.white = opts.white || null;
+    let wBuf = null, wFill = 0;
+    E.fillWhite = function (n) {
+      if (E.white) return true;
+      const len = Math.floor(sr * 1.0);
+      if (!wBuf) wBuf = ac.createBuffer(1, len, sr);
+      const d = wBuf.getChannelData(0), end = Math.min(len, wFill + n);
+      for (let i = wFill; i < end; i++) d[i] = Math.random() * 2 - 1;
+      wFill = end;
+      if (end >= len) E.white = wBuf;
+      return !!E.white;
+    };
+    if (!opts.lazy) E.fillWhite(Infinity);
     function pulseWave(duty) {
       const N = 40, re = new Float32Array(N), im = new Float32Array(N);
       for (let n = 1; n < N; n++) re[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
       return ac.createPeriodicWave(re, im);
     }
-    E.pulse25 = pulseWave(0.25);
+    let p25 = null;
+    Object.defineProperty(E, 'pulse25', { get() { return p25 || (p25 = pulseWave(0.25)); } });
+    // cada contexto monta a tabela de onda de um tipo de oscilador no 1º uso (5–10 ms a 4×):
+    // warm() faz isso fora da hora de tocar
+    E.warm = function (type) {
+      if (type === 'pulse') return E.pulse25;
+      const o = ac.createOscillator();
+      if (type !== 'sine') o.type = type;
+      return o;
+    };
+    if (opts.bare) return E;
 
     // ---- barramentos ----
     const master = E.gain(0.9, null);
@@ -200,7 +232,7 @@
     // reverb global da música (só médios/agudos, para não embolar o grave).
     // Resposta ao impulso mono de 1 s com decaimento cúbico SEM Math.pow (antes: 1,5 s estéreo
     // com pow por amostra — e o ConvolverNode prepara a FFT da resposta na thread principal).
-    // Ao vivo é criada depois do toque (ver buildEngine) e fica desligada na qualidade baixa.
+    // Ao vivo é criada ≥ 1,5 s depois do motor (ver applyQuality/tick) e fica desligada na qualidade baixa.
     E.rev = null;
     E.addReverb = function () {
       if (E.rev) return E.rev;
@@ -221,7 +253,7 @@
       if (!R || R.on === !!on) return;
       try { if (on) E.musicBus.connect(R.hp); else E.musicBus.disconnect(R.hp); R.on = !!on; } catch (e) { /* nada */ }
     };
-    if (opts.reverb !== false && !opts.lazyReverb) E.addReverb();
+    if (opts.reverb !== false && !opts.lazyReverb && !opts.lazy) E.addReverb();
 
     // ---- SFX: vozes com teto e "roubo" da mais antiga de prioridade <= ----
     E.playSfx = function (name, t, p) {
@@ -229,6 +261,13 @@
       if (!d) return false;
       E.prune(t);
       if (E.voices.length >= MAX_SFX && !E.steal(d.pri, t)) return false;
+      // versão pré-renderizada (ao vivo): só 1 fonte direto no barramento, sem ganho nem envelope
+      const bk = E.bank && E.bank(name, p);
+      if (bk) {
+        const s = playBaked(E, bk, t, E.sfxBus);
+        E.voices.push({ out: null, end: t + s.buffer.duration + 0.02, pri: d.pri, srcs: null, name });
+        return true;
+      }
       const out = E.gain(1, E.sfxBus);
       const v = { out, end: t + 0.5, pri: d.pri, srcs: [], name };
       E.cur = v;
@@ -242,7 +281,9 @@
       let k = -1;
       for (let i = 0; i < E.voices.length; i++) if (E.voices[i].pri <= pri) { k = i; break; } // lista em ordem de início
       if (k < 0) return false;
-      const v = E.voices.splice(k, 1)[0], g = v.out.gain;
+      const v = E.voices.splice(k, 1)[0];
+      if (!v.out) return true; // pré-renderizada: curta, termina sozinha (cortar daria estalo)
+      const g = v.out.gain;
       try { g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, now + 0.025); } catch (e) { /* nada */ }
       for (const s of v.srcs) { try { s.stop(now + 0.03); } catch (e) { /* já parou */ } }
       v.end = now + 0.06;
@@ -254,7 +295,7 @@
         let j = 0;
         for (let i = 0; i < L.length; i++) {
           const v = L[i];
-          if (v.end < now) { try { v.out.disconnect(); } catch (e) { /* nada */ } } else L[j++] = v;
+          if (v.end < now) { if (v.out) try { v.out.disconnect(); } catch (e) { /* nada */ } } else L[j++] = v;
         }
         L.length = j;
       }
@@ -1659,9 +1700,9 @@
       const keys = Object.keys(drums);
       if (fill) for (const k in fill) if (keys.indexOf(k) < 0) keys.push(k);
       for (const k of keys) {
-        const hi = k[0] === '+', fn = DRUM[(hi ? k.slice(1) : k).split('_')[0]];
+        const hi = k[0] === '+', nmD = (hi ? k.slice(1) : k).split('_')[0], fn = DRUM[nmD];
         if (!fn) continue;
-        sec.dk.push({ key: k, fn, hi, pat: drums[k] ? strip(drums[k]) : null, fill: fill && fill[k] != null ? strip(fill[k]) : null, vol: dv[k] != null ? dv[k] : 1 });
+        sec.dk.push({ key: k, nm: nmD, fn, hi, pat: drums[k] ? strip(drums[k]) : null, fill: fill && fill[k] != null ? strip(fill[k]) : null, vol: dv[k] != null ? dv[k] : 1 });
       }
       for (const p of r.parts || []) {
         const P = Object.assign({ vel: 0.8, oct: 0, gate: 0.95, hvel: 0.6 }, p), q = parseTokens(p.notes);
@@ -1768,8 +1809,9 @@
       else if (D.pat) { pat = D.pat; idx = ss; } else continue;
       const c = pat[idx % pat.length];
       if (c === '.' || c === undefined) continue;
-      const vel = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol * (0.92 + Math.random() * 0.12);
-      D.fn(E, tt + Math.random() * 0.004, c, vel, out, sd);
+      const vn = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol, vr = 0.92 + Math.random() * 0.12, td = tt + Math.random() * 0.004;
+      // golpe pré-renderizado (ao vivo) ou sintetizado
+      if (!(E.hit && E.hit(E, D.nm, c, vn, vr, td, out))) D.fn(E, td, c, vn * vr, out, sd);
     }
     // baixo
     const B = sec.bass;
@@ -1857,8 +1899,43 @@
     return probs;
   }
 
+  // ===================== Sons pré-renderizados =====================
+  // Os SFX que tocam o tempo todo e os golpes de bateria da trilha são renderizados uma vez num
+  // OfflineAudioContext (em outra thread) e depois tocam como 1 BufferSource + 1 ganho: 2 nós e
+  // nenhuma automação, contra 5–10 nós com envelopes por disparo. Até o buffer ficar pronto (ou se
+  // o navegador não tiver OfflineAudioContext), toca o sintetizador de sempre.
+  // nº de variações: a variação i fixa o rnd() em (i + 0,5) / n da faixa original (os tons sorteados
+  // viram n tons espalhados pela mesma faixa, tocados em ordem aleatória); o ruído de cada uma é outro.
+  // (Mexer no playbackRate a cada disparo custaria quase o mesmo que um nó a mais.)
+  const BAKE_SFX = {
+    shot_voto: 4, shot_boca: 4, shot_panela: 4, shot_jato: 4, hit: 4, tink: 1, boss_hit: 4, pan_hit: 4, graze: 2,
+    explode_s: 4, explode_m: 4, enemy_shot: 4, enemy_shot2: 2, split: 1, spawn: 1, pix: 1, ui_type: 5, ui_click: 1,
+  };
+  // renderizados logo que o motor nasce (os outros da lista: no 1º disparo)
+  const BAKE_FIRST = ['shot_voto', 'shot_boca', 'shot_panela', 'shot_jato', 'hit', 'tink', 'graze', 'enemy_shot', 'explode_s', 'ui_click', 'ui_type'];
+  const DRUM_SYNTH = { sweep: 1, rev: 1, vox: 1 }; // dependem do andamento ou são raros: sempre sintetizados
+  const ROLL = { snare: [0.75, 0.85], caixa: [0.8, 0.9] }; // rufo 'r' = 2 golpes (ver DRUM.snare/caixa)
+  const OAC = typeof window !== 'undefined' ? window.OfflineAudioContext || window.webkitOfflineAudioContext || null : null;
+
+  // toca uma variação pré-renderizada em dest
+  function playBaked(E, ent, t, dest) {
+    const s = E.ac.createBufferSource(), b = ent.bufs;
+    s.buffer = b[b.length > 1 ? (Math.random() * b.length) | 0 : 0];
+    s.connect(dest);
+    s.start(t);
+    ent.used = t;
+    return s;
+  }
+  // contexto de ensaio: roda um som sem criar nós de verdade, só para saber até quando ele toca
+  function dryCtx(sr) {
+    const P = { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues() {} };
+    const node = () => ({ gain: P, frequency: P, detune: P, Q: P, playbackRate: P, offset: P, connect() {}, disconnect() {}, start() {}, stop() {}, setPeriodicWave() {} });
+    return { sampleRate: sr, currentTime: 0, destination: node(), createGain: node, createOscillator: node, createBiquadFilter: node, createBufferSource: node, createWaveShaper: node, createConstantSource: node, createPeriodicWave: node };
+  }
+
   // ===================== Controle ao vivo (G.Audio) =====================
-  const L = { E: null, ac: null, building: false, pend: [], cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0 };
+  const L = { E: null, ac: null, building: false, pend: [], cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0,
+    musicOk: false, bank: {}, bq: [], bqKeys: {}, bakeT: 0, baking: false, bakeOff: !OAC, bakeKB: 0, revWant: false, revAt: 0 };
   const musicOn = () => { const s = G.save && G.save.settings; return !s || s.music !== false; };
   const sfxOn = () => { const s = G.save && G.save.settings; return !s || s.sfx !== false; };
   function report(err, where) {
@@ -1876,21 +1953,200 @@
     L.ac = ac;
     return ac;
   }
-  function buildEngine() {
-    L.building = false;
-    if (L.E) return L.E;
-    const ac = L.ac;
-    if (!ac) return null;
-    try { L.E = Engine(ac, { lazyReverb: true }); } catch (err) { report(err, 'engine'); try { ac.close(); } catch (e) { /* nada */ } L.ac = null; L.pend.length = 0; return null; }
+  // O motor nasce em fatias curtas, cada uma uma tarefa própria: barramentos, ruído (em blocos, até
+  // ~4 ms por fatia) e as tabelas de onda dos sons de interface -> SFX prontos (tocam os sons pedidos
+  // no meio tempo, como o clique do próprio toque); depois as outras tabelas e a partitura pedida ->
+  // trilha pronta. A pré-renderização começa aí e o reverb vem ≥ 1,5 s depois (ver tick).
+  // Uma fatia só emenda o passo seguinte se ainda não gastou 2 ms (aparelho rápido: menos fatias;
+  // lento: 1 passo de ≤ ~10 ms a 4× por fatia). Passo que devolve false continua na próxima fatia.
+  const BOOT = [
+    () => { L.E0 = Engine(L.ac, { lazy: true }); },
+    () => { const t = performance.now(); while (!L.E0.fillWhite(2048)) if (performance.now() - t > 4) return false; return true; },
+    () => { L.E0.warm('sine'); },
+    () => { L.E0.warm('square'); },
+    sfxReady,
+    () => { L.E.warm('triangle'); },
+    () => { L.E.warm('sawtooth'); },
+    () => { L.E.warm('pulse'); },
+    () => { const s = L.wanted && SONGS[L.wanted]; if (s) compile(s); },
+    musicReady,
+  ];
+  const SFX_READY = 4; // índice de sfxReady em BOOT
+  function bootStep(i) {
+    if (!L.ac || (i <= SFX_READY && L.E)) { L.building = false; return; }
+    const t0 = performance.now();
+    try {
+      do { if (BOOT[i]() !== false) i++; } while (i < BOOT.length && performance.now() - t0 < 2);
+    } catch (err) {
+      report(err, 'engine');
+      L.building = false; L.E0 = null; L.pend.length = 0;
+      if (L.E) { clearInterval(L.timer); L.E = null; }
+      try { L.ac.close(); } catch (e) { /* nada */ }
+      L.ac = null;
+      return;
+    }
+    if (i < BOOT.length) setTimeout(bootStep, 0, i);
+  }
+  function sfxReady() {
+    const E = L.E0;
+    L.E0 = null; L.building = false;
+    E.bank = bakedSfx; E.hit = bakedDrum;
+    L.E = E;
     L.mOn = L.sOn = null;
+    LOWQ = G.quality === 'low';
     applySettings(true);
     L.timer = setInterval(tick, TICK_MS);
-    if (L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
     // sons pedidos enquanto o motor nascia (ex.: o clique do próprio toque)
     const pend = L.pend.splice(0);
     for (const nm of pend) api.sfx(nm);
-    setTimeout(() => { try { applyQuality(); } catch (err) { report(err, 'reverb'); } }, 0);
-    return L.E;
+  }
+  function musicReady() {
+    const E = L.E;
+    L.musicOk = true;
+    L.revWant = !LOWQ; L.revAt = E.ac.currentTime + 1.5;
+    for (const nm of BAKE_FIRST) bakedSfx(nm);
+    if (L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
+  }
+  function buildReverb() {
+    const E = L.E;
+    if (!E || LOWQ) return;
+    try { if (!E.rev) E.addReverb(); else E.setReverb(true); } catch (err) { report(err, 'reverb'); }
+  }
+
+  // ---- fila de pré-renderização ----
+  // entrada do banco para um SFX (null: ainda não existe; pede a renderização)
+  function bakedSfx(name, p) {
+    const n = BAKE_SFX[name];
+    if (!n || L.bakeOff) return null;
+    const key = p == null ? name : name + ':' + p;
+    const ent = L.bank[key];
+    if (ent) return ent;
+    if (!L.bqKeys[key]) wantBake({ key, n, run: (E, t, o) => SFX[name].fn(E, t, o, p) });
+    return null;
+  }
+  // entrada do banco para um golpe de bateria na velocidade nominal vn (lane × acento); a variação
+  // humana de ±6% de cada golpe continua no ganho do golpe (bakedHit)
+  function drumEntry(nm, c, vn) {
+    const vq = Math.round(vn * 100) / 100, key = '#' + nm + c + vq, ent = L.bank[key];
+    if (ent) return ent;
+    if (!L.bqKeys[key] && vq > 0) wantBake({ key, n: 1, v: vq, run: (E, t, o) => DRUM[nm](E, t, c, vq, o, 0.1) });
+    return null;
+  }
+  function bakedDrum(E, nm, c, vn, vr, t, dest) {
+    if (DRUM_SYNTH[nm] || L.bakeOff) return false;
+    const roll = c === 'r' && ROLL[nm];
+    if (roll) {
+      const a = drumEntry(nm, 'x', vn * roll[0]), b = drumEntry(nm, 'x', vn * roll[1]);
+      if (!a || !b) return false;
+      const sd = L.cur ? L.cur.sd : 0.11;
+      bakedHit(E, a, vn * roll[0] * vr, t, dest);
+      bakedHit(E, b, vn * roll[1] * vr, t + sd / 2, dest);
+      return true;
+    }
+    const ent = drumEntry(nm, c, vn);
+    if (!ent) return false;
+    bakedHit(E, ent, vn * vr, t, dest);
+    return true;
+  }
+  function bakedHit(E, ent, vel, t, dest) {
+    const g = E.nv(dest, vel / ent.v);
+    E.fin(playBaked(E, ent, t, g), g);
+  }
+  // todos os golpes que uma faixa pode tocar (pedidos quando ela começa)
+  function wantSongDrums(song) {
+    const C = compile(song);
+    for (const sn in C.secs) {
+      for (const D of C.secs[sn].dk) {
+        if (DRUM_SYNTH[D.nm]) continue;
+        const seen = {};
+        for (const c of (D.pat || '') + (D.fill || '')) {
+          if (c === '.' || c === '-' || seen[c]) continue;
+          seen[c] = 1;
+          const vn = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol, roll = c === 'r' && ROLL[D.nm];
+          if (roll) { drumEntry(D.nm, 'x', vn * roll[0]); drumEntry(D.nm, 'x', vn * roll[1]); } else drumEntry(D.nm, c, vn);
+        }
+      }
+    }
+  }
+  // golpes de faixas que não tocam há 20 s saem do banco (voltam a ser renderizados se preciso)
+  function evictDrums(now) {
+    for (const k in L.bank) {
+      const e = L.bank[k];
+      if (e.v && e.used < now - 20) { L.bakeKB -= e.kb; delete L.bank[k]; }
+    }
+  }
+  function wantBake(job) {
+    L.bqKeys[job.key] = 1;
+    L.bq.push(job);
+    if (!L.baking && !L.bakeT) L.bakeT = setTimeout(bakeStart, 250);
+  }
+  function bakeFail(err) {
+    L.bakeOff = true; L.baking = false; L.bq.length = 0; L.bqKeys = {};
+    report(err, 'bake');
+  }
+  // Um lote: ensaio sem nós (duração exata e osciladores usados) -> OfflineAudioContext do tamanho
+  // certo -> 1 tabela de onda por fatia -> nós em fatias de ~4 ms -> render (fora da thread
+  // principal) -> recorte em buffers, também em fatias.
+  function bakeStart() {
+    L.bakeT = 0;
+    const E = L.E;
+    if (!E || L.baking || L.bakeOff || !L.bq.length) return;
+    L.baking = true;
+    let parts, oac, B, types, k = 0, off = 0;
+    const jobs = L.bq.splice(0, 64), sr = E.ac.sampleRate;
+    try {
+      const D = Engine(dryCtx(sr), { bare: true, white: E.white, meter: true });
+      parts = [];
+      for (const j of jobs) {
+        for (let i = 0; i < j.n; i++) {
+          D.tEnd = 0;
+          FIX = (i + 0.5) / j.n;
+          try { j.run(D, 0, D.ac.destination); } finally { FIX = -1; }
+          const len = Math.ceil(D.tEnd * sr) + 128;
+          parts.push({ j, i, off, len });
+          off += len + 128;
+        }
+      }
+      // o 1º oscilador de um contexto já monta a tabela do seno: ela vem sozinha, antes das outras
+      types = Object.keys(D.types).filter((ty) => ty !== 'sine').concat('sine');
+      oac = new OAC(1, off, sr);
+      B = Engine(oac, { bare: true, white: E.white });
+    } catch (err) { bakeFail(err); return; }
+    const next = (fn) => setTimeout(() => { try { fn(); } catch (err) { bakeFail(err); } }, 0);
+    const build = () => {
+      if (types.length) { B.warm(types.pop()); next(build); return; }
+      const t0 = performance.now();
+      while (k < parts.length && (performance.now() - t0 < 4 || k === 0)) {
+        const p = parts[k++];
+        FIX = (p.i + 0.5) / p.j.n;
+        try { p.j.run(B, p.off / sr, oac.destination); } finally { FIX = -1; }
+      }
+      if (k < parts.length) { next(build); return; }
+      let fin = false;
+      const done = (buf) => { if (fin) return; fin = true; k = 0; next(() => cut(buf)); };
+      oac.oncomplete = (e) => done(e.renderedBuffer);
+      const pr = oac.startRendering();
+      if (pr && pr.then) pr.then(done, (err) => { if (!fin) { fin = true; bakeFail(err); } });
+    };
+    const cut = (buf) => {
+      const data = buf.getChannelData(0), ac = L.E ? L.E.ac : null, t0 = performance.now();
+      if (!ac) { L.baking = false; return; }
+      while (k < parts.length && performance.now() - t0 < 4) {
+        const p = parts[k++], j = p.j, b = ac.createBuffer(1, p.len, sr), seg = data.subarray(p.off, p.off + p.len);
+        if (b.copyToChannel) b.copyToChannel(seg, 0); else b.getChannelData(0).set(seg);
+        (j.bufs || (j.bufs = [])).push(b);
+        if (j.bufs.length === j.n) {
+          const kb = (j.n * p.len * 4) / 1024;
+          L.bank[j.key] = { bufs: j.bufs, v: j.v || 0, used: ac.currentTime, kb };
+          L.bakeKB += kb;
+          delete L.bqKeys[j.key];
+        }
+      }
+      if (k < parts.length) { next(() => cut(buf)); return; }
+      L.baking = false;
+      if (L.bq.length && !L.bakeT) L.bakeT = setTimeout(bakeStart, 100);
+    };
+    next(build);
   }
   function fadeOut(tr, dur) {
     if (!tr || tr.stopping) return;
@@ -1902,10 +2158,11 @@
   }
   function startTrack(name) {
     const E = L.E;
-    if (!E || !SONGS[name]) return;
+    if (!E || !SONGS[name] || !L.musicOk) return; // antes do "trilha pronta": fica em L.wanted
     const had = !!L.cur;
     if (L.cur) fadeOut(L.cur, XFADE);
     L.cur = E.track(name, E.ac.currentTime + 0.06, had ? XFADE : 0.05);
+    if (!L.bakeOff) { evictDrums(E.ac.currentTime); wantSongDrums(SONGS[name]); }
   }
   function applySettings(force) {
     const E = L.E;
@@ -1923,7 +2180,10 @@
     const E = L.E;
     LOWQ = G.quality === 'low';
     if (!E) return;
-    if (!LOWQ) { if (!E.rev) E.addReverb(); else E.setReverb(true); } else E.setReverb(false);
+    // montar o convolver custa ~60 ms a 4× (FFT da resposta na thread principal): fica para o tick
+    // escolher a hora (≥ 1,5 s depois e de preferência fora do 'play')
+    if (!LOWQ) { if (!E.rev) { if (!L.revWant) { L.revWant = true; L.revAt = E.ac.currentTime + 1.5; } } else E.setReverb(true); }
+    else { L.revWant = false; E.setReverb(false); }
   }
   // chefão nos últimos 34% de vida = trilha no clímax (camadas extras)
   function bossCritical() {
@@ -1955,6 +2215,7 @@
         E.duckG.gain.setTargetAtTime(duck ? 0.5 : 1, now, 0.08);
       }
       if (ac.state !== 'running') return;
+      if (L.revWant && now >= L.revAt && (G.state !== 'play' || now >= L.revAt + 4.5)) { L.revWant = false; setTimeout(buildReverb, 0); }
       // chefão entrando/falando com a música parada: toca o "suspense" (vira a trilha do chefão no começo da luta)
       if (!L.cur && !L.wanted && L.mOn) {
         const b = G.game && G.game.boss;
@@ -1999,7 +2260,7 @@
       if (!AC) return;
       const ac = ensureCtx();
       if (!ac) return;
-      if (!L.E && !L.building) { L.building = true; setTimeout(() => { try { buildEngine(); } catch (err) { L.building = false; report(err, 'engine'); } }, 0); }
+      if (!L.E && !L.building) { L.building = true; setTimeout(bootStep, 0, 0); }
       if (ac.state !== 'running' || L.first) {
         L.first = false;
         if (!(typeof document !== 'undefined' && document.hidden)) {
@@ -2049,6 +2310,7 @@
         voices: E ? E.voices.length : 0, musicVoices: E ? E.mv : 0, reverb: !!(E && E.rev && E.rev.on), low: LOWQ,
         music: musicOn(), sfx: sfxOn(), climax: !!(L.cur && L.cur.hi), ducked: L.duck,
         time: E ? +E.ac.currentTime.toFixed(2) : 0,
+        baked: Object.keys(L.bank).length, bakeKB: Math.round(L.bakeKB), bakeQueue: L.bq.length, bakeOff: L.bakeOff,
       };
     },
     names: { sfx: Object.keys(SFX), music: Object.keys(SONGS) },
@@ -2058,6 +2320,9 @@
     _songs: SONGS,
     _inst: INST,
     _drum: DRUM,
+    _sfx: SFX,
+    _bank: () => L.bank,
+    _fix(v) { FIX = v; }, // fixa o sorteio (comparar sintetizado x pré-renderizado)
     _ctxSuspendForTest() { if (L.E) L.E.ac.suspend(); },
   };
   G.Audio = Object.assign(G.Audio || {}, api);

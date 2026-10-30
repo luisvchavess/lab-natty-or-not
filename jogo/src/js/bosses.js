@@ -522,7 +522,16 @@
   // sprGet: só consulta (sem alocar nada por quadro). Um sprite da resolução anterior serve até sair o novo.
   function sprGet(key) {
     sprCheckRes();
-    return sprCache.get(key) || sprStale.get(key) || null;
+    const cv = sprCache.get(key);
+    if (cv) return cv;
+    const old = sprStale.get(key);
+    if (!old) return null;
+    if (!old._rq) { // o que está na tela é repintado primeiro
+      old._rq = 1;
+      const k = sprQ.findIndex((j) => j.key === key);
+      if (k > 0) { const j = sprQ.splice(k, 1)[0]; sprQ.splice(sprQ[0].i > 0 ? 1 : 0, 0, j); }
+    }
+    return old;
   }
   // precisa AGORA: termina o trabalho da fila (ou pinta tudo de uma vez, como antes). paint = fn(ctx) ou steps()
   function sprite(key, box, paint, steps) {
@@ -1272,6 +1281,8 @@
       const d = b.data;
       stopCo(b); d.depOn = false; d.ghost = null; d.fx.length = 0;
       if (d.orbit) d.orbit.w = 0;
+      // na queda e na fuga só aparece o corpo com o letreiro de agora (e o flash): o resto da memória já volta
+      sprDrop((k) => !(k === 'cenF' || k.startsWith('case|') || (k.startsWith('cen|') && k.split('|')[3] === d.banner)));
     },
     draw(ctx, b, g) {
       const d = b.data;
@@ -1613,14 +1624,15 @@
     const d = b.data;
     for (;;) {
       yield every * M.rand(0.85, 1.15);
-      const side = Math.random() < 0.5 ? 0 : 1;
+      let side = Math.random() < 0.5 ? 0 : 1;
+      if (d.jarT[side] > 0.6) side ^= 1; // o pote da rajada já está aberto: usa o outro
       d.jarT[side] = 0.6;
       yield 0.32;
       const jx = b.x + (side ? 66 : -66), jy = b.y + 16;
       fan(jx, jy, aimFrom(jx, jy), 3, 0.32, 120, { style: 'bs_vento', color: COL.magenta });
       sfx('enemy_shot');
       yield 0.3;
-      d.jarT[side] = 0;
+      if (d.jarT[side] === 0.6) d.jarT[side] = 0;
     }
   }
   // fase 3: sementinhas miradas da mão
@@ -1916,8 +1928,9 @@
       if (idx === 2) warmPeople(b, 'p4', poses(DILMA_SW, DIL_BIKE, ['drive']));
       if (idx >= 2) { d.wind.target = 0; d.windy = false; }
       d.jarT[0] = d.jarT[1] = 0;
-      if (idx === 1) { co(b, dilP2(b)); co(b, null, 1); }
-      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.7), 1); }
+      // pressão de fundo: os potes também arrotam vento mirado durante as rajadas (o 2º turno era o mais calmo)
+      if (idx === 1) { co(b, dilP2(b)); co(b, dilBgJars(b, L2() ? 2.2 : 2.6), 1); }
+      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.45), 1); }
       else if (idx === 3) { co(b, dilP4(b)); co(b, null, 1); }
     },
     onDeath(b) {
@@ -2448,7 +2461,8 @@
     d.smokeOn = false;
   }
   // jet ski: avança rente à água deixando uma cortina com duas frestas
-  function* bolJetDash(b, dir, y) {
+  // prev = brechas da passada anterior (a 2ª passada de cada par abre as brechas perto delas)
+  function* bolJetDash(b, dir, y, prev) {
     const d = b.data;
     const edge = dir > 0 ? 44 : G.W - 44, sx = b.x, sy = b.y;
     d.dir = dir;
@@ -2459,9 +2473,12 @@
     yield 0.7;
     sfx('dash'); sfx('splash');
     const x0 = b.x, x1 = dir > 0 ? G.W + 64 : -64, T = Math.abs(x1 - x0) / (L2() ? 520 : 480);
-    const g1 = M.rand(50, G.W / 2 - 40), g2 = M.rand(G.W / 2 + 40, G.W - 50);
-    // brecha (meia largura): mais larga no 1º Mandato (as 4 fileiras de 2 passadas chegam a ~0,8 s uma da outra)
-    const gapR = L2() ? 31 : 42;
+    // brecha (meia largura): mais larga no 1º Mandato. As 4 fileiras de um par de passadas chegam a ~0,8 s uma
+    // da outra, mas no lado onde a 2ª passada começa a fileira lenta da 1ª e a rápida da 2ª chegam quase juntas
+    // (0,2-0,4 s): por isso as brechas da 2ª ficam a no máximo 3/4 de brecha das da 1ª (sempre sobra passagem).
+    const gapR = L2() ? 31 : 42, sh = prev ? gapR * 0.75 : 0;
+    const g1 = prev ? clamp(prev[0] + M.rand(-sh, sh), 50, G.W / 2 - 40) : M.rand(50, G.W / 2 - 40);
+    const g2 = prev ? clamp(prev[1] + M.rand(-sh, sh), G.W / 2 + 40, G.W - 50) : M.rand(G.W / 2 + 40, G.W - 50);
     let lastX = x0;
     yield* tween(b, T, (u) => {
       b.x = M.lerp(x0, x1, u);
@@ -2475,6 +2492,7 @@
       }
     });
     b.x = dir > 0 ? -64 : G.W + 64;
+    return [g1, g2];
   }
 
   function* bolP1(b) {
@@ -2532,8 +2550,8 @@
     let dir = b.x < G.W / 2 ? 1 : -1, r = 0;
     const rows = [146, 200];
     for (;;) {
-      yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3)); dir = -dir;
-      yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3)); dir = -dir;
+      const gaps = yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3), null); dir = -dir;
+      yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3), gaps); dir = -dir;
       // volta ao centro
       const sx = b.x;
       d.dir = sx < 0 ? 1 : -1;
