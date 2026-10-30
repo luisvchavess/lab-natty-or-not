@@ -1567,7 +1567,8 @@
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold]];
   G.Bosses.define('centrao', {
     // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3600, r: 46, homeY: 165, fatStart: 85,
+    // HP afinado com a manha (humanbot ttk voto nv3: ~70 s pegando a emenda, ~85 s ignorando)
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3300, r: 46, homeY: 165, fatStart: 85,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -1675,7 +1676,7 @@
       // entregou a mala: ela volta pra mão do Centrão (cura 2% quando chega) + a cura normal do apoio
       if (frac == null && e.data && e.data.carry) { const em = e.data.carry; e.data.carry = null; if (em.st === 'carried') cenMiss(b, em); }
       const cap = b.maxHp * (b.phases[b.phase] ? b.phases[b.phase].at : 1);
-      // cura pequena (≈ 40 HP no 1º mandato, 63 no 2º): não cresce junto com o HP do chefão, senão
+      // cura pequena (1,1% do HP no 1º mandato, 1,4% no 2º; a emenda perdida: 2%): não cresce mais que isso, senão
       // ganharia da arma fraca (o jogador tem que derrubar o apoio, mas não precisa ser perfeito)
       const amt = b.maxHp * (frac != null ? frac * (L2() ? 1.2 : 1) : L2() ? 0.014 : 0.011);
       b.hp = Math.min(cap, b.hp + amt);
@@ -2613,7 +2614,8 @@
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
-    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3900, r: 40, homeY: 168, spdK: 1.12,
+    // HP afinado com a manha (humanbot ttk voto nv3: ~78 s enchendo as metas, ~103 s ignorando com a META ABERTA)
+    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3000, r: 40, homeY: 168, spdK: 1.12,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },

@@ -470,9 +470,14 @@ function pageMain(cfg) {
     if (AG) {
       const key = B.id + ':' + AG.id;
       if (S.mechKey !== key) {
-        S.mechKey = key; S.mechTake = rnd() < P.mechNotice; S.mechAt = g.t + P.mechDelay;
-        const st = curStage();
-        if (st && st.boss && AG.why !== 'stun') { st.boss.goals++; if (S.mechTake) st.boss.noticed++; }
+        // o "SAI!" do Leão é o mesmo Leão que a pessoa já estava olhando: mantém a decisão (só reage de novo, mechDelay)
+        const cont = S.mechWhy === 'leao-alinha' && AG.why === 'leao-sai';
+        S.mechKey = key; S.mechWhy = AG.why; S.mechAt = g.t + P.mechDelay;
+        if (!cont) {
+          S.mechTake = rnd() < P.mechNotice;
+          const st = curStage();
+          if (st && st.boss && AG.why !== 'stun') { st.boss.goals++; if (S.mechTake) st.boss.noticed++; }
+        }
       }
     }
     const take = (S.take = !!(AG && S.mechTake && g.t >= S.mechAt));
