@@ -58,8 +58,11 @@
 
   // ===================== Erros (para testes) =====================
   G.errors = [];
+  // G.errors guarda só os 50 últimos; G.errorCount conta todos (para saber se houve erro NESTE quadro)
+  G.errorCount = 0;
   G.reportError = function (err, where) {
     const msg = (where ? '[' + where + '] ' : '') + (err && err.stack ? err.stack : String(err));
+    G.errorCount++;
     G.errors.push(msg);
     if (G.errors.length > 50) G.errors.shift();
     try { console.error(msg); } catch (e) { /* nada */ }
@@ -1680,8 +1683,11 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       return;
     }
-    const bgOk = call(G.BG, 'draw', ctx, stageId, scroll, tt, W, H);
-    if (bgOk === undefined && G.errors.length && /bg\.draw/.test(G.errors[G.errors.length - 1])) { ctx.fillStyle = '#0d1b3d'; ctx.fillRect(-20, -20, W + 40, H + 40); }
+    const ec = G.errorCount;
+    call(G.BG, 'draw', ctx, stageId, scroll, tt, W, H);
+    // O fundo falhou NESTE quadro: desfaz os save() que ficaram abertos (clip/alpha/transform do bg)
+    // e pinta um fundo liso só neste quadro. No quadro seguinte o bg desenha de novo normalmente.
+    if (G.errorCount !== ec && G.errors[G.errors.length - 1].lastIndexOf('[bg.draw]', 0) === 0) bgFallback(k, ox, oy, W, H);
 
     // itens
     for (const it of g.pickups) {
@@ -1769,6 +1775,13 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  // render() chama o bg sem save() aberto: restore() até esvaziar a pilha volta ao estado de antes do bg
+  function bgFallback(k, ox, oy, W, H) {
+    for (let i = 0; i < 64; i++) ctx.restore();
+    ctx.setTransform(k, 0, 0, k, ox * k, oy * k);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#0d1b3d'; ctx.fillRect(-20, -20, W + 40, H + 40);
+  }
   const PLAYER_DRAW_OPTS = {};
   // "PRONTO? ... VAI!" na volta da pausa
   function drawResume(t) {
