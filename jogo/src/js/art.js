@@ -567,7 +567,7 @@
       c.beginPath(); O(c, x, y - ry * 0.9, 3.6); fillP(c, '#ffd23f');
       c.beginPath(); c.moveTo(x - rx * 0.8, y - ry * 0.55); c.lineTo(x + rx * 0.8, y - ry * 0.55); strokeP(c, '#ffd23f', 1.6);
     } else if (hat === 'helmet') {
-      c.beginPath(); RR(c, x - 3, y - ry * 1.15, 6, ry * 0.5, 2.5); fillP(c, '#ffd23f');
+      c.beginPath(); RR(c, x - 3, y - ry * 1.15, 6, ry * 0.5, 2.5); fillP(c, (spec && spec.hatStripe) || '#ffd23f');
       if (DET) { c.beginPath(); E(c, x - rx * 0.62, y - ry * 0.5, 2.4, 6, 0.3); fillP(c, 'rgba(255,255,255,0.3)'); }
     } else if (hat === 'cowboy') {
       c.beginPath(); c.moveTo(x - rx * 0.76, y - ry * 0.78); c.quadraticCurveTo(x, y - ry * 0.86, x + rx * 0.76, y - ry * 0.78); strokeP(c, '#5a3618', 3.4);
@@ -1282,10 +1282,10 @@
   // flash (corpo, braços, cabeça); as cabeças piscando (~4% do tempo) vão para a fila q2.
   // mq: abertura da boca já quantizada (0, 1/3, 2/3, 1) das cabeças sem flash (quem fala muito,
   // como o Centrão bravo/rindo, aquece também a boca aberta: ver prewarm); o flash não tem rosto.
-  function queueWarm(sk, sz, spec, mood, pose, big, mq) {
+  function queueWarm(sk, sz, spec, mood, pose, big, mq, bust) {
     mq = mq || 0;
     if (WARM.q.length > WARM_CAP) return false;
-    const body = spec.body || 'suit';
+    const body = bust ? 'none' : spec.body || 'suit'; // bust: só a cabeça (como person(..., { bust: true }))
     const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
     const arms = body !== 'none' && spec.arms !== false;
     const res = pRes, s = sz / 100;
@@ -1346,9 +1346,10 @@
     }
     if (left()) WARM.timer = setTimeout(pumpWarm, 4);
   }
-  // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose?, mouth? }] — pinta antes de o personagem
+  // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose?, mouth?, bust? }] — pinta antes de o personagem
   // aparecer. mouth (0..1, quantizada como no jogo) aquece as cabeças falando (ex.: { mood: 'angry',
-  // mouth: 0.6 }); sem mouth, a boca fechada. Sem lista: aquece os sprites dos itens (ver warmItems).
+  // mouth: 0.6 }); sem mouth, a boca fechada. bust: true aquece só as cabeças (sem corpo nem braços).
+  // Sem lista: aquece os sprites dos itens (ver warmItems).
   function prewarm(list) {
     if (!list) { warmItems(); return; }
     const res = gameRes();
@@ -1360,11 +1361,12 @@
       const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
       // mesma quantização de personCached (a chave da cabeça tem que bater)
       const mq = it.mouth != null && sz < 70 ? Math.round(clamp(+it.mouth || 0, 0, 1) * 3) / 3 : 0;
-      const id = sk + '|' + sz + '|' + mood + '|' + pose + (mq ? '|m' + mq : '');
+      const bust = !!it.bust;
+      const id = sk + '|' + sz + '|' + mood + '|' + pose + (mq ? '|m' + mq : '') + (bust ? '|bust' : '');
       if ((WARM.seen.get(id) || 0) >= 2) continue;
       // só marca como feito o que entrou na fila (fila cheia: fica para a 2ª aparição no jogo)
       if (WARM.seen.size > 1500) { WARM.seen.clear(); WARM.live.clear(); }
-      if (queueWarm(sk, sz, it.spec, mood, pose, sz >= 70, mq)) markWarm(id, sk, sz, it.spec, mood, pose, sz >= 70, -1e9, mq);
+      if (queueWarm(sk, sz, it.spec, mood, pose, sz >= 70, mq, bust)) markWarm(id, sk, sz, it.spec, mood, pose, sz >= 70, -1e9, mq);
     }
   }
 

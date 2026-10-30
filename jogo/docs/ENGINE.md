@@ -250,9 +250,9 @@ ignoring it has a cost. It is strongly rewarded, **never a hard lock**: fatigue 
 
 **Boss fields (set by the boss module every frame):**
 - `b.autoGoal = { x, y, r, why, id } | null` — where the car should be for the mechanic right now. Clamped to
-  x ∈ [16, W-16], y ∈ [0,42H, H-30]; one reused object per boss. `why` ∈ `'emenda' | 'meta' | 'fio' | 'leao-alinha' |
+  x ∈ [16, W-16], y ∈ [0.42H, H-30]; one reused object per boss. `why` ∈ `'emenda' | 'meta' | 'fio' | 'leao-alinha' |
   'leao-sai' | 'stun'`; `id` changes when the target object changes (the humanbot uses it to "notice" a new object).
-  While stunned: `why:'stun'` at `(clamp(b.x, 30, W-30), 0,78H)`, r 40 (under the boss, shooting). Null in `onDeath`,
+  While stunned: `why:'stun'` at `(clamp(b.x, 30, W-30), 0.78H)`, r 40 (under the boss, shooting). Null in `onDeath`,
   at Lule's revive and whenever nothing is available. The core autopilot (`auto=1`) follows it unless `mech=0`
   (`G.debug.noMech`); `hitboxes=1` draws it as a cyan cross + circle of radius `r`.
 - `b.mech = { kind, ok, miss, stuns }` — kind ∈ `'pegar' | 'meta' | 'fio' | 'ole'`; `ok` = successful actions (catch,
