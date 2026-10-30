@@ -1053,7 +1053,7 @@
     // vira o casaco
     yield* tween(b, 0.8, (u) => { d.flipX = Math.max(0.07, Math.abs(Math.cos(u * TAU))); if (u > 0.25 && d.side === 0) { d.side = 1; G.burst(b.x, b.y, 16, { colors: [SIDE[1].main, SIDE[1].acc], speed: 200 }); } });
     d.flipX = 1;
-    d.ghost = { x: G.W - b.x, y: b.y, a: 0 };
+    d.ghost = { x: G.W - b.x, y: b.y, a: 0 }; d.ghostBanner = d.banner;
     hint('reflexo', G.W / 2, G.H * 0.45, 'O REFLEXO NÃO LEVA DANO!', '#ffffff');
     yield* cenSwap(b, true);
     for (;;) {
@@ -1084,8 +1084,7 @@
       b.x = M.lerp(x0, b.homeX, e); b.y = M.lerp(b.y, b.homeY, 0.2);
       if (d.ghost) { d.ghost.x = M.lerp(gx0, b.homeX, e); d.ghost.a = 1 - u; }
     });
-    d.ghost = null;
-    if (d.side !== 0 && Math.random() < 0.5) d.side = 0;
+    d.ghost = null; cenEvict(b); // (a cor do 3º turno já veio no onPhase: d.p3Side)
     say(b, 'VEM PRA BASE, PESSOAL!', 2.2);
     d.mv = cenSway; d.depOn = true; d.depT = 0.6;
     yield 1.2;
@@ -1133,6 +1132,43 @@
     }
   }
 
+  // ---------- sprites do Centrão: o que cada turno vai usar, pintado ANTES (fila, uma fatia por quadro) ----------
+  const CEN_BAN = ['TOMA LÁ DÁ CÁ', 'SOMOS GOVERNO', 'BALCÃO ABERTO', 'BASE ALIADA']; // letreiro de cada turno
+  function cenHpSt(hp) { return hp < 0.25 ? 2 : hp < 0.45 ? 1 : 0; } // igual ao drawCentrao
+  function cenPlan(b) {
+    const d = b.data, ph = b.state === 'fight' ? b.phase : 0, hp = b.hp / b.maxHp, s3 = d.p3Side;
+    if (ph === 0) {
+      cenBodyWant(0, true, 0, ''); caseWant(22, 'EMENDA'); cenBodyWant(0, false, 0, CEN_BAN[0]); caseWant(24, 'EMENDA');
+      // começo do 2º turno: vira o casaco (lado 1), o reflexo aparece (lado 0) e a 1ª troca de lado
+      cenBodyWant(1, false, 0, CEN_BAN[1]); cenGhostWant(0, 0, CEN_BAN[1]); cenBodyWant(0, false, 0, CEN_BAN[1]); cenGhostWant(1, 0, CEN_BAN[1]);
+    } else if (ph === 1) {
+      for (let st = cenHpSt(hp); st <= 1; st++) for (let sd = 0; sd < 2; sd++) { cenBodyWant(sd, false, st, CEN_BAN[1]); cenGhostWant(sd, st, CEN_BAN[1]); }
+      if (hp < 0.5) cenBodyWant(s3, false, 1, CEN_BAN[2]);
+    } else if (ph === 2) {
+      if (d.ghost) cenGhostWant(s3 ^ 1, cenHpSt(hp), d.ghostBanner); // o reflexo voltando para o corpo
+      cenBodyWant(s3, false, cenHpSt(hp), CEN_BAN[2]);
+      if (hp < 0.34) cenBodyWant(s3, false, 2, CEN_BAN[2]);
+      if (hp < 0.2) cenBodyWant(s3, false, 2, CEN_BAN[3]);
+    } else cenBodyWant(s3, false, 2, CEN_BAN[3]);
+  }
+  // libera a memória do turno que passou: corpos com o letreiro de agora e do próximo; reflexo só enquanto existe
+  function cenEvict(b) {
+    const d = b.data, ph = b.phase;
+    sprDrop((k) => {
+      const p = k.split('|'), bi = CEN_BAN.indexOf(p[3]);
+      if (p[0] === 'cen') return bi < ph || bi > ph + 1;
+      if (p[0] === 'cenG') return ph > 1 && !d.ghost;
+      return false;
+    });
+  }
+  // durante o "ALERTA!" o core não chama nada do chefão: a fila anda por um timer (uma fatia a cada ~2 quadros)
+  function sprWarm(b) {
+    const tick = () => { const g = G.game; if (g && g.boss === b && b.state === 'warning' && sprStep()) setTimeout(tick, 30); };
+    setTimeout(tick, 30);
+  }
+  // uma fatia por quadro (chamado no draw do chefão), fora dos quadros cheios de balas
+  function sprPump(b, g) { if (sprQ.length && (b.state !== 'fight' || b.invulnT > 0 || g.eb.length < 120)) sprStep(); }
+
   const CEN_HB = [[0, -6, 46], [-46, 16, 28], [46, 16, 28], [0, 38, 30]];
   // todo (estilo, cor) que o Centrão atira (o reflexo usa violeta; as emendas estouram em laranja/violeta)
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold], ['bs_cedula', COL.orange], ['bs_cedula', COL.violet]];
@@ -1148,7 +1184,6 @@
     ],
     init(b) {
       const d = b.data;
-      sprCache.clear();
       d.fx = []; d.side = 0; d.flipX = 1; d.nHeads = 6;
       d.pops = [0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0]; d.popT = d.pops.slice(); d.hold = [0, 0, 0, 0, 0, 0, 0, 0];
       d.hmood = ['smug', 'smug', 'smug', 'smug', 'smug', 'smug', 'smug', 'smug']; d.warn = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -1156,9 +1191,12 @@
       d.holdCase = true; d.caseT = 0; d.tx = b.homeX; d.ty = b.homeY;
       d.ghost = null; d.orbit = null; d.banner = 'TOMA LÁ DÁ CÁ'; d.swapWarn = 0;
       d.depOn = false; d.depT = 0; d.depSide = 1;
-      d.S = {}; d.GS = {};
+      d.S = {}; d.GS = {}; d.ghostBanner = null; d.planT = 0;
+      d.p3Side = Math.random() < 0.75 ? 0 : 1; // cor do 3º turno em diante (decidida já: os sprites saem antes)
       b.bubbleY = 72;
       b.hitboxes = CEN_HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      // sprites do 1º turno e do começo do 2º: pintados durante o aviso e a entrada
+      sprReset(); cenPlan(b); sprWarm(b);
       // cabecinhas da 1ª fase (sorrisinho) e os tiros de todas as fases
       warmPeople(b, 'heads', CEN_HEADS.map((spec) => ({ spec, size: 34, mood: 'smug' })));
       warmShots(b, CEN_SHOTS);
@@ -1177,6 +1215,7 @@
       fatigue(b, 'CANSEI DE APANHAR!');
       if (d.mv) { d.mv(b, d, dt); glide(b, dt, 2.6); }
       cenAnim(b, dt);
+      if ((d.planT -= dt) <= 0) { d.planT = 0.4; cenPlan(b); }
       // deputadinhos (fase 3)
       if (d.depOn) {
         d.depT -= dt;
@@ -1199,8 +1238,11 @@
     },
     onPhase(b, idx) {
       const d = b.data;
-      sprCache.clear(); // letreiro novo: os sprites da fase anterior não servem mais (memória do celular)
-      cenBodySprite(0, true, 0, ''); // flash de novo já (no quadro da troca, que tem hitstop)
+      // letreiro novo já no 1º quadro do turno; libera os sprites do turno que passou e pede os que faltam
+      d.banner = CEN_BAN[idx] || d.banner;
+      if (idx === 2) d.side = d.p3Side;
+      if (idx === 3) d.ghost = null;
+      cenEvict(b); cenPlan(b); d.planT = 0.4;
       // próximas fases: cabecinhas suadas (HP < 66%) e os deputadinhos do apoio (fase 3, de gravata vermelha ou verde)
       if (idx === 1) {
         warmPeople(b, 'headsSw', CEN_HEADS_SW.map((spec) => ({ spec, size: 34, mood: 'smug' })));
@@ -1210,7 +1252,7 @@
       d.armLT = 0; d.armRT = 0; d.flipX = 1; d.swapWarn = 0;
       if (idx === 1) { co(b, cenP2(b)); co(b, cenBg(b, 1.9), 1); }
       else if (idx === 2) { co(b, cenP3(b)); co(b, cenBg(b, 1.3), 1); }
-      else if (idx === 3) { d.ghost = null; d.flipX = 1; co(b, cenP4(b)); co(b, null, 1); }
+      else if (idx === 3) { d.flipX = 1; co(b, cenP4(b)); co(b, null, 1); }
     },
     onHit(b) { b.data.sq = Math.max(b.data.sq, 0.02); },
     // chamado pelo deputadinho quando chega
@@ -1233,6 +1275,7 @@
     },
     draw(ctx, b, g) {
       const d = b.data;
+      sprPump(b, g);
       bubbleAt(b, 72);
       drawFx(ctx, b, 'under');
       const S = d.S, hpF = b.hp / b.maxHp;
@@ -1247,7 +1290,7 @@
       if (d.ghost && d.ghost.a > 0.02 && b.state === 'fight') {
         const GS = d.GS;
         Object.assign(GS, S);
-        GS.flash = false; GS.side = d.side ^ 1; GS.ghost = true; GS.alpha = 0.4 * d.ghost.a; GS.flipX = -S.flipX; GS.look = lookAt(d.ghost.x, d.ghost.y);
+        GS.flash = false; GS.side = d.side ^ 1; GS.ghost = true; GS.banner = d.ghostBanner || S.banner; GS.alpha = 0.4 * d.ghost.a; GS.flipX = -S.flipX; GS.look = lookAt(d.ghost.x, d.ghost.y);
         drawCentrao(ctx, d.ghost.x, d.ghost.y, 1, GS);
       }
       if (b.state === 'leaving') balloons(ctx, b.x, b.y, b.t, Math.min(1, b.t / 0.6));
@@ -1758,7 +1801,7 @@
     d.jarGlow = true;
     say(b, 'EU ESTOQUEI O VENTO!', 2.2);
     d.mv = (bb, dd) => { dd.tx = bb.homeX + Math.sin(bb.ft * 0.35) * 40; dd.ty = bb.homeY; };
-    hint('vento', G.W / 2, G.H * 0.66, 'SEGURE CONTRA O VENTO!', '#ffffff');
+    hint('vento', G.W / 2, G.H * 0.66, 'ARRASTE CONTRA O VENTO!', '#ffffff');
     yield 1.0;
     let dir = pl().x < G.W / 2 ? -1 : 1; // empurra pro lado mais perto da parede
     for (;;) {
@@ -1823,7 +1866,7 @@
     ],
     init(b) {
       const d = b.data;
-      sprCache.clear(); // libera os sprites do Centrão
+      sprReset(); // libera os sprites do Centrão
       d.fx = []; d.pose = 'idle'; d.glowT = 0; d.mouth = 0; d.mouthT = 0;
       d.jar = [0, 0]; d.jarT = [0, 0]; d.jarGlow = false; d.windy = false;
       d.wind = { dir: 1, str: 0, target: 0, warn: 0 };
@@ -2417,12 +2460,14 @@
     sfx('dash'); sfx('splash');
     const x0 = b.x, x1 = dir > 0 ? G.W + 64 : -64, T = Math.abs(x1 - x0) / (L2() ? 520 : 480);
     const g1 = M.rand(50, G.W / 2 - 40), g2 = M.rand(G.W / 2 + 40, G.W - 50);
+    // brecha (meia largura): mais larga no 1º Mandato (as 4 fileiras de 2 passadas chegam a ~0,8 s uma da outra)
+    const gapR = L2() ? 31 : 42;
     let lastX = x0;
     yield* tween(b, T, (u) => {
       b.x = M.lerp(x0, x1, u);
       if (Math.abs(b.x - lastX) >= 15 && b.x > 6 && b.x < G.W - 6) {
         lastX = b.x;
-        if (Math.abs(b.x - g1) > 31 && Math.abs(b.x - g2) > 31) {
+        if (Math.abs(b.x - g1) > gapR && Math.abs(b.x - g2) > gapR) {
           shoot(b.x, b.y + 30, DOWN, 40, { style: 'bs_gota', color: COL.hot, ay: 115, data: { vmax: 165 }, update: smokeFall });
           shoot(b.x, b.y + 30, DOWN, 12, { style: 'bs_gota', color: COL.magenta, ay: 80, data: { vmax: 130 }, update: smokeFall });
         }
@@ -2518,7 +2563,7 @@
     ],
     init(b) {
       const d = b.data;
-      sprCache.clear();
+      sprReset();
       d.fx = []; d.mode = 'moto'; d.dir = 1; d.lastX = b.x; d.th = 0; d.w = 0;
       d.helmet = true; d.mood = 'angry'; d.pose = 'drive'; d.mouth = 0; d.wheelie = 0; d.wheelieT = 0;
       d.cans = []; d.puddles = []; d.box = null; d.smokeOn = false; d.smT = 0; d.smK = 0; d.canHand = false;
@@ -2526,6 +2571,8 @@
       b.hitboxes = BOL_HB_MOTO.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       warmPeople(b, 'p1', poses(bolSpec(true, false), BOL_SIZE, ['drive', 'point']));
       warmShots(b, BOL_SHOTS);
+      // a escolta da motociata (1º turno): se a luta começou direto (boss=1 / bossid=), a fase não aqueceu os motoqueiros
+      G.call(G.EnemyArt, 'prewarm', ['motoqueiro']);
     },
     updateEnter(b) { if (b.t > 0.3 && !b.data.revved) { b.data.revved = true; sfx('motor'); } warmShotsStep(b, 1); },
     start(b) { warmShotsStep(b, 99); co(b, bolP1(b)); say(b, 'É MOTOCIATA, TALKEY?', 2); sfx('motor'); },

@@ -732,7 +732,7 @@
       for (let i = 0; i < 2; i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
         yield 0.7;
-        dropStamp(b, d, { track: 0.65, warn: 1.1 });
+        dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
         yield 1.7;
       }
       yield 0.8;
