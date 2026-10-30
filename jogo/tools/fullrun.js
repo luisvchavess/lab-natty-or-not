@@ -38,6 +38,8 @@ for (let i = 0; i < a.length; i += 2) o[a[i].replace(/^--/, '')] = isNaN(+a[i + 
     await page.waitForTimeout(500);
   }
   const errors = await page.evaluate(() => G.errors.slice(0, 30));
+  const report = { q, finished: timeline.length && timeline[timeline.length - 1].state, maxEnemyBullets: last.maxEb, maxEnemies: last.maxEn, errors, pageErrors: pageErrors.slice(0, 10), timeline };
+  fs.writeFileSync(path.join(o.out, 'report.json'), JSON.stringify(report, null, 1));
   console.log(JSON.stringify({ q, finished: timeline.length && timeline[timeline.length - 1].state, maxEnemyBullets: last.maxEb, maxEnemies: last.maxEn, errors, pageErrors: pageErrors.slice(0, 10), timeline }, null, 1));
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

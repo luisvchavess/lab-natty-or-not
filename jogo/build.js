@@ -26,8 +26,8 @@ const js = jsFiles.map((f) => {
   return '<script>/* ' + path.basename(f) + ' */\n' + code + '\n</script>';
 }).join('\n');
 
-const head = headPart.replace('<!--CSS-->', '<style>\n' + css + '\n</style>');
-const body = bodyPart.replace('<!--SCRIPTS-->', js);
+const head = headPart.replace('<!--CSS-->', () => '<style>\n' + css + '\n</style>');
+const body = bodyPart.replace('<!--SCRIPTS-->', () => js);
 
 const full = '<!doctype html>\n<html lang="pt-BR">\n<head>\n<meta charset="utf-8">\n'
   + '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">\n'
@@ -40,11 +40,11 @@ fs.writeFileSync(path.join(ROOT, 'dist', 'artifact.html'), head + '\n' + body + 
 
 // dev.html: scripts separados, filtro opcional ?mods=art,bg (data, core e main sempre carregam)
 const devCss = cssFiles.map((f) => '<link rel="stylesheet" href="src/css/' + path.basename(f) + '">').join('\n');
-const devHead = headPart.replace('<!--CSS-->', devCss);
+const devHead = headPart.replace('<!--CSS-->', () => devCss);
 const devLoader = '<script>(function(){var all=' + JSON.stringify(JS) + ';var q=new URLSearchParams(location.search);var m=q.get("mods");'
   + 'var keep=m?m.split(","):null;all.forEach(function(n){if(keep&&["data","core","main"].indexOf(n)<0&&keep.indexOf(n)<0)return;'
   + 'document.write(\'<script src="src/js/\'+n+\'.js?v=\'+Date.now()+\'"><\\/script>\');});})();</script>';
-const devBody = bodyPart.replace('<!--SCRIPTS-->', devLoader);
+const devBody = bodyPart.replace('<!--SCRIPTS-->', () => devLoader);
 const dev = '<!doctype html>\n<html lang="pt-BR">\n<head>\n<meta charset="utf-8">\n'
   + '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">\n'
   + devHead + '\n</head>\n<body>\n' + devBody + '\n</body>\n</html>\n';

@@ -584,7 +584,7 @@
     const e = {
       kind, def, x, y, vx: o.vx || 0, vy: o.vy || 0, r: o.r || def.r || 14,
       hp: (o.hp || def.hp || 5) * hpMul, t: 0, flash: 0, dead: false,
-      score: o.score || def.score || 100, pix: o.pix != null ? o.pix : def.pix != null ? def.pix : 1,
+      score: o.score != null ? o.score : def.score != null ? def.score : 100, pix: o.pix != null ? o.pix : def.pix != null ? def.pix : 1,
       drop: o.drop || null, big: o.big != null ? o.big : !!def.big, o, data: {},
       invuln: false, shieldT: 0, harmless: !!def.harmless, sayText: null, sayT: 0,
       ignoreClear: !!def.ignoreClear,
@@ -730,7 +730,8 @@
       else if (n < 140) G.part({ x: b.x, y: b.y, type: 'dot', size: 2.5, life: 0.35, color: b.color, vy: -30 });
       n++;
     }
-    for (const l of g.lasers) if (l.t < l.warn + l.life - 0.25) l.t = l.warn + l.life - 0.25;
+    // laser ainda avisando some; laser já ativo encerra logo
+    for (const l of g.lasers) { if (l.t < l.warn) l.dead = true; else if (l.t < l.warn + l.life - 0.25) l.t = l.warn + l.life - 0.25; }
   };
 
   // ===================== Placar / aprovação =====================
@@ -876,6 +877,7 @@
         G.flash(0.8, '#fff');
         call(G.Audio, 'sfx', 'explode_l');
         g.stamp = { text: def.defeatText || 'CASSADO!', t: 0, x: b.x, y: b.y };
+        call(G.Audio, 'sfx', 'stamp');
       }
     } else if (b.state === 'leaving') {
       if (b.t > 1.2) { b.y -= (b.t - 1.2) * 600 * dt; b.x += Math.sin(b.t * 3) * 60 * dt; }
@@ -929,9 +931,11 @@
     const prev = G.state;
     if (g) { g.inDialogue = true; G.clearBullets(false); }
     G.state = 'dialogue';
+    setPlayButtons(false);
     call(G.UI, 'dialogue', lines, () => {
       if (g) g.inDialogue = false;
       if (G.state === 'dialogue') G.state = prev === 'dialogue' ? 'play' : prev;
+      if (G.state === 'play') setPlayButtons(true);
       if (done) safe(done, 'dialogue.done');
     });
   };
@@ -1482,7 +1486,9 @@
     const scroll = g ? g.scrollY : menuT * 30;
     const tt = g ? g.t : menuT;
     if (G.state === 'menu' || G.state === 'boot' || !g) {
-      call(G.BG, 'draw', ctx, 'menu', menuT * 30, menuT, W, H);
+      // telas opacas do menu cobrem tudo: não precisa desenhar o fundo
+      const kind = G.UI && G.UI.current ? safe(G.UI.current, 'ui.current') : null;
+      if (!/^(title|story|roll)$/.test(kind || '')) call(G.BG, 'draw', ctx, 'menu', menuT * 30, menuT, W, H);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       return;
     }
@@ -2058,7 +2064,7 @@
       g.script = { gen: (function* () { yield 0.5; yield STAGE_API.boss(id); })(), wait: null, done: false };
       G.state = 'play';
     },
-    killBoss() { const g = G.game; if (g && g.boss && g.boss.state === 'fight') G.hitBoss(g.boss, g.boss.hp + 1); },
+    killBoss() { const g = G.game; const b = g && g.boss; if (b && b.state === 'fight') G.hitBoss(b, (b.hp + 1) / Math.max(0.01, b.dmgMul != null ? b.dmgMul : 1)); },
     hurtBoss(frac) { const g = G.game; if (g && g.boss && g.boss.state === 'fight') G.hitBoss(g.boss, g.boss.maxHp * frac); },
     spawnBoss(id) {
       const g = G.game; if (!g) return;
