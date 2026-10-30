@@ -126,6 +126,9 @@
       const o = ac.createOscillator();
       if (typeof type === 'string') o.type = type; else o.setPeriodicWave(type);
       krate(o.frequency); krate(o.detune);
+      // valor intrínseco também: k-rate lê o parâmetro no início do bloco de 128 amostras, e um
+      // oscilador que começa no meio do bloco tocaria o resto dele a 440 Hz (o padrão)
+      o.frequency.value = f;
       o.frequency.setValueAtTime(f, t0);
       if (dest) o.connect(dest);
       o.start(t0); o.stop(t1);
@@ -1960,10 +1963,18 @@
   // Uma fatia só emenda o passo seguinte se ainda não gastou 2 ms (aparelho rápido: menos fatias;
   // lento: 1 passo de ≤ ~10 ms a 4× por fatia). Passo que devolve false continua na próxima fatia.
   const BOOT = [
-    () => { L.E0 = Engine(L.ac, { lazy: true }); },
-    () => { const t = performance.now(); while (!L.E0.fillWhite(2048)) if (performance.now() - t > 4) return false; return true; },
+    () => { const E = (L.E0 = Engine(L.ac, { lazy: true })); noiseWav(L.ac, (b) => { if (b) { E.white = b; L.noise = 'wav'; } else L.noiseFail = true; }); },
     () => { L.E0.warm('sine'); },
     () => { L.E0.warm('square'); },
+    // ruído: vem do WAV decodificado; se o navegador recusar, é preenchido aqui em blocos (≤ ~4 ms por fatia)
+    () => {
+      if (L.E0.white) return true;
+      if (!L.noiseFail) return WAIT;
+      const t = performance.now();
+      while (!L.E0.fillWhite(2048)) if (performance.now() - t > 4) return false;
+      L.noise = 'js';
+      return true;
+    },
     sfxReady,
     () => { L.E.warm('triangle'); },
     () => { L.E.warm('sawtooth'); },
@@ -1972,11 +1983,13 @@
     musicReady,
   ];
   const SFX_READY = 4; // índice de sfxReady em BOOT
+  const WAIT = {}; // passo esperando algo assíncrono: tenta de novo daqui a 10 ms
   function bootStep(i) {
     if (!L.ac || (i <= SFX_READY && L.E)) { L.building = false; return; }
     const t0 = performance.now();
+    let r;
     try {
-      do { if (BOOT[i]() !== false) i++; } while (i < BOOT.length && performance.now() - t0 < 2);
+      do { r = BOOT[i](); if (r !== false && r !== WAIT) i++; } while (r !== WAIT && i < BOOT.length && performance.now() - t0 < 2);
     } catch (err) {
       report(err, 'engine');
       L.building = false; L.E0 = null; L.pend.length = 0;
@@ -1985,7 +1998,26 @@
       L.ac = null;
       return;
     }
-    if (i < BOOT.length) setTimeout(bootStep, 0, i);
+    if (i < BOOT.length) setTimeout(bootStep, r === WAIT ? 10 : 0, i);
+  }
+  // 1 s de ruído branco sem laço na thread principal: um WAV PCM de 16 bits com bytes sorteados pelo
+  // crypto (uniforme em [-1, 1), como Math.random() * 2 - 1) que o navegador decodifica em outra thread.
+  // done(AudioBuffer | null) é chamado uma vez.
+  function noiseWav(ac, done) {
+    let fin = false;
+    const end = (b) => { if (!fin) { fin = true; done(b && b.length ? b : null); } };
+    try {
+      const sr = ac.sampleRate, n = Math.floor(sr), ab = new ArrayBuffer(44 + n * 2), dv = new DataView(ab);
+      const tag = (o, s) => { for (let i = 0; i < 4; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+      tag(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+      dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, sr, true);
+      dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); tag(36, 'data'); dv.setUint32(40, n * 2, true);
+      const u8 = new Uint8Array(ab, 44);
+      for (let o = 0; o < u8.length; o += 65536) crypto.getRandomValues(u8.subarray(o, Math.min(u8.length, o + 65536)));
+      const p = ac.decodeAudioData(ab, end, () => end(null));
+      if (p && p.then) p.then(end, () => end(null));
+    } catch (e) { end(null); }
+    setTimeout(() => end(null), 1500); // decodificador mudo: cai no preenchimento em JS
   }
   function sfxReady() {
     const E = L.E0;
@@ -2102,9 +2134,12 @@
           D.tEnd = 0;
           FIX = (i + 0.5) / j.n;
           try { j.run(D, 0, D.ac.destination); } finally { FIX = -1; }
+          // cada som começa num limite de bloco de 128 amostras: os parâmetros k-rate (frequência dos
+          // osciladores) são lidos no início do bloco, e um som começando no meio dele tocaria o resto
+          // do bloco no valor padrão (440 Hz)
           const len = Math.ceil(D.tEnd * sr) + 128;
           parts.push({ j, i, off, len });
-          off += len + 128;
+          off = Math.ceil((off + len + 128) / 128) * 128;
         }
       }
       // o 1º oscilador de um contexto já monta a tabela do seno: ela vem sozinha, antes das outras
@@ -2310,7 +2345,7 @@
         voices: E ? E.voices.length : 0, musicVoices: E ? E.mv : 0, reverb: !!(E && E.rev && E.rev.on), low: LOWQ,
         music: musicOn(), sfx: sfxOn(), climax: !!(L.cur && L.cur.hi), ducked: L.duck,
         time: E ? +E.ac.currentTime.toFixed(2) : 0,
-        baked: Object.keys(L.bank).length, bakeKB: Math.round(L.bakeKB), bakeQueue: L.bq.length, bakeOff: L.bakeOff,
+        baked: Object.keys(L.bank).length, bakeKB: Math.round(L.bakeKB), bakeQueue: L.bq.length, bakeOff: L.bakeOff, noise: L.noise || null,
       };
     },
     names: { sfx: Object.keys(SFX), music: Object.keys(SONGS) },

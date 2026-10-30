@@ -159,8 +159,11 @@ body.rotate-hint::after {
     font: 800 14px/1.2 var(--font-body);
     letter-spacing: 0.04em;
     pointer-events: none;
+    /* some depois de 5 s (volta a cada vez que o tablet deitar): não fica por cima do placar */
+    animation: hint-out 0.4s 5s forwards;
   }
 }
+@keyframes hint-out { to { opacity: 0; visibility: hidden; } }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -893,14 +896,15 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .rc-sep span { position: absolute; left: 50%; top: 0; padding: 0 .6rem; background: #fbfaf3; font-size: .95rem; font-weight: 700; letter-spacing: .12em; white-space: nowrap; transform: translate(-50%, -55%); }
 #ui .rc-sep span:empty { display: none; }
 #ui .rc-stamp-area { position: relative; min-height: 9.4rem; margin-top: .8rem; padding-top: .8rem; border-top: .15rem dashed rgba(42, 45, 49, .5); }
-#ui .rc-line { max-width: 46%; margin: .2rem 0 0; font-size: 1.1rem; line-height: 1.35; opacity: 0; transition: opacity .3s .2s; }
+#ui .rc-line { max-width: 42%; margin: .2rem 0 0; font-size: 1.1rem; line-height: 1.35; opacity: 0; transition: opacity .3s .2s; }
 #ui .stamped .rc-line { opacity: 1; }
-#ui .rc-tip { max-width: 46%; margin: .45rem 0 0; font: 700 1rem/1.3 var(--font-body); color: #3c4a40; opacity: 0; transition: opacity .3s .35s; }
+#ui .rc-tip { max-width: 42%; margin: .45rem 0 0; font: 700 1rem/1.3 var(--font-body); color: #3c4a40; opacity: 0; transition: opacity .3s .35s; }
 #ui .stamped .rc-tip { opacity: 1; }
 #ui .rc-best { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; margin: .6rem 0 0; padding: .4rem .7rem .4rem; border-radius: .5rem; background: #121519; color: var(--u-yel); opacity: 0; transform: scale(.6) rotate(-2deg); transform-origin: left center; transition: opacity .2s .45s, transform .3s cubic-bezier(.3, 1.6, .5, 1) .45s; }
 #ui .rc-best small { font: 900 1rem/1 var(--font-display); white-space: nowrap; }
 #ui .rc-best b { font: 900 1.6rem/1 var(--font-display); color: #fff; white-space: nowrap; }
-#ui .rc-best s { color: rgba(255, 255, 255, .5); }
+/* sem risco: um C riscado vira "€" (a seta já diz nota antiga → nova) */
+#ui .rc-best s { color: rgba(255, 255, 255, .45); text-decoration: none; }
 #ui .stamped .rc-best { opacity: 1; transform: rotate(-2deg); }
 #ui .stamp {
   --st: #c8323e;
@@ -1348,12 +1352,12 @@ body.in-play #toasts { opacity: 0; }
   // ---------- Lojinha do Zé (melhorias permanentes, pagas com Pix) ----------
   G.UPGRADES = [
     // Custos pensados para ~6 partidas (jogador bom) a ~9 (casual) até comprar tudo (total R$ 22.700).
-    // Comprado na parada entre fases já vale na partida em andamento (vida, delação e nível na hora).
-    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida no começo da partida',             costs: [900, 2700] },
-    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação Premiada no começo',             costs: [700, 2100] },
+    // A compra vale na hora: na parada entre fases a vida, a delação e o nível entram na partida em andamento.
+    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida em toda partida',                  costs: [900, 2700] },
+    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação em toda partida',                costs: [700, 2100] },
     { id: 'turbo',  name: 'Gatilho Turbinado',       desc: 'Atira 10% mais rápido por nível',           costs: [600, 1700, 3600] },
     { id: 'ima',    name: 'Chave Pix Aleatória',     desc: 'Puxa Pix e itens (menos o P) de mais longe', costs: [600, 1100, 2200] },
-    { id: 'arma',   name: 'Emenda Bélica',           desc: 'Começa com a arma um nível acima',           costs: [1200, 3400] },
+    { id: 'arma',   name: 'Emenda Bélica',           desc: '+1 nível de arma em toda partida',           costs: [1200, 3400] },
     { id: 'habeas', name: 'Habeas Corpus Preventivo', desc: 'Começa cada fase com escudo',               costs: [1900] },
   ];
 
@@ -1361,7 +1365,7 @@ body.in-play #toasts { opacity: 0; }
   // counter/goal: liberada automaticamente quando G.count(counter) chega na meta.
   G.ACHIEVEMENTS = [
     { id: 'primeiro_voto', name: 'Primeiro Voto',    desc: 'Derrube seu primeiro político',               counter: 'kills', goal: 1 },
-    { id: 'ficha_limpa',   name: 'Ficha Limpa',      desc: 'Termine uma fase sem levar nenhum tiro' },
+    { id: 'ficha_limpa',   name: 'Ficha Limpa',      desc: 'Termine uma fase sem perder vida' },
     { id: 'bico_calado',   name: 'Bico Calado',      desc: 'Vença um chefão sem usar Delação' },
     { id: 'rachou',        name: 'Rachou!',          desc: 'Divida 30 Assessores da Rachadinha',            counter: 'rachadinha', goal: 30 },
     { id: 'por_um_fio',    name: 'Por um Fio',       desc: 'Faça 300 raspões numa partida' },
@@ -1411,7 +1415,7 @@ body.in-play #toasts { opacity: 0; }
           { who: 'ze', text: 'Pode deixar, vó. Rodoviária do Plano à vista. Tá lotada de cabo eleitoral.' },
           { who: 'vo', text: 'Arraste o dedo em qualquer lugar da tela. O Fusca copia o movimento: não precisa encostar nele.' },
           { who: 'vo', text: 'Ele atira sozinho. Todo "P" deixa a arma mais forte, e a cor dele escolhe qual arma você usa.' },
-          { who: 'vo', text: 'Se apertar, aperta o botão da Delação Premiada: todo mundo entrega todo mundo e a tela fica limpa.' },
+          { who: 'vo', text: 'Apertou? Dê um toque rápido no botão da Delação Premiada: todo mundo entrega todo mundo e a tela fica limpa.' },
         ],
       },
       esplanada: {
@@ -1561,8 +1565,11 @@ body.in-play #toasts { opacity: 0; }
 
   // ===================== Erros (para testes) =====================
   G.errors = [];
+  // G.errors guarda só os 50 últimos; G.errorCount conta todos (para saber se houve erro NESTE quadro)
+  G.errorCount = 0;
   G.reportError = function (err, where) {
     const msg = (where ? '[' + where + '] ' : '') + (err && err.stack ? err.stack : String(err));
+    G.errorCount++;
     G.errors.push(msg);
     if (G.errors.length > 50) G.errors.shift();
     try { console.error(msg); } catch (e) { /* nada */ }
@@ -1633,7 +1640,8 @@ body.in-play #toasts { opacity: 0; }
   }
   G.save = loadSave();
   G.saveGame = function () { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.save)); } catch (e) { /* nada */ } };
-  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); };
+  // APAGAR PROGRESSO: a qualidade volta para 'auto' (começando do 'high') e o medidor recomeça
+  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); };
   G.upg = (id) => G.save.upgrades[id] || 0;
   G.upgradeCost = function (id) {
     const u = G.UPGRADES.find((x) => x.id === id);
@@ -1681,6 +1689,7 @@ body.in-play #toasts { opacity: 0; }
     if (q === 'auto') G.save.qualityTier = 'high';
     G.debug.qualityForced = false;
     G.saveGame();
+    resetQualityMeter();
     applyQuality();
   };
   function applyQuality() {
@@ -2034,10 +2043,10 @@ body.in-play #toasts { opacity: 0; }
     try { if (!coarseMQ && window.matchMedia) coarseMQ = window.matchMedia('(pointer: coarse)'); } catch (e) { /* nada */ }
     const land = vw > vh * 1.15 && !!(coarseMQ && coarseMQ.matches);
     document.body.classList.toggle('rotate-hint', land);
-    // celular (tela baixa) acabou de deitar: pausa uma vez. Tablet deitado continua jogável (base.css só avisa).
+    // celular (tela baixa) deitado: pausa (e continua pausando enquanto estiver deitado). Tablet deitado continua jogável (base.css só avisa).
     const phoneLand = land && vh < 560;
-    if (phoneLand && !wasPhoneLand && G.state === 'play') G.pause();
-    wasPhoneLand = phoneLand;
+    wasPhoneLand = phoneLand; // frame() pausa enquanto estiver assim (vale também para a 'play' que começa deitada)
+    if (phoneLand && G.state === 'play') G.pause();
     G.H = Math.round(M.clamp((G.W * vh) / vw, 600, 780));
     scale = Math.min(vw / G.W, vh / G.H);
     dpr = Math.min(window.devicePixelRatio || 1, Q_DPR[G.quality] || 2);
@@ -2329,7 +2338,19 @@ body.in-play #toasts { opacity: 0; }
     const g = G.game; if (!g) return;
     o = o || {};
     if (g.texts.length > 40) g.texts.shift();
-    g.texts.push({ x, y, str, color: o.color || '#fff', size: o.size || 12, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font: o.font || G.FONT_DISPLAY, stroke: o.stroke !== false && (G.quality !== 'low' || (o.size || 12) >= 16) });
+    const size = o.size || 12, font = o.font || G.FONT_DISPLAY;
+    str = String(str);
+    // Não deixa o texto sair pela lateral (carro encostado na borda). Só mede quando pode passar:
+    // a estimativa (0,45 em por letra, acima até da Bungee) já cabe na maioria das vezes.
+    const W = G.W;
+    if (ctx && (x - str.length * size * 0.45 < 4 || x + str.length * size * 0.45 > W - 4)) {
+      const f0 = ctx.font;
+      ctx.font = size + 'px ' + font;
+      const hw = ctx.measureText(str).width / 2 + 4;
+      ctx.font = f0;
+      x = hw * 2 >= W ? W / 2 : M.clamp(x, hw, W - hw);
+    }
+    g.texts.push({ x, y, str, color: o.color || '#fff', size, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font, stroke: o.stroke !== false && (G.quality !== 'low' || size >= 16) });
   };
   G.shake = function (m) { const g = G.game; if (g && G.save.settings.shake) g.shake = Math.min(14, Math.max(g.shake, m)); };
   G.flash = function (a, c) { const g = G.game; if (g) { g.flashA = Math.max(g.flashA, a); g.flashC = c || '#fff'; } };
@@ -2384,12 +2405,15 @@ body.in-play #toasts { opacity: 0; }
   G.addApproval = function (v) { const g = G.game; if (!g) return; g.approval = M.clamp(g.approval + v, 0, 100); if (v > 0) g.approvalIdle = 0; };
 
   // ===================== Dano =====================
+  const FLASH_BIG = 0.034, FLASH_BIG_CD = 0.35; // 2-3 quadros brancos, no máximo 3 por segundo
   G.hitEnemy = function (e, dmg) {
     const g = G.game;
     if (e.dead || e.invuln) return false;
     if (e.shieldT > 0) dmg *= 0.25;
     e.hp -= dmg;
-    if (!(e.flashCd > 0)) { e.flash = 0.05; e.flashCd = 0.13; }
+    // flash do acerto: inimigo pequeno pisca a cada 0,13 s; os grandes (chefes intermediários) piscam
+    // mais curto e no máximo ~3 vezes por segundo (tela branca piscando rápido cansa e esconde a caricatura)
+    if (!(e.flashCd > 0)) { if (e.big) { e.flash = FLASH_BIG; e.flashCd = FLASH_BIG_CD; } else { e.flash = 0.05; e.flashCd = 0.13; } }
     if (e.def.onHit) call(e.def, 'onHit', e, dmg, g);
     if (e.hp <= 0 && !e.dead) G.killEnemy(e);
     return true;
@@ -2427,7 +2451,7 @@ body.in-play #toasts { opacity: 0; }
     }
     dmg *= b.dmgMul != null ? b.dmgMul : 1;
     b.hp -= dmg;
-    if (!(b.flashCd > 0)) { b.flash = 0.045; b.flashCd = 0.2; }
+    if (!(b.flashCd > 0)) { b.flash = FLASH_BIG; b.flashCd = FLASH_BIG_CD; }
     G.game.approvalIdle = 0; // acertar o chefão segura a aprovação
     if (b.def.onHit) call(b.def, 'onHit', b, dmg, g);
     if (b.hp <= 0) {
@@ -2649,17 +2673,19 @@ body.in-play #toasts { opacity: 0; }
     return b;
   }
   const UP = -Math.PI / 2, DEG = Math.PI / 180;
-  // VOTO: pares [deslocamento x, ângulo em graus] por nível
+  // VOTO: pares [deslocamento x, ângulo em graus] por nível. Todo nível põe mais um tiro reto
+  // (alvo único: 22 / 33 / 44 / 56 / 67 dps); o par aberto do nível 4-5 é para as ondas.
   const VOTO_SETS = [
     [-5, 0, 5, 0],
     [-8, 0, 0, 0, 8, 0],
     [-10, 0, -3.5, 0, 3.5, 0, 10, 0],
-    [-10, 0, -3.5, 0, 3.5, 0, 10, 0, -14, -7, 14, 7],
-    [-12, 0, -6, 0, 0, 0, 6, 0, 12, 0, -15, -8, 15, 8],
+    [-12, 0, -6, 0, 0, 0, 6, 0, 12, 0, -15, -7, 15, 7],
+    [-13, 0, -8, 0, -3, 0, 3, 0, 8, 0, 13, 0, -16, -8, 16, 8],
   ];
   // BOCA DE URNA: leque (n, abertura em graus) + um feixe central reto (ns tiros) em todo nível,
   // para não virar arma-armadilha contra chefão (o leque sozinho só acertava com o tiro do meio).
-  const BOCA_N = [3, 5, 5, 7, 9], BOCA_SPREAD = [28, 46, 52, 66, 84], BOCA_CORE = [2, 3, 3, 4, 4];
+  // Todo nível sobe o feixe central (alvo único 25 / 34 / 43 / 52 / 61 dps) e o leque nunca abre à toa.
+  const BOCA_N = [3, 5, 5, 7, 9], BOCA_SPREAD = [28, 46, 46, 66, 84], BOCA_CORE = [2, 3, 4, 5, 6];
   function fireWeapon(p) {
     const run = G.run, lv = run.level, w = run.weapon;
     const x = p.x, y = p.y - 14;
@@ -2694,7 +2720,8 @@ body.in-play #toasts { opacity: 0; }
   }
   function fireInterval() {
     const base = { voto: 0.09, boca: 0.11, panela: 0.1, jato: 0.16 }[G.run.weapon] || 0.1;
-    let k = 1 - 0.1 * G.upg('turbo');
+    // Gatilho Turbinado: +10% de cadência por nível (intervalo / 1,1, / 1,2, / 1,3), igual ao jato
+    let k = 1 / (1 + 0.1 * G.upg('turbo'));
     if (G.game.player.cafe > 0) k *= 0.66;
     return base * k;
   }
@@ -2721,7 +2748,7 @@ body.in-play #toasts { opacity: 0; }
     if (run.weapon !== 'jato' || !p.alive || !g.canFire) { g.beam = null; return; }
     const lv = run.level;
     const w = 7 + lv * 2.6;
-    let dps = 20 + lv * 11;
+    let dps = 14 + lv * 12; // 26 / 38 / 50 / 62 / 74: sem tempo de voo, então um pouco abaixo dos outros no nível 1-3
     dps *= 1 + 0.1 * G.upg('turbo');
     if (p.cafe > 0) dps *= 1.35;
     const x0 = p.x, y0 = p.y - 16;
@@ -2799,7 +2826,7 @@ body.in-play #toasts { opacity: 0; }
       if (p.fireT <= 0) { fireWeapon(p); p.fireT += fireInterval(); if (p.fireT < 0) p.fireT = 0; }
       if (run.weapon === 'panela') {
         p.panT -= dt;
-        if (p.panT <= 0) { firePans(p); p.panT = (run.level >= 3 ? 0.22 : 0.27) * (1 - 0.1 * G.upg('turbo')) * (p.cafe > 0 ? 0.66 : 1); }
+        if (p.panT <= 0) { firePans(p); p.panT = (run.level >= 3 ? 0.22 : 0.27) / (1 + 0.1 * G.upg('turbo')) * (p.cafe > 0 ? 0.66 : 1); }
       }
     }
   }
@@ -3183,8 +3210,11 @@ body.in-play #toasts { opacity: 0; }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       return;
     }
-    const bgOk = call(G.BG, 'draw', ctx, stageId, scroll, tt, W, H);
-    if (bgOk === undefined && G.errors.length && /bg\.draw/.test(G.errors[G.errors.length - 1])) { ctx.fillStyle = '#0d1b3d'; ctx.fillRect(-20, -20, W + 40, H + 40); }
+    const ec = G.errorCount;
+    call(G.BG, 'draw', ctx, stageId, scroll, tt, W, H);
+    // O fundo falhou NESTE quadro: desfaz os save() que ficaram abertos (clip/alpha/transform do bg)
+    // e pinta um fundo liso só neste quadro. No quadro seguinte o bg desenha de novo normalmente.
+    if (G.errorCount !== ec && G.errors[G.errors.length - 1].lastIndexOf('[bg.draw]', 0) === 0) bgFallback(k, ox, oy, W, H);
 
     // itens
     for (const it of g.pickups) {
@@ -3272,6 +3302,13 @@ body.in-play #toasts { opacity: 0; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
+  // render() chama o bg sem save() aberto: restore() até esvaziar a pilha volta ao estado de antes do bg
+  function bgFallback(k, ox, oy, W, H) {
+    for (let i = 0; i < 64; i++) ctx.restore();
+    ctx.setTransform(k, 0, 0, k, ox * k, oy * k);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#0d1b3d'; ctx.fillRect(-20, -20, W + 40, H + 40);
+  }
   const PLAYER_DRAW_OPTS = {};
   // "PRONTO? ... VAI!" na volta da pausa
   function drawResume(t) {
@@ -3579,6 +3616,8 @@ body.in-play #toasts { opacity: 0; }
     ctx.textAlign = 'left'; ctx.font = '11px ' + G.FONT_DISPLAY; ctx.fillStyle = wdef.color;
     ctx.fillText(wdef.name, 10, wy - 8);
     const need = powerNeed(run.level);
+    // tarja escura atrás das 5 casas: as vazias somem em fundo claro (prédios da Esplanada)
+    ctx.fillStyle = 'rgba(8,12,22,0.55)'; ctx.fillRect(8, wy - 5, 12 * G.MAX_LEVEL + 1, 9);
     for (let i = 0; i < G.MAX_LEVEL; i++) {
       ctx.fillStyle = i < run.level ? wdef.color : 'rgba(255,255,255,0.18)';
       ctx.fillRect(10 + i * 12, wy - 3, 9, 5);
@@ -3688,12 +3727,14 @@ body.in-play #toasts { opacity: 0; }
   G.commitPix = commitPix;
   // Grava o que já foi ganho (app indo para o fundo / aba fechando)
   function saveProgress() { if (G.game && G.run) commitPix(); else G.saveGame(); }
-  // Nota da fase. S: sem morrer e no máximo 1 Delação (bomba não é pecado). A: sem morrer.
-  // B: até 1 / 2 / 4 / 6 mortes nas fases 1..4 (a régua acompanha a dificuldade; medido com o bot
-  // "humano": nas fases 3 e 4 um jogador bom morre 4 a 8 vezes). C: o resto.
+  // Nota da fase. S: sem morrer e no máximo 1 Delação (bomba não é pecado). A: sem morrer (Delações
+  // à vontade) OU uma morte só com no máximo 1 Delação. B: até 1 / 2 / 4 / 6 mortes nas fases 1..4
+  // (a régua acompanha a dificuldade; medido com o bot "humano": nas fases 3 e 4 um jogador bom morre
+  // 4 a 8 vezes). C: o resto.
   const RANK_B = [1, 2, 4, 6];
   G.rankFor = function (hits, bombs, stageIdx) {
     if (hits === 0) return bombs <= 1 ? 'S' : 'A';
+    if (hits === 1 && bombs <= 1) return 'A';
     return hits <= RANK_B[M.clamp(stageIdx | 0, 0, RANK_B.length - 1)] ? 'B' : 'C';
   };
   G.stageClear = function () {
@@ -3810,26 +3851,40 @@ body.in-play #toasts { opacity: 0; }
   let last = 0, acc = 0;
   let frozenState = null; // pausa / fim de jogo parado: desenha uma vez e deixa a imagem quieta
   // Medidor do modo de qualidade automático (intervalo real do rAF, que inclui rasterizar e compor)
-  const QM = { ema: 16.7, slowT: 0, stageMax: 0, stageN: 0 };
+  // failed: níveis que já caíram por lentidão nesta sessão (não sobe de volta para eles: sem pingue-pongue)
+  const QM = { ema: 16.7, slowT: 0, verySlowT: 0, stageMax: 0, stageN: 0, failed: {} };
+  function resetQualityMeter() { QM.ema = 16.7; QM.slowT = 0; QM.verySlowT = 0; QM.stageMax = 0; QM.stageN = 0; QM.failed = {}; }
+  function setAutoTier(q) { G.save.qualityTier = q; G.saveGame(); applyQuality(); }
   function qualityMeter(dtMs) {
-    if (G.state !== 'play' || !G.game || G.game.t <= 3 || dtMs >= 120 || dtMs <= 0 || document.hidden) return;
-    QM.ema += (dtMs - QM.ema) * 0.05;
+    // > 500 ms = aba escondida, troca de app, depurador: não é o desempenho do jogo
+    if (G.state !== 'play' || !G.game || G.game.t <= 3 || dtMs > 500 || dtMs <= 0 || document.hidden) return;
+    // quadro longo conta (limitado a 120 ms para um soluço isolado não pesar demais na média)
+    QM.ema += ((dtMs < 120 ? dtMs : 120) - QM.ema) * 0.05;
     QM.slowT = QM.ema > 22 ? QM.slowT + dtMs : 0;
+    QM.verySlowT = QM.ema > 32 ? QM.verySlowT + dtMs : 0;
     QM.stageN++;
     if (QM.stageN > 120 && QM.ema > QM.stageMax) QM.stageMax = QM.ema;
-    if (QM.slowT > 2500 && G.qualityAuto()) {
-      QM.slowT = 0; QM.ema = 16.7;
-      const i = Q_ORDER.indexOf(G.quality);
-      if (i > 0) { G.save.qualityTier = Q_ORDER[i - 1]; G.saveGame(); applyQuality(); }
-    }
+    if (!G.qualityAuto()) return;
+    const i = Q_ORDER.indexOf(G.quality);
+    if (i <= 0) return;
+    // Lento (> 22 ms) por 2,5 s, ou muito lento (> 32 ms, < 31 fps) por 1,5 s: desce. Se a média ainda está
+    // acima de 32 ms, desce dois níveis de uma vez (high -> low): o 'mid' só tira ~20-25% do quadro, não
+    // salvaria; assim o celular fraco paga UMA reconstrução de caches, não duas.
+    // Só o nível que caiu fica marcado: o 'mid' pulado ainda pode voltar no começo de uma fase.
+    if (!(QM.verySlowT > 1500 || QM.slowT > 2500)) return;
+    const drop = QM.ema > 32 ? 2 : 1; // a média (~20 quadros) na hora da decisão escolhe o tamanho do degrau
+    QM.slowT = 0; QM.verySlowT = 0; QM.ema = 16.7;
+    QM.failed[G.quality] = true;
+    setAutoTier(Q_ORDER[Math.max(0, i - drop)]);
   }
-  // Começo de fase: sobe um nível se a fase anterior inteira rodou com folga (tela de 90/120 Hz)
+  // Começo de fase: sobe um nível se a fase anterior inteira rodou liso (média nunca acima de 18 ms:
+  // 60 Hz cravado, ou folga numa tela de 90/120 Hz) e esse nível ainda não falhou nesta sessão.
   function qualityStageStart() {
-    if (G.qualityAuto() && QM.stageN > 600 && QM.stageMax > 0 && QM.stageMax < 12) {
+    if (G.qualityAuto() && QM.stageN > 1200 && QM.stageMax > 0 && QM.stageMax < 18) {
       const i = Q_ORDER.indexOf(G.quality);
-      if (i >= 0 && i < Q_ORDER.length - 1) { G.save.qualityTier = Q_ORDER[i + 1]; G.saveGame(); applyQuality(); }
+      if (i >= 0 && i < Q_ORDER.length - 1 && !QM.failed[Q_ORDER[i + 1]]) setAutoTier(Q_ORDER[i + 1]);
     }
-    QM.stageMax = 0; QM.stageN = 0; QM.slowT = 0; QM.ema = 16.7;
+    QM.stageMax = 0; QM.stageN = 0; QM.slowT = 0; QM.verySlowT = 0; QM.ema = 16.7;
   }
   function frame(ts) {
     requestAnimationFrame(frame);
@@ -3839,6 +3894,8 @@ body.in-play #toasts { opacity: 0; }
     last = ts;
     if (dt > 0.1) dt = 0.1;
     if (dt < 0) dt = 0;
+    // celular deitado: nunca joga por baixo do "GIRE O CELULAR" (cartão da fase que avança sozinho, begin()...)
+    if (wasPhoneLand && G.state === 'play') G.pause();
     qualityMeter(dtMs);
     const ts2 = G.debug.timeScale || 1;
     acc += dt * ts2;
@@ -3880,7 +3937,7 @@ body.in-play #toasts { opacity: 0; }
   G.debug = {
     god: false, auto: false, timeScale: 1, hitboxes: false, skipUI: false, skipDialogue: false, skipStory: false, autoContinue: false,
     qualityForced: null, // ?quality=high|mid|low (testes): fixa a qualidade e desliga o modo automático
-    qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN }; },
+    qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN, failed: Object.keys(QM.failed) }; },
     // pula direto para o chefão da fase atual
     toBoss() {
       const g = G.game; if (!g || !g.stage || !g.stage.boss) return;
@@ -4966,7 +5023,20 @@ body.in-play #toasts { opacity: 0; }
   // (balanço, piscada, boca, olhar) são quantizadas; gotas de suor e a veia de raiva continuam ao vivo.
   const pcache = new Map(), pseen = new Map();
   let pRes = 0, pPixels = 0;
-  const P_MAX = 600, P_BUDGET = 5.5e6; // no máximo ~22 MB de sprites
+  // P_MAX: com braços erguidos, piscadas e flash aquecidos, cada combinação tem 17 a 33 imagens;
+  // com 600 a fase 4 (e a 2) girava o LRU e repintava no quadro o que ainda estava na tela
+  // (partida inteira a ts 3: 572 sprites pintados em quadros com 600, 181 com 900). A memória
+  // continua presa pelo P_BUDGET.
+  const P_MAX = 900, P_BUDGET = 5.5e6; // no máximo ~22 MB de sprites
+  // Troca de resolução do canvas (degrau da qualidade automática, giro da tela): o cache antigo
+  // vira "velho" (pStale) em vez de ser jogado fora. Um sprite velho continua sendo desenhado,
+  // escalado pelo caminho não exato, até ser repintado na resolução nova: nos primeiros ~10 s só
+  // em segundo plano (na frente da fila de aquecimento); depois disso o que não foi usado no
+  // último segundo sai e o que ainda está na tela é repintado no quadro, dentro do teto por
+  // quadro. O mapa velho some quando esvazia (ou de vez aos 20 s).
+  let pStale = null, pStalePx = 0, pStaleT = 0, pStaleChk = -1, pStaleHit = false, pStaleLate = false;
+  const STALE_MS = 10000;
+  let pFramed = 0; // sprites pintados dentro de quadros (testes/perfil: cacheStats().framed)
   const BOX_BODY = [-50, 2, 100, 58], BOX_HEAD = [-53, -77, 106, 106], BOX_ARMS = [-47, -21, 94, 48];
   // Teto de sprites NOVOS por quadro: uma onda inteira de ministros (ou a entrada de um chefão)
   // pintava 20+ sprites no mesmo quadro (35–55 ms a 4x). Passou do teto, o personagem sai em
@@ -4977,18 +5047,49 @@ body.in-play #toasts { opacity: 0; }
   let rafN = 0;
   if (typeof requestAnimationFrame !== 'undefined') { const tick = () => { rafN++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
   function frameId() { return rafN; }
+  // repinta na resolução nova um sprite velho que está na tela (o estado de setScale vai junto)
+  function staleJob(key, box, s, res, paint) {
+    const sz = Math.round(s * 100), fl = FL;
+    WARM.q.unshift(() => {
+      if (res !== pRes || pcache.has(key)) return;
+      setScale(sz, fl);
+      partSprite(key, box, s, res, paint, true);
+    });
+    pumpWarmSoon();
+  }
+  function frameRoom() {
+    const f = frameId();
+    if (f !== pFrame) { pFrame = f; pMade = 0; }
+    if (pMade >= P_PER_FRAME) return false;
+    pMade++;
+    return true;
+  }
   function partSprite(key, box, s, res, paint, force) {
     let cv = pcache.get(key);
     if (cv) { pcache.delete(key); pcache.set(key, cv); return cv; } // LRU
+    const stale = pStale !== null ? pStale.get(key) : undefined;
     if (!force) {
-      const n = (pseen.get(key) || 0) + 1;      // só guarda o que aparece mais de uma vez
-      if (n < 2) { if (pseen.size > 3000) pseen.clear(); pseen.set(key, n); return null; }
-      const f = frameId();
-      if (f !== pFrame) { pFrame = f; pMade = 0; }
-      if (pMade >= P_PER_FRAME) return null;    // fica para o próximo quadro (pseen continua em 1)
-      pMade++;
-      pseen.delete(key);
+      if (stale !== undefined) {
+        // sprite da resolução anterior: desenha o velho (escalado) e pede a repintura em segundo
+        // plano, na frente da fila. Repintar dentro do quadro logo de cara gastava o teto inteiro
+        // por ~10 s depois do degrau de qualidade, justo quando o jogo já está pesado; só depois
+        // dos 10 s (pStaleLate) o que sobrou na tela é trocado no quadro, dentro do teto.
+        stale._hit = rafN;
+        if (!pStaleLate || !frameRoom()) {
+          pStaleHit = true;
+          if (!stale._rq) { stale._rq = 1; staleJob(key, box, s, res, paint); }
+          return stale;
+        }
+        pFramed++;
+      } else {
+        const n = (pseen.get(key) || 0) + 1;      // só guarda o que aparece mais de uma vez
+        if (n < 2) { if (pseen.size > 3000) pseen.clear(); pseen.set(key, n); return null; }
+        if (!frameRoom()) return null;            // fica para o próximo quadro (pseen continua em 1)
+        pseen.delete(key);
+        pFramed++;
+      }
     }
+    if (stale !== undefined) { pStale.delete(key); pStalePx -= stale.width * stale.height; }
     const k = s * res;
     cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.ceil(box[2] * k)); cv.height = Math.max(1, Math.ceil(box[3] * k));
@@ -5031,8 +5132,55 @@ body.in-play #toasts { opacity: 0; }
   // resolução dos sprites do jogo (px do aparelho por px lógico); muda com a qualidade
   function gameRes() {
     const res = G.canvas ? G.canvas.width / G.W : 0;
-    if (res > 0 && res !== pRes) { pcache.clear(); pseen.clear(); pRes = res; pPixels = 0; WARM.q.length = 0; WARM.seen.clear(); }
+    if (res > 0 && res !== pRes) changeRes(res);
+    else if (pStale !== null && rafN !== pStaleChk) { // uma checagem por quadro
+      pStaleChk = rafN;
+      const age = performance.now() - pStaleT;
+      if (!pStale.size || age > STALE_MS * 2) dropStale();
+      else if (age > STALE_MS && !pStaleLate) {
+        // 10 s: solta o que não apareceu no último ~1 s; o resto é trocado no quadro (no teto)
+        pStaleLate = true;
+        for (const [key, cv] of pStale) if (!(rafN - (cv._hit || -1e9) <= 60)) { pStalePx -= cv.width * cv.height; pStale.delete(key); }
+        if (!pStale.size) dropStale();
+      }
+    }
     return res;
+  }
+  // (sem encolher os canvas na hora: zerar a largura de ~150 canvas custou 44 ms num quadro a 4x;
+  // o coletor de lixo devolve a memória, como no pcache)
+  function dropStale() {
+    pStale = null; pStalePx = 0; pStaleLate = false;
+  }
+  function changeRes(res) {
+    const first = !(pRes > 0);
+    pRes = res;
+    // o cache atual vira velho (somado ao velho de uma troca anterior, até o mesmo orçamento);
+    // os sprites com resolução própria (arte do título, chave com '@') continuam valendo
+    const st = pStale !== null ? pStale : new Map();
+    if (pStale === null) pStalePx = 0;
+    const own = [];
+    for (const [key, cv] of pcache) {
+      if (key.indexOf('@') >= 0) { own.push(key, cv); continue; }
+      const prev = st.get(key);
+      if (prev !== undefined) { st.delete(key); pStalePx -= prev.width * prev.height; }
+      st.set(key, cv); pStalePx += cv.width * cv.height;
+    }
+    pcache.clear(); pPixels = 0;
+    for (let i = 0; i < own.length; i += 2) { pcache.set(own[i], own[i + 1]); pPixels += own[i + 1].width * own[i + 1].height; }
+    while (st.size && pStalePx > P_BUDGET) { // os menos usados saem primeiro
+      const k0 = st.keys().next().value, c0 = st.get(k0);
+      pStalePx -= c0.width * c0.height; st.delete(k0);
+    }
+    for (const cv of st.values()) cv._rq = 0; // a fila antiga (com os pedidos de repintura) vai embora
+    pStale = st.size ? st : null; pStalePx = pStale !== null ? pStalePx : 0;
+    pStaleT = performance.now(); pStaleChk = rafN; pStaleLate = false;
+    // aquecimento: a fila antiga era da resolução anterior; repõe já quem está na tela agora
+    // (visto nos últimos ~90 quadros), do mais recente para o mais antigo, até a fila encher
+    const live = [];
+    if (!first) for (const e of WARM.live.values()) if (rafN - e.f <= 90) live.push(e);
+    live.sort((a, b) => b.f - a.f);
+    clearWarmQueue(); WARM.seen.clear(); WARM.live.clear();
+    for (const e of live) if (queueWarm(e.sk, e.sz, e.spec, e.mood, e.pose, e.big)) { WARM.seen.set(e.id, 2); WARM.live.set(e.id, e); }
   }
   // resOver: resolução própria (arte do título, fora do canvas do jogo)
   function personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY, resOver) {
@@ -5062,6 +5210,7 @@ body.in-play #toasts { opacity: 0; }
     const skin = flash ? WHITE : spec.skin || '#e8b48a';
     if (!resOver) noteWarm(sk, sz, spec, mood, pose, false);
     setScale(sz, flash);
+    pStaleHit = false;
     let bodyS = null, armS = null;
     if (hasBody) {
       bodyS = partSprite(base + '|b|' + pose + '|' + sw + '|' + (arms ? 1 : 0), BOX_BODY, s, res, (c) => {
@@ -5089,7 +5238,7 @@ body.in-play #toasts { opacity: 0; }
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
     let m = null;
-    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+    if (EXACT && !flash && k === 1 && !pStaleHit && ctx.getTransform) { // sprite velho: tamanho de outra resolução, vai escalado
       m = ctx.getTransform();
       if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
     }
@@ -5137,6 +5286,7 @@ body.in-play #toasts { opacity: 0; }
     const skin = flash ? WHITE : spec.skin || '#e8b48a';
     noteWarm(sk, sz, spec, mood, pose, true);
     setScale(sz, flash);
+    pStaleHit = false;
     const bodyS = partSprite(bodyKey(sk, sz, flash, pose, sw, arms), BOX_BODY, s, res, (c) => paintBigBody(c, spec, body, skin, pose, sw, arms, raised));
     if (!bodyS) return false;
     setScale(size, flash);
@@ -5146,7 +5296,7 @@ body.in-play #toasts { opacity: 0; }
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
     let m = null;
-    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+    if (EXACT && !flash && k === 1 && !pStaleHit && ctx.getTransform) {
       m = ctx.getTransform();
       if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
     }
@@ -5179,25 +5329,47 @@ body.in-play #toasts { opacity: 0; }
   // mais comuns (balanço, olhar para os lados/para baixo, flash do acerto) são pintadas fora
   // do quadro, em fatias de ~3 ms entre os quadros. G.Art.prewarm(lista) faz o mesmo antes
   // de o personagem entrar (introdução da fase, aviso do chefão).
-  const WARM = { q: [], seen: new Map(), timer: 0 };
+  // WARM.seen: id → 1 (visto uma vez) | 2 (já na fila); WARM.live: id → quem foi para a fila e
+  // em que quadro apareceu por último (na troca de resolução, quem está na tela volta para a fila).
+  // q2: fila de baixa prioridade (cabeças piscando), só anda com a fila principal vazia
+  const WARM = { q: [], q2: [], seen: new Map(), live: new Map(), timer: 0 };
+  const WARM_CAP = 400; // tarefas na fila principal (cada combinação pequena: 17 a 27)
   const SWAYS = [-1, -0.5, 0, 0.5, 1];
+  const LOOKS = [[-1, 0.5], [0, 0.5], [1, 0.5], [-1, 0], [0, 0], [1, 0]];
   function noteWarm(sk, sz, spec, mood, pose, big) {
     const id = sk + '|' + sz + '|' + mood + '|' + pose;
-    const n = (WARM.seen.get(id) || 0) + 1;
-    if (n > 2) return;
-    if (WARM.seen.size > 1500) WARM.seen.clear();
-    WARM.seen.set(id, n);
-    if (n === 2) queueWarm(sk, sz, spec, mood, pose, big);
+    const n = WARM.seen.get(id) || 0;
+    if (n >= 2) { const e = WARM.live.get(id); if (e !== undefined) e.f = rafN; return; }
+    if (WARM.seen.size > 1500) { WARM.seen.clear(); WARM.live.clear(); }
+    // 2ª vez: vai para a fila; fila cheia = continua em 1 e tenta de novo na próxima aparição
+    if (n === 1 && queueWarm(sk, sz, spec, mood, pose, big)) markWarm(id, sk, sz, spec, mood, pose, big, rafN);
+    else WARM.seen.set(id, 1);
   }
+  function markWarm(id, sk, sz, spec, mood, pose, big, f) {
+    WARM.seen.set(id, 2);
+    WARM.live.set(id, { id, sk, sz, spec, mood, pose, big, f });
+  }
+  // Põe na fila as variações de uma combinação (spec × tamanho × humor × pose). false = fila cheia.
+  // Ordem: sem flash (corpo nos 5 balanços, braços erguidos nas 5 fases, cabeça em 6 olhares),
+  // flash (corpo, braços, cabeça); as cabeças piscando (~4% do tempo) vão para a fila q2.
   function queueWarm(sk, sz, spec, mood, pose, big) {
-    if (WARM.q.length > 400) return;
+    if (WARM.q.length > WARM_CAP) return false;
     const body = spec.body || 'suit';
     const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
     const arms = body !== 'none' && spec.arms !== false;
-    const res = pRes;
+    const res = pRes, s = sz / 100;
     const J = (fn) => WARM.q.push(fn);
+    const head = (flash, skin, blink, L) => (blink ? WARM.q2 : WARM.q).push(() => {
+      if (res !== pRes) return;
+      setScale(sz, flash);
+      partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|' + (blink ? 1 : 0) + '|0|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
+        BLINK = blink; NO_EMOTES = true;
+        drawHead(c, spec, { mouth: 0 }, mood, -14, 0, skin, L[0], L[1]);
+        BLINK = null; NO_EMOTES = false;
+      }, true);
+    });
     for (const flash of [false, true]) {
-      const skin = flash ? WHITE : spec.skin || '#e8b48a', s = sz / 100;
+      const skin = flash ? WHITE : spec.skin || '#e8b48a';
       if (body !== 'none') for (const sw of SWAYS) {
         J(() => {
           if (res !== pRes) return;
@@ -5210,32 +5382,34 @@ body.in-play #toasts { opacity: 0; }
         });
       }
       if (big) continue;
-      // cabeça: olhando para baixo (o Fusca quase sempre está embaixo) e reto; no flash, uma só
-      const looks = flash ? [[0, 0]] : [[-1, 0.5], [0, 0.5], [1, 0.5], [-1, 0], [0, 0], [1, 0]];
-      for (const L of looks) {
+      // braços erguidos (aceno, punho, mãos para cima): uma imagem por fase da oscilação
+      if (arms && raised) for (const fq of SWAYS) {
         J(() => {
           if (res !== pRes) return;
           setScale(sz, flash);
-          partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|0|0|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
-            BLINK = false; NO_EMOTES = true;
-            drawHead(c, spec, { mouth: 0 }, mood, -14, 0, skin, L[0], L[1]);
-            BLINK = null; NO_EMOTES = false;
-          }, true);
+          partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|a|' + pose + '|' + fq, BOX_ARMS, s, res, (c) => drawArms(c, poseHands(pose, 0, fq), spec, body, skin, pose), true);
         });
       }
+      // cabeça: olhando para baixo (o Fusca quase sempre está embaixo) e reto; no flash, uma só
+      if (flash) head(true, skin, false, [0, 0]);
+      else for (const L of LOOKS) head(false, skin, false, L);
     }
+    if (!big && mood !== 'laugh' && mood !== 'hurt' && WARM.q2.length < WARM_CAP) { const skin = spec.skin || '#e8b48a'; for (const L of LOOKS) head(false, skin, true, L); }
     pumpWarmSoon();
+    return true;
   }
-  function pumpWarmSoon() { if (!WARM.timer && WARM.q.length) WARM.timer = setTimeout(pumpWarm, 0); }
+  function pumpWarmSoon() { if (!WARM.timer && (WARM.q.length || WARM.q2.length)) WARM.timer = setTimeout(pumpWarm, 0); }
+  function clearWarmQueue() { WARM.q.length = 0; WARM.q2.length = 0; }
   function pumpWarm() {
     WARM.timer = 0;
-    if (typeof document !== 'undefined' && document.hidden) { if (WARM.q.length) WARM.timer = setTimeout(pumpWarm, 150); return; }
+    const left = () => WARM.q.length + WARM.q2.length;
+    if (typeof document !== 'undefined' && document.hidden) { if (left()) WARM.timer = setTimeout(pumpWarm, 150); return; }
     const t0 = performance.now();
-    while (WARM.q.length && performance.now() - t0 < 3) {
-      const fn = WARM.q.shift();
-      try { fn(); } catch (err) { G.reportError(err, 'art.warm'); WARM.q.length = 0; }
+    while (left() && performance.now() - t0 < 3) {
+      const fn = WARM.q.length ? WARM.q.shift() : WARM.q2.shift();
+      try { fn(); } catch (err) { G.reportError(err, 'art.warm'); clearWarmQueue(); }
     }
-    if (WARM.q.length) WARM.timer = setTimeout(pumpWarm, 4);
+    if (left()) WARM.timer = setTimeout(pumpWarm, 4);
   }
   // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose? }] — pinta antes de o personagem
   // aparecer. Sem lista: aquece os sprites dos itens (ver warmItems).
@@ -5250,8 +5424,9 @@ body.in-play #toasts { opacity: 0; }
       const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
       const id = sk + '|' + sz + '|' + mood + '|' + pose;
       if ((WARM.seen.get(id) || 0) >= 2) continue;
-      WARM.seen.set(id, 2);
-      queueWarm(sk, sz, it.spec, mood, pose, sz >= 70);
+      // só marca como feito o que entrou na fila (fila cheia: fica para a 2ª aparição no jogo)
+      if (WARM.seen.size > 1500) { WARM.seen.clear(); WARM.live.clear(); }
+      if (queueWarm(sk, sz, it.spec, mood, pose, sz >= 70)) markWarm(id, sk, sz, it.spec, mood, pose, sz >= 70, -1e9);
     }
   }
 
@@ -5677,6 +5852,7 @@ body.in-play #toasts { opacity: 0; }
         const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
         const x = cv.getContext('2d'); x.translate(32, 32);
         for (const ty of ['power', 'bomb', 'shield', 'life', 'cafe', 'pix', 'pix5', 'mala']) pickup(x, ty, 0, 0, 0.3, { wtype: 'voto', cycle: true });
+        pickup(x, 'power', 0, 0, 0.3, { wtype: 'voto', restore: true }); // fonte menor do +1 do P da morte
         cv.width = 1;
       },
     ];
@@ -5697,7 +5873,7 @@ body.in-play #toasts { opacity: 0; }
   // fontes chegaram depois do boot: refaz os sprites com texto (e o resto do cache de personagens)
   function fontsReady() {
     spriteCache.clear();
-    pcache.clear(); pseen.clear(); pPixels = 0; WARM.q.length = 0; WARM.seen.clear();
+    pcache.clear(); pseen.clear(); pPixels = 0; dropStale(); clearWarmQueue(); WARM.seen.clear(); WARM.live.clear();
     TL.key = '';
     if (fuscaSpr) { fuscaSpr.c.width = 1; fuscaSpr = null; }
     warmItems();
@@ -5749,16 +5925,17 @@ body.in-play #toasts { opacity: 0; }
         c.beginPath(); O(c, 0, 0, 9.4); fillP(c, '#141a2e');
         c.beginPath(); c.arc(0, 0, 11, PI * 1.1, PI * 1.55); strokeP(c, 'rgba(255,255,255,0.6)', 1.4);
         weaponIcon(c, w, 0, 0.5, 13.5);
-        // etiqueta "P"
-        c.beginPath(); O(c, 9, -9, 5.4); c.lineWidth = 2.2; c.strokeStyle = INK; c.stroke(); fillP(c, WHITE);
-        c.fillStyle = INK; c.font = '900 7.4px ' + FD(); c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillText('P', 9.2, -8.5);
+        // etiqueta "P" (o P que caiu na morte, item.restore: "+1" dourado, devolve o nível perdido)
+        const back = !!item.restore;
+        c.beginPath(); O(c, 9, -9, 5.4); c.lineWidth = 2.2; c.strokeStyle = INK; c.stroke(); fillP(c, back ? '#ffd23f' : WHITE);
+        c.fillStyle = INK; c.font = '900 ' + (back ? 6.4 : 7.4) + 'px ' + FD(); c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(back ? '+1' : 'P', back ? 9 : 9.2, -8.5);
         c.restore();
-        // nome curto da arma
-        const nm = WNAME[w];
+        // nome curto da arma ("DE VOLTA" no P da morte)
+        const nm = back ? 'DE VOLTA' : WNAME[w];
         c.font = '900 7px ' + FB(); c.textAlign = 'center'; c.textBaseline = 'middle';
         c.lineWidth = 2.6; c.strokeStyle = INK; c.lineJoin = 'round'; c.strokeText(nm, x, y + bob + 19);
-        c.fillStyle = col; c.fillText(nm, x, y + bob + 19);
+        c.fillStyle = back ? WHITE : col; c.fillText(nm, x, y + bob + 19);
         return;
       }
       case 'bomb': {
@@ -6470,16 +6647,20 @@ body.in-play #toasts { opacity: 0; }
   };
 
   SC.planalto = function (c, L, t) {
+    // a mesma cena abre a história (ameaça) e o final: no final (G.state 'ending') o chefão
+    // aparece derrotado — sem o brilho vermelho, olhos fechados, afundado atrás do palácio e
+    // um carimbo de PAGO na fachada
+    const won = G.state === 'ending';
     c.fillStyle = vgrad(c, L.y, 178, [0, '#060a1c', 0.6, '#1c1440', 1, '#4a1630']); c.fillRect(L.x, L.y, L.w, 178 - L.y);
     stars(c, L, t, 40, 120, 11);
     // lua
     c.beginPath(); O(c, 52, 40, 16); fillP(c, '#f4f1e8');
     c.beginPath(); O(c, 59, 36, 14); fillP(c, '#0b1026');
     // brilho vermelho ameaçador
-    glow(c, 180, 120, 180, '#e63946', 0.5);
+    if (!won) glow(c, 180, 120, 180, '#e63946', 0.5);
     // silhueta barbuda gigante atrás do palácio
     const br = Math.sin(t * 1.6) * 1.5;
-    c.save(); c.translate(180, 96 + br);
+    c.save(); c.translate(180, won ? 104 + br * 0.5 : 96 + br);
     const sil = () => {
       c.beginPath();
       c.moveTo(-110, 80); c.quadraticCurveTo(-100, 34, -52, 26); c.lineTo(52, 26); c.quadraticCurveTo(100, 34, 110, 80); c.closePath();
@@ -6489,24 +6670,33 @@ body.in-play #toasts { opacity: 0; }
       for (let i = 0; i < 2; i++) { const sd = i ? 1 : -1; c.moveTo(sd * 44, 4); c.bezierCurveTo(sd * 54, -14, sd * 52, -36, sd * 32, -48); c.quadraticCurveTo(sd * 40, -30, sd * 38, -12); c.closePath(); }
     };
     // luz de contorno vermelha (silhueta deslocada) + silhueta escura por cima
-    c.save(); c.translate(-2.5, -2.5); sil(); fillP(c, 'rgba(255,90,90,0.75)'); c.restore();
-    c.save(); c.translate(2.5, -1.5); sil(); fillP(c, 'rgba(255,170,90,0.35)'); c.restore();
+    c.save(); c.translate(-2.5, -2.5); sil(); fillP(c, won ? 'rgba(150,160,195,0.4)' : 'rgba(255,90,90,0.75)'); c.restore();
+    c.save(); c.translate(2.5, -1.5); sil(); fillP(c, won ? 'rgba(120,130,165,0.2)' : 'rgba(255,170,90,0.35)'); c.restore();
     sil(); fillP(c, '#120914');
     // textura da barba
     c.beginPath();
     for (let i = 0; i < 5; i++) { const bx = -24 + i * 12; c.moveTo(bx - 4, 32 + Math.abs(i - 2) * -3); c.quadraticCurveTo(bx, 40 + Math.abs(i - 2) * -3, bx + 4, 32 + Math.abs(i - 2) * -3); }
     c.moveTo(-36, 4); c.quadraticCurveTo(-30, 12, -22, 10); c.moveTo(36, 4); c.quadraticCurveTo(30, 12, 22, 10);
-    strokeP(c, 'rgba(255,90,90,0.35)', 2);
-    // olhos e sorrisinho
-    c.beginPath(); c.moveTo(-26, -24); c.lineTo(-8, -18); c.lineTo(-10, -14); c.lineTo(-25, -17); c.closePath();
-    c.moveTo(26, -24); c.lineTo(8, -18); c.lineTo(10, -14); c.lineTo(25, -17); c.closePath();
-    fillP(c, '#ffd23f');
-    c.beginPath(); c.moveTo(-16, 16); c.quadraticCurveTo(0, 28, 16, 16); c.quadraticCurveTo(0, 22, -16, 16); c.closePath(); fillP(c, '#f4f1e8');
-    // mão erguida com o espeto de picanha
-    c.beginPath(); c.moveTo(78, 40); c.lineTo(96, -12); strokeP(c, '#120914', 20);
-    c.beginPath(); O(c, 97, -16, 12); fillP(c, '#120914');
-    c.beginPath(); c.moveTo(97, -16); c.lineTo(112, -76); strokeP(c, '#8a96a8', 2.5);
-    for (let i = 0; i < 3; i++) { c.beginPath(); E(c, 103 + i * 2.6, -36 - i * 12, 9, 6.5, -0.25); inked(c, i === 1 ? '#c0283a' : '#9b2335', 1.6); c.beginPath(); E(c, 101 + i * 2.6, -38 - i * 12, 7, 2, -0.25); fillP(c, '#f4e1c8'); }
+    strokeP(c, won ? 'rgba(150,160,195,0.25)' : 'rgba(255,90,90,0.35)', 2);
+    if (won) {
+      // derrotado: olhos fechados (pálpebras caídas), boquinha murcha e a mão com o espeto abaixada
+      c.beginPath();
+      c.moveTo(-26, -16); c.quadraticCurveTo(-17, -22, -8, -16);
+      c.moveTo(26, -16); c.quadraticCurveTo(17, -22, 8, -16);
+      c.moveTo(-10, 20); c.quadraticCurveTo(0, 15, 10, 20);
+      strokeP(c, '#9a8ea8', 2.4);
+    } else {
+      // olhos e sorrisinho
+      c.beginPath(); c.moveTo(-26, -24); c.lineTo(-8, -18); c.lineTo(-10, -14); c.lineTo(-25, -17); c.closePath();
+      c.moveTo(26, -24); c.lineTo(8, -18); c.lineTo(10, -14); c.lineTo(25, -17); c.closePath();
+      fillP(c, '#ffd23f');
+      c.beginPath(); c.moveTo(-16, 16); c.quadraticCurveTo(0, 28, 16, 16); c.quadraticCurveTo(0, 22, -16, 16); c.closePath(); fillP(c, '#f4f1e8');
+      // mão erguida com o espeto de picanha
+      c.beginPath(); c.moveTo(78, 40); c.lineTo(96, -12); strokeP(c, '#120914', 20);
+      c.beginPath(); O(c, 97, -16, 12); fillP(c, '#120914');
+      c.beginPath(); c.moveTo(97, -16); c.lineTo(112, -76); strokeP(c, '#8a96a8', 2.5);
+      for (let i = 0; i < 3; i++) { c.beginPath(); E(c, 103 + i * 2.6, -36 - i * 12, 9, 6.5, -0.25); inked(c, i === 1 ? '#c0283a' : '#9b2335', 1.6); c.beginPath(); E(c, 101 + i * 2.6, -38 - i * 12, 7, 2, -0.25); fillP(c, '#f4e1c8'); }
+    }
     c.restore();
     // holofotes
     for (let i = 0; i < 2; i++) {
@@ -6521,7 +6711,7 @@ body.in-play #toasts { opacity: 0; }
     c.fillStyle = '#ffcf6b';
     for (let i = 0; i < 26; i++) { if (hash(i * 3.3) > 0.3) { c.globalAlpha = hash(i) > 0.8 ? 0.6 + 0.4 * Math.sin(t * 4 + i) : 0.9; c.fillRect(16 + i * 12.8, 132, 9.6, 18); } }
     c.globalAlpha = 1;
-    c.fillStyle = '#e63946'; c.globalAlpha = 0.55; c.fillRect(146, 132, 68, 18); c.globalAlpha = 1;
+    if (!won) { c.fillStyle = '#e63946'; c.globalAlpha = 0.55; c.fillRect(146, 132, 68, 18); c.globalAlpha = 1; }
     c.beginPath(); c.rect(6, 120, 348, 9); inked(c, '#e9edf3', 1.6);
     c.beginPath(); c.rect(24, 154, 312, 22); fillP(c, '#1a1626');
     // colunas
@@ -6539,6 +6729,15 @@ body.in-play #toasts { opacity: 0; }
     for (let i = 0; i < 6; i++) { c.beginPath(); O(c, 274 + i * 6, 186, 1.6 + Math.abs(Math.sin(t * 7 + i)) * 1.2); fillP(c, i % 2 ? '#ff8c1a' : '#ffd23f'); }
     smokePuffs(c, 288, 182, t, 9, 7, 'rgba(200,190,210,0.28)', -60, 6);
     c.beginPath(); c.moveTo(L.x, 176); c.lineTo(L.x + L.w, 176); strokeP(c, 'rgba(255,255,255,0.12)', 1);
+    if (won) { // carimbo "PAGO" na fachada (a fatura foi entregue)
+      c.save(); c.translate(180, 142); c.rotate(-0.14);
+      c.beginPath(); RR(c, -33, -12.5, 66, 25, 3); fillP(c, 'rgba(255,246,236,0.16)'); strokeP(c, INK, 4.6); strokeP(c, '#ff4d5e', 2.6);
+      c.beginPath(); RR(c, -29, -8.6, 58, 17.2, 2); strokeP(c, 'rgba(255,77,94,0.85)', 1);
+      c.font = '900 15px ' + FD(); c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineWidth = 3.2; c.strokeStyle = INK; c.lineJoin = 'round'; c.strokeText('PAGO', 0, 1);
+      c.fillStyle = '#ff4d5e'; c.fillText('PAGO', 0, 1);
+      c.restore();
+    }
   };
 
   function sceneFallback(c, L, t, id) {
@@ -6793,7 +6992,7 @@ body.in-play #toasts { opacity: 0; }
     prewarm,
     fontsReady,
     // depuração: tamanho do cache de sprites dos personagens
-    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size, specs: specIds.size, exact: EXACT }; },
+    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, warmQueue2: WARM.q2.length, items: spriteCache.size, specs: specIds.size, exact: EXACT, stale: pStale !== null ? pStale.size : 0, stalePixels: pStalePx, framed: pFramed }; },
     _exact(v) { EXACT = !!v; }, // testes A/B da cópia exata
   });
 })();
@@ -8354,18 +8553,30 @@ body.in-play #toasts { opacity: 0; }
   // resultado/loja/título/história, um item por vez. Durante o jogo, o que faltar entra
   // numa fila e sai no máximo um item a cada 250 ms — nada é construído de surpresa
   // no meio da luta (a vinheta do chefão ficava para o 1º quadro do chefão: 146 ms a 4x).
-  const caches = {};      // cacheId -> { kinds: {nome: {c,h,feats,over}}, ov: {chave: {c,W,H,res}}, spr, up }
+  // Troca de resolução (qualidade automática, girar a tela, barra do navegador): o conjunto
+  // antigo vira RESERVA (st.fb) e continua sendo desenhado em escala enquanto o novo sai da
+  // fila aos poucos; quando o novo fica completo, a reserva é liberada. Nenhum quadro do jogo
+  // reconstrói o cenário inteiro (eram 125–186 ms num quadro e 3–5 s de engasgos a 4–6x).
+  const caches = {};      // cacheId -> { id, res, kinds: {nome: {c,h,feats,over,res}}, ov: {chave: {c,W,H,res}}, spr, up }
   let S = null;           // estado corrente
   let EDGE = null;        // faixas vermelhas da borda (iguais em todas as fases)
   const MAP = ['rodoviaria', 'esplanada', 'paranoa', 'planalto'];
   const Q_DPR = { high: 2, mid: 1.5, low: 1 }; // mesma regra do core (resize)
-  const PLAY_GAP = 250;   // ms entre construções durante o jogo
+  const PLAY_GAP = 250;   // ms entre construções durante o jogo (no mínimo)
+  const PLAY_DUTY = 8;    // jogando: depois de uma construção de N ms, espera N×8 ms (≤ 12% do tempo)
+  const PLAY_GAP_MAX = 1200;
   const PRE_GAP = 140;    // ms entre construções nas telas (resultado, loja, título)
+  const TITLE_WAIT = 1200; // o título acabou de aparecer: a animação e o toque em JOGAR vêm antes
+  const TAP_QUIET = 400;  // fora do jogo, nada é construído logo depois de um toque
+  let lastTap = -1e9;
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    try { document.addEventListener('pointerdown', () => { lastTap = nowMs(); }, { capture: true, passive: true }); } catch (e) { /* nada */ }
+  }
   const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const quality = () => G.quality || 'high';
   // para os testes: últimas construções (nome, ms, estado do jogo)
   const BUILDS = [];
-  function logBuild(id, item, ms) { BUILDS.push({ id, item, ms: Math.round(ms * 10) / 10, state: G.state, t: G.game ? Math.round(G.game.t * 10) / 10 : -1 }); if (BUILDS.length > 120) BUILDS.shift(); }
+  function logBuild(id, item, ms) { BUILDS.push({ id, item, ms: Math.round(ms * 10) / 10, state: G.state, t: G.game ? Math.round(G.game.t * 10) / 10 : -1, at: Math.round(nowMs() - ms) }); if (BUILDS.length > 120) BUILDS.shift(); }
 
   // resolução dos caches = escala real da tela (para desenhar 1:1, sem filtro: no
   // Canvas sem GPU, ampliar uma imagem com filtro custa ~13x mais que copiar 1:1).
@@ -8373,7 +8584,7 @@ body.in-play #toasts { opacity: 0; }
   function quantRes(k) { return k <= 2.6 ? Math.max(0.5, Math.round(k * 1000) / 1000) : 2.5; }
   function getCache(cacheId) {
     let c = caches[cacheId];
-    if (!c) c = caches[cacheId] = { kinds: {}, ov: {}, spr: null, up: null, puffs: null };
+    if (!c) c = caches[cacheId] = { id: cacheId, res: +cacheId.slice(cacheId.lastIndexOf('@') + 1) || 1, kinds: {}, ov: {}, spr: null, up: null, puffs: null };
     return c;
   }
   function freeKind(k) { if (k) { freeCanvas(k.c); if (k.over) freeCanvas(k.over.c); } }
@@ -8387,15 +8598,16 @@ body.in-play #toasts { opacity: 0; }
     freeSprites(c.spr); freeUpper(c.up);
     if (c.puffs) for (const k in c.puffs) freeCanvas(c.puffs[k]);
     delete caches[cacheId];
+    if (S && S.fb === c) S.fb = null;
   }
-  // Fica na memória só o conjunto em uso, o do menu e o que está sendo pré-construído
+  // Fica na memória só o conjunto em uso (e a reserva dele), o do menu e o que está sendo pré-construído
   // (a fase anterior inteira ficava viva: ~25 MB de canvas a mais; o iOS limita a memória de canvas).
   function pruneCaches() {
     const keep = {};
-    if (S) keep[S.cacheId] = 1;
+    if (S) { keep[S.cacheId] = 1; if (S.fb) keep[S.fb.id] = 1; }
     for (const id in PRE.keep) keep[id] = 1;
     for (const id in caches) if (!keep[id]) freeCache(id);
-    if (EDGE && S && (EDGE.res !== S.res || quality() !== 'high')) { freeCanvas(EDGE.c); freeCanvas(EDGE.r); EDGE = null; }
+    if (EDGE && S && ((EDGE.res !== S.res && !(S.fb && EDGE.res === S.fb.res)) || quality() !== 'high')) { freeCanvas(EDGE.c); freeCanvas(EDGE.r); EDGE = null; }
   }
   // contexto mínimo para pintar um item de uma fase (não precisa do estado de rolagem)
   function paintCtx(id, res) { const def = STAGES[id]; return { id, def, P: def.pal, res }; }
@@ -8439,11 +8651,14 @@ body.in-play #toasts { opacity: 0; }
     logBuild(pc.id, item, nowMs() - t0);
     return true;
   }
-  // ordem de construção: o que aparece primeiro vem antes; o marco e a vinheta do chefão por último
+  // ordem de construção: o que aparece primeiro vem antes; o marco e a vinheta do chefão por último.
+  // Os 2 blocos da abertura antes do trânsito e da tinta: bloco faltando na tela é construído na hora,
+  // trânsito e tinta faltando têm substituto barato (sem carros / faixas sólidas).
   function itemsFor(def) {
-    const L = ['spr', def.first, 'ov0'];
     const ks = Object.keys(def.kinds);
+    const L = [def.first];
     if (ks.indexOf('a') >= 0 && L.indexOf('a') < 0) L.push('a');
+    L.push('spr', 'ov0');
     if (def.upper && quality() !== 'low') L.push('up'); // sem nuvens na qualidade baixa
     if (def.puffs) L.push('puff');
     for (const k of ks) if (L.indexOf(k) < 0 && k !== def.bossKind) L.push(k);
@@ -8462,16 +8677,42 @@ body.in-play #toasts { opacity: 0; }
     }
   }
   function queueItem(st, item) { if (st.queue.indexOf(item) < 0) st.queue.push(item); }
-  function queueMissing(st, H) { st.queue = itemsFor(st.def).filter((it) => !isBuilt(st, it, H)); }
-  // fila da fase em andamento: 1 item a cada 4 quadros; jogando, no máximo 1 a cada 250 ms
+  // pula a fila: o bloco vai aparecer na tela em instantes
+  function queueFront(st, item) { const i = st.queue.indexOf(item); if (i === 0) return; if (i > 0) st.queue.splice(i, 1); st.queue.unshift(item); }
+  // o que falta do conjunto; com reserva, os blocos que estão na tela vêm primeiro
+  function queueMissing(st, H) {
+    let L = itemsFor(st.def).filter((it) => !isBuilt(st, it, H));
+    // fase vencida (resultado/loja/final, ver trimForClear): o mundo está parado, só o que está na tela
+    if (st.trimmed) L = L.filter((it) => (st.def.kinds[it] ? st.seq.some((ch) => ch.kind === it) : it !== 'edge' && (it !== 'ov1' || st.bossK >= 0.004)));
+    if (st.fb) {
+      // na tela agora: blocos, depois a camada de tela cheia em uso (a mais cara para desenhar em escala)
+      const vis = [];
+      for (const ch of st.seq) if (L.indexOf(ch.kind) >= 0 && vis.indexOf(ch.kind) < 0) vis.push(ch.kind);
+      const ov = st.bossK > 0.5 ? 'ov1' : 'ov0';
+      if (L.indexOf(ov) >= 0) vis.push(ov);
+      st.queue = vis.concat(L.filter((it) => vis.indexOf(it) < 0));
+    } else st.queue = L;
+  }
+  // Reserva (conjunto de outra resolução) ainda viva: quando o conjunto novo tem tudo o que
+  // está na tela e a fila acabou, a reserva sai da memória (pelo FREEQ, aos poucos).
+  function settleFallback(st) {
+    for (const ch of st.seq) if (!st.cache.kinds[ch.kind]) queueItem(st, ch.kind);
+    if (st.queue.length) return;
+    const old = st.fb; st.fb = null;
+    if (old && old !== st.cache && !PRE.keep[old.id]) freeCache(old.id);
+  }
+  // fila da fase em andamento: 1 item a cada 4 quadros; jogando, no máximo 1 a cada 250 ms e
+  // nunca mais que ~12% do tempo (uma construção de 100 ms espera 800 ms pela próxima)
   function processQueue(st, W, H) {
-    if (!st.queue.length) return;
+    if (st.syncBuilt) { st.syncBuilt = false; return; } // um bloco já foi construído na hora neste quadro
+    if (!st.queue.length) { if (st.fb) settleFallback(st); if (!st.queue.length) return; }
     if (st.delay > 0) { st.delay--; return; }
     const t0 = nowMs();
-    if (G.state === 'play' && t0 - st.lastBuild < PLAY_GAP) return;
+    if (G.state === 'play') { if (t0 - st.lastBuild < Math.min(PLAY_GAP_MAX, Math.max(PLAY_GAP, st.lastCost * PLAY_DUTY))) return; }
+    else if (t0 - lastTap < TAP_QUIET) return;
     while (st.queue.length) {
       const it = st.queue.shift();
-      if (buildItem(st.pc, st.cache, it, W, H)) { st.lastBuild = nowMs(); st.delay = 3; return; }
+      if (buildItem(st.pc, st.cache, it, W, H)) { st.lastBuild = nowMs(); st.lastCost = st.lastBuild - t0; st.delay = 3; return; }
     }
   }
 
@@ -8493,7 +8734,7 @@ body.in-play #toasts { opacity: 0; }
       sealRow(o.c, oh * res);
       over = { c: bake(o.c), y0: oy0, h: oh };
     }
-    return { c: s.c, h, feats: F, over };
+    return { c: s.c, h, feats: F, over, res };
   }
   // a última linha do canvas fica "meio pintada" quando h*res não é inteiro: copia a de cima
   function sealRow(c, hr) {
@@ -8507,24 +8748,39 @@ body.in-play #toasts { opacity: 0; }
   }
   // Desenha uma faixa [topo, topo+h) (em px lógicos) de um cache, com as bordas
   // presas a linhas inteiras do aparelho: blocos vizinhos se encostam sem fresta e o blit fica 1:1.
-  function blitBand(ctx, st, img, top, h, W, H) {
-    const q = st.k, res = st.res;
+  // res = resolução da imagem (a da reserva, durante uma troca de resolução).
+  function blitBand(ctx, st, img, top, h, W, H, res) {
+    const q = st.k;
+    res = res || st.res;
     const mD = st.shaking ? Math.ceil(30 * q) : 0; // margem extra durante o tremor
     const tD = Math.round(top * q), bD = Math.round((top + h) * q), HD = Math.ceil(H * q - 0.001) + mD;
     const y0 = Math.max(-mD, tD), y1 = Math.min(HD, bD);
     if (y1 <= y0) return;
     const f = res / q;
     let sy = (y0 - tD) * f, sh = (y1 - y0) * f;
-    if (st.crisp) { sy = Math.round(sy); sh = Math.min(Math.round(sh), img.height - sy); }
+    if (st.crisp && res === st.res) { sy = Math.round(sy); sh = Math.min(Math.round(sh), img.height - sy); }
     if (sh <= 0) return;
     ctx.drawImage(img, 0, sy, img.width, sh, 0, y0 / q, (img.width / res) * (W / WW), (y1 - y0) / q);
   }
-  // bloco pronto (ou construído agora: só acontece se a fila não deu conta a tempo)
+  // bloco já pronto: do conjunto atual ou, numa troca de resolução, da reserva (null = nenhum dos dois)
+  function kindAt(st, name) { return st.cache.kinds[name] || (st.fb && st.fb.kinds[name]) || null; }
+  // bloco para desenhar agora. Da reserva: o novo entra na fila. Construído na hora só se
+  // nenhum dos dois conjuntos tem o bloco (a fila não deu conta a tempo); conta como a construção da vez.
   function kindOf(st, name) {
     let k = st.cache.kinds[name];
-    if (!k) { const t0 = nowMs(); k = st.cache.kinds[name] = buildKind(st, name); logBuild(st.id, name + '!', nowMs() - t0); }
+    if (k) return k;
+    if (st.fb && st.fb.kinds[name]) { queueItem(st, name); return st.fb.kinds[name]; }
+    const t0 = nowMs();
+    k = st.cache.kinds[name] = buildKind(st, name);
+    st.lastBuild = nowMs(); st.lastCost = st.lastBuild - t0; st.syncBuilt = true;
+    logBuild(st.id, name + '!', st.lastCost);
     return k;
   }
+  // suavização ao desenhar uma imagem de resolução res: 1:1 sem filtro. Fora de escala só por
+  // alguns segundos (reserva, ou a tela acabou de mudar e espera estabilizar): também sem filtro —
+  // sem GPU, a 4x, reduzir/ampliar a tela cheia sem filtro custa ~1,6x o blit 1:1; com filtro, 4–7x.
+  // Só a tela grande demais (tablet, cache preso em 2,5) usa filtro o tempo todo.
+  function smoothFor(st, res) { return res === st.res && !st.crisp && !st.pendRes; }
   function resolveId(id) {
     if (STAGES[id]) return id;
     const g = G.game;
@@ -8544,10 +8800,21 @@ body.in-play #toasts { opacity: 0; }
       id, def, P: def.pal, g, res, cacheId, cache: getCache(cacheId), pc: paintCtx(id, res),
       pos: 0, lastScroll: scrollY, lastT: t, dt: 0, seq: [], n: 1, mul: def.speed || 1,
       bossK: 0, boss: null, park: null, flags: {}, lastLoop: null, cloudPos: 0, ranges: [],
-      queue: [], delay: 3, lastBuild: 0, traffic: null, flagImg: null, k: res, crisp: true,
+      queue: [], delay: 3, lastBuild: 0, lastCost: 0, traffic: null, flagImg: null, k: res, crisp: true, fb: null,
     };
-    const fk = kindOf(st, def.first);
-    st.seq.push({ kind: def.first, y0: -(def.firstAt || 0), h: fk.h, n: 0 });
+    // conjunto desta fase pré-construído em outra resolução (a qualidade subiu no começo da fase,
+    // a tela girou): vira reserva em vez de tudo ser construído no 1º quadro
+    if (!st.cache.kinds[def.first]) {
+      let best = null, bn = 0;
+      for (const cid in caches) {
+        const c = caches[cid];
+        if (c === st.cache || cid.indexOf(id + '@') !== 0 || !c.kinds[def.first]) continue;
+        const n = Object.keys(c.kinds).length;
+        if (n > bn) { best = c; bn = n; }
+      }
+      st.fb = best;
+    }
+    st.seq.push({ kind: def.first, y0: -(def.firstAt || 0), h: def.kinds[def.first].h, n: 0 });
     queueMissing(st, H);
     buildTraffic(st);
     S = st;
@@ -8568,17 +8835,30 @@ body.in-play #toasts { opacity: 0; }
       // a tela mudou de tamanho: espera estabilizar e refaz só os caches (o mundo continua)
       if (S.pendRes === res) S.pendN++; else { S.pendRes = res; S.pendN = 0; }
       if (S.pendN > 12) rescale(S, res, H);
-    }
+    } else S.pendRes = null;
     S.k = k; S.tx = tx; S.ty = ty;
     S.crisp = Math.abs(S.res - k) < 0.002;
     return S;
   }
+  // quantos blocos da tela (e do conjunto) um cache já tem: decide quem fica de reserva
+  function setScore(st, c) {
+    if (!c) return -1;
+    let n = 0;
+    for (const ch of st.seq) if (c.kinds[ch.kind]) n += 100;
+    return n + Object.keys(c.kinds).length;
+  }
+  // Nova resolução: o conjunto atual (ou a reserva, se ela estiver mais completa) fica de reserva
+  // e continua na tela, em escala; o novo sai da fila aos poucos (ver processQueue/settleFallback).
   function rescale(st, res, H) {
     disposeState(st);
-    st.res = res; st.cacheId = st.id + '@' + res; st.cache = getCache(st.cacheId); st.pc = paintCtx(st.id, res);
+    const cid = st.id + '@' + res, old = st.cache;
+    if (st.fb && st.fb.id === cid) st.fb = null; // voltou para a resolução da reserva: ela é o conjunto
+    else if (setScore(st, old) >= setScore(st, st.fb)) st.fb = old;
+    st.res = res; st.cacheId = cid; st.cache = getCache(cid); st.pc = paintCtx(st.id, res);
+    if (st.fb === st.cache) st.fb = null;
     st.pendRes = null;
     queueMissing(st, H);
-    pruneCaches();
+    pruneCaches(); // o conjunto parcial que sobrou (nem atual nem reserva) sai aos poucos
   }
   // rolagem própria: acompanha scrollY, mas acelera/estaciona no marco do chefão
   function advance(st, scrollY, t, H) {
@@ -8619,8 +8899,9 @@ body.in-play #toasts { opacity: 0; }
     let last = st.seq[st.seq.length - 1], guard = 0;
     while (last.y0 + last.h < st.pos + H + 34 && guard++ < 8) { // +34: margem do tremor de tela
       const name = st.def.next(st, st.g, st.n);
-      const kd = kindOf(st, name);
-      const ch = { kind: name, y0: last.y0 + last.h, h: kd.h, n: st.n++ };
+      // ainda fora da tela: se não estiver pronto, pula a fila (construído na hora só se aparecer antes)
+      if (!kindAt(st, name)) queueFront(st, name);
+      const ch = { kind: name, y0: last.y0 + last.h, h: st.def.kinds[name].h, n: st.n++ };
       st.seq.push(ch);
       const park = st.def.kinds[name].park;
       if (park && st.g && st.g.boss) st.park = { chunk: ch, local: park.local, screen: park.screen, state: 'go' };
@@ -8633,12 +8914,16 @@ body.in-play #toasts { opacity: 0; }
 
   // =================================================================
   // Pré-construção (fora do jogo): a próxima fase enquanto o resultado e a
-  // Lojinha estão na tela; no título/história, o fundo do menu e a 1ª fase.
+  // Lojinha estão na tela; no título/história, a 1ª fase e o fundo do menu.
   // Um item por vez, com folga de 140 ms entre eles (a tela de resultado parada
-  // esconde o engasgo). Roda pelo draw() e por um relógio próprio, porque o
-  // título e a história não desenham o fundo.
+  // esconde o engasgo), nada logo depois de um toque e nada no 1,2 s inicial do
+  // título (animação de entrada + toque em JOGAR). Roda pelo draw() e por um
+  // relógio próprio, porque o título e a história não desenham o fundo.
   // =================================================================
-  const PRE = { key: '', jobs: [], i: 0, next: 0, keep: {} };
+  const PRE = { key: '', jobs: [], i: 0, next: 0, keep: {}, titleT: 0, prune: false };
+  function uiKind() { try { return G.UI && G.UI.current ? G.UI.current() : null; } catch (e) { return null; } }
+  // telas do menu que o core desenha sem fundo (ver render no core)
+  const NO_BG_UI = /^(title|story|roll)$/;
   function preTargets() {
     const st = G.state, g = G.game;
     if (st === 'clear' && g) { const nx = MAP[(g.stageIdx | 0) + 1]; return nx ? [nx] : null; }
@@ -8646,9 +8931,19 @@ body.in-play #toasts { opacity: 0; }
       const sv = G.save || {}, un = sv.unlocked || 1;
       // provável próxima escolha: a 1ª fase (ou o 2º Mandato) ou a fase mais nova liberada
       const stage = st === 'intro' || sv.cleared || un <= 1 ? 'rodoviaria' : MAP[Math.min(3, un - 1)];
-      return st === 'intro' ? [stage] : ['menu', stage];
+      if (st === 'intro') return [stage];
+      // a fase antes do menu (o título não desenha fundo e JOGAR é o toque provável),
+      // a não ser que uma tela com o fundo do menu já esteja aberta (fases, lojinha...)
+      const ui = st === 'menu' ? uiKind() : null;
+      return ui && !NO_BG_UI.test(ui) ? ['menu', stage] : [stage, 'menu'];
     }
     return null;
+  }
+  // título recém-aberto (o jogo acabou de carregar ou voltou de uma partida): espera TITLE_WAIT
+  function titleWait(now) {
+    if (G.state !== 'menu' || uiKind() !== 'title') return false;
+    if (!PRE.titleT) PRE.titleT = now;
+    return now - PRE.titleT < TITLE_WAIT;
   }
   // Resultado/loja com a próxima fase a caminho: o mundo parado só mostra os blocos visíveis.
   // O resto do conjunto da fase vencida sai já (pico de memória: ~13 Mpx em vez de ~19).
@@ -8657,10 +8952,12 @@ body.in-play #toasts { opacity: 0; }
     st.trimmed = true;
     const vis = {};
     for (const ch of st.seq) vis[ch.kind] = 1;
-    const c = st.cache;
-    for (const k in c.kinds) if (!vis[k]) { freeKind(c.kinds[k]); delete c.kinds[k]; }
-    if (st.bossK < 0.004) for (const k in c.ov) if (k.indexOf('ov1|') === 0) { freeCanvas(c.ov[k].c); delete c.ov[k]; }
-    st.queue.length = 0;
+    for (const c of [st.cache, st.fb]) {
+      if (!c) continue;
+      for (const k in c.kinds) if (!vis[k]) { freeKind(c.kinds[k]); delete c.kinds[k]; }
+      if (st.bossK < 0.004) for (const k in c.ov) if (k.indexOf('ov1|') === 0) { freeCanvas(c.ov[k].c); delete c.ov[k]; }
+    }
+    st.queue.length = 0; // com reserva, settleFallback volta a pedir só os blocos da tela
   }
   function predictRes() {
     const v = G.view, q = quality();
@@ -8670,13 +8967,16 @@ body.in-play #toasts { opacity: 0; }
     return quantRes(v.scale * dpr);
   }
   function prebuildPump() {
+    if (G.state !== 'menu') PRE.titleT = 0; // a próxima vez que o título abrir, espera de novo
     if (!G.canvas || (typeof document !== 'undefined' && document.hidden)) return;
     const ids = preTargets();
     if (!ids) return;
-    // telas do menu: um estado de fase antiga (o título não desenha fundo) não segura mais a memória dela
-    if (S && S.id !== 'menu' && G.state !== 'clear' && (!G.game || S.g !== G.game)) { disposeState(S); S = null; }
+    // telas do menu: um estado de fase antiga (o título não desenha fundo) não segura mais a memória
+    // dela: o conjunto da fase terminada sai (a não ser que seja o alvo da pré-construção)
+    if (S && S.id !== 'menu' && G.state !== 'clear' && (!G.game || S.g !== G.game)) { disposeState(S); S = null; PRE.prune = true; }
+    // final/créditos: da última fase só ficam os blocos parados na tela
+    if (G.state === 'ending' && S && S.id !== 'menu' && !S.trimmed) { trimForClear(S); PRE.prune = true; }
     const t0 = nowMs();
-    if (t0 < PRE.next) return;
     const res = predictRes();
     if (!res) return;
     const W = G.W || 360, H = G.H || 640;
@@ -8690,8 +8990,10 @@ body.in-play #toasts { opacity: 0; }
         PRE.keep[cid] = 1;
         for (const it of itemsFor(pc.def)) PRE.jobs.push({ cid, pc, it });
       }
-      pruneCaches();
+      PRE.prune = true;
     }
+    if (PRE.prune) { PRE.prune = false; pruneCaches(); } // libera pelo FREEQ: poucos ms por vez
+    if (titleWait(t0) || t0 < PRE.next || t0 - lastTap < TAP_QUIET) return;
     while (PRE.i < PRE.jobs.length) {
       const j = PRE.jobs[PRE.i++];
       let did = false;
@@ -8715,7 +9017,7 @@ body.in-play #toasts { opacity: 0; }
     const P = pc.P, res = pc.res;
     const mk = (w, h, fn) => { const s = surface(w, h, res); fn(s.x); s.c.lw = w; s.c.lh = h; return bake(s.c); };
     const cols = P.cars, bcols = P.bus || ['#376a8a'];
-    const spr = { up: { car: [], bus: [] }, down: { car: [], bus: [] } };
+    const spr = { up: { car: [], bus: [] }, down: { car: [], bus: [] }, res };
     for (const c of cols) {
       spr.up.car.push(mk(12, 34, (x) => { beam(x, P, 6, 11.5, -1, 11); car(x, 6, 17, c, 0); }));
       spr.down.car.push(mk(12, 34, (x) => { beam(x, P, 6, 22.5, 1, 11); car(x, 6, 17, c, Math.PI); }));
@@ -8756,12 +9058,13 @@ body.in-play #toasts { opacity: 0; }
     return r;
   }
   function drawTraffic(ctx, st, H, t) {
-    const T = st.traffic, spr = st.cache.spr;
+    const T = st.traffic;
     if (!T) return;
-    if (!spr) { queueItem(st, 'spr'); return; } // ainda na fila: o trânsito aparece em instantes
+    let spr = st.cache.spr;
+    if (!spr) { queueItem(st, 'spr'); spr = st.fb && st.fb.spr; if (!spr) return; } // ainda na fila: o trânsito aparece em instantes
     const r = laneRanges(st, H);
-    const L = 900;
-    ctx.imageSmoothingEnabled = !st.crisp;
+    const L = 900, sr = spr.res || st.res;
+    ctx.imageSmoothingEnabled = smoothFor(st, sr);
     for (const ln of T) {
       const set = ln.dir > 0 ? spr.up : spr.down;
       const list = ln.bus ? set.bus : set.car;
@@ -8770,7 +9073,7 @@ body.in-play #toasts { opacity: 0; }
         y = ((y % L) + L) % L - 50;
         if (y > H + 30 || !inRanges(r, y)) continue;
         const img = list[ln.col[i] < 0 ? st.blackIdx : ln.col[i]] || list[0];
-        ctx.drawImage(img, snap(st, ln.x - img.lw / 2), snap(st, y - img.lh / 2), img.width / st.res, img.height / st.res);
+        ctx.drawImage(img, snap(st, ln.x - img.lw / 2), snap(st, y - img.lh / 2), img.width / sr, img.height / sr);
       }
     }
     ctx.imageSmoothingEnabled = true;
@@ -8791,7 +9094,9 @@ body.in-play #toasts { opacity: 0; }
     for (const ch of st.seq) {
       const top = chunkTop(st, ch, H);
       if (top > H + 60 || top + ch.h < -60) continue;
-      const F = st.cache.kinds[ch.kind].feats;
+      const K = kindAt(st, ch.kind);
+      if (!K) continue; // bloco ainda na fila (logo acima/abaixo da tela): os enfeites vêm quando ele chegar
+      const F = K.feats;
       // brilhos do sol na água: tracinhos horizontais (nunca bolinhas)
       if (F.glints.length) {
         ctx.fillStyle = st.id === 'paranoa' ? '#ffcf9a' : '#cfe4f0';
@@ -8858,11 +9163,12 @@ body.in-play #toasts { opacity: 0; }
   }
   function drawOvers(ctx, st, W, H) {
     for (const ch of st.seq) {
-      const k = st.cache.kinds[ch.kind]; if (!k || !k.over) continue;
+      const k = kindAt(st, ch.kind); if (!k || !k.over) continue;
       const top = H + st.pos - (ch.y0 + ch.h) + k.over.y0;
       if (top + k.over.h <= 0 || top >= H) continue;
-      ctx.imageSmoothingEnabled = !st.crisp;
-      blitBand(ctx, st, k.over.c, top, k.over.h, W, H);
+      const res = k.res || st.res;
+      ctx.imageSmoothingEnabled = smoothFor(st, res);
+      blitBand(ctx, st, k.over.c, top, k.over.h, W, H, res);
       ctx.imageSmoothingEnabled = true;
     }
   }
@@ -8886,17 +9192,19 @@ body.in-play #toasts { opacity: 0; }
     const g = x.createRadialGradient(rb, rb, 0, rb, rb, rb);
     g.addColorStop(0, 'rgba(' + PUFF_RGB + ',1)'); g.addColorStop(0.45, 'rgba(' + PUFF_RGB + ',0.55)'); g.addColorStop(1, 'rgba(' + PUFF_RGB + ',0)');
     x.fillStyle = g; x.fillRect(0, 0, rb * 2, rb * 2);
-    const c = bake(s.c); c.rb = rb;
+    const c = bake(s.c); c.rb = rb; c.res = res;
     return c;
   }
   function puffAt(st, r) {
     const rb = Math.max(2, Math.round(r / 2) * 2);
     const P = st.cache.puffs || (st.cache.puffs = {}); // normalmente já veio da pré-construção
-    return P[rb] || (P[rb] = buildPuff(st.res, rb));
+    if (P[rb]) return P[rb];
+    const F = st.fb && st.fb.puffs; // troca de resolução: a baforada da reserva serve, em escala
+    return (F && F[rb]) || (P[rb] = buildPuff(st.res, rb));
   }
   function drawPuff(ctx, st, x, y, r) {
-    const c = puffAt(st, r), rb = c.rb;
-    ctx.drawImage(c, snap(st, x - rb), snap(st, y - rb), c.width / st.res, c.height / st.res);
+    const c = puffAt(st, r), rb = c.rb, res = c.res || st.res;
+    ctx.drawImage(c, snap(st, x - rb), snap(st, y - rb), c.width / res, c.height / res);
   }
   // Camada de cima: nuvens/névoa/fumaça como SPRITES soltos (pintados na resolução
   // da tela e desenhados 1:1) — só custa a área que ocupam, ao contrário de um
@@ -8957,10 +9265,10 @@ body.in-play #toasts { opacity: 0; }
     const def = st.def, U = UPPER[def.upper], q = quality();
     // qualidade baixa: sem nuvens/névoa (a fumaça da churrasqueira e das barracas fica)
     if (U && q !== 'low' && !(G.BG.skip && G.BG.skip.clouds)) {
-      const set = st.cache.up;
-      if (!set) queueItem(st, 'up');
-      else {
-        ctx.imageSmoothingEnabled = !st.crisp;
+      let set = st.cache.up;
+      if (!set) { queueItem(st, 'up'); set = st.fb && st.fb.up; }
+      if (set) {
+        ctx.imageSmoothingEnabled = set === st.cache.up ? smoothFor(st, st.res) : false; // reserva: nuvem macia, sem filtro
         // sombras das nuvens no chão (só de dia): andam com o chão, um pouco mais devagar que as nuvens
         if (U.shadow && q === 'high') drawCloudSet(ctx, st, set, set.dark, set.inst, st.cloudPos * 0.75 + 120, 1, W, H, t);
         drawCloudSet(ctx, st, set, set.shapes, set.inst, st.cloudPos, 1, W, H, t);
@@ -8973,10 +9281,10 @@ body.in-play #toasts { opacity: 0; }
     // fumaça da churrasqueira do Lule (sai do marco e vem descendo) e das barraquinhas
     let smoked = false;
     for (const ch of st.seq) {
-      const F = st.cache.kinds[ch.kind] && st.cache.kinds[ch.kind].feats;
+      const K = kindAt(st, ch.kind), F = K && K.feats;
       if (!F || (!F.grill && !F.smoke.length)) continue;
       const top = chunkTop(st, ch, H);
-      if (!smoked) { smoked = true; ctx.imageSmoothingEnabled = !st.crisp; }
+      if (!smoked) { smoked = true; ctx.imageSmoothingEnabled = smoothFor(st, st.res); }
       if (F.grill) {
         const gx = F.grill.x, gy = top + F.grill.y;
         if (gy > -160 && gy < H + 40) {
@@ -9141,23 +9449,26 @@ body.in-play #toasts { opacity: 0; }
     drawBands(ctx, st, st.tintB, W, H);
     if (boss) { ctx.fillStyle = 'rgba(5,3,12,0.22)'; ctx.fillRect(0, 0, W, H); }
   }
+  // camada de tela cheia (key = 'ov0' | 'ov1'). Ainda na fila: a da reserva (outra resolução,
+  // mesma tela) serve, sem filtro (é lisa); sem reserva, faixas sólidas baratas.
+  function drawLayer(ctx, st, key, a, boss, W, H) {
+    const o = st.cache.ov[key + '|' + H];
+    if (o && o.W === W && o.res === st.res) { ctx.imageSmoothingEnabled = smoothFor(st, st.res); blitFull(ctx, st, o, a); return; }
+    queueItem(st, key);
+    const f = st.fb && st.fb.ov[key + '|' + H];
+    if (f && f.W === W) { ctx.imageSmoothingEnabled = false; blitFull(ctx, st, f, a); }
+    else fallbackTint(ctx, st, W, H, a, boss);
+  }
   function drawOverlay(ctx, st, W, H, t) {
     const k = (G.BG.skip && G.BG.skip.boss) ? 0 : st.bossK, q = quality();
-    const ok = (o) => o && o.W === W && o.res === st.res;
-    ctx.imageSmoothingEnabled = !st.crisp;
-    if (k < 0.995) {
-      const o = st.cache.ov['ov0|' + H];
-      if (ok(o)) blitFull(ctx, st, o, 1 - k); else { queueItem(st, 'ov0'); fallbackTint(ctx, st, W, H, 1 - k, false); }
-    }
-    if (k > 0.005) {
-      const o = st.cache.ov['ov1|' + H];
-      if (ok(o)) blitFull(ctx, st, o, k); else { queueItem(st, 'ov1'); fallbackTint(ctx, st, W, H, k, true); }
-    }
+    if (k < 0.995) drawLayer(ctx, st, 'ov0', 1 - k, false, W, H);
+    if (k > 0.005) drawLayer(ctx, st, 'ov1', k, true, W, H);
+    ctx.imageSmoothingEnabled = smoothFor(st, st.res);
     // borda de perigo pulsando (enfeite: só na qualidade alta)
     if (k > 0.01 && q === 'high') {
       const e = EDGE;
       if (!e || e.H !== H || e.res !== st.res) queueItem(st, 'edge');
-      else {
+      if (e && e.H === H) { // de outra resolução durante a troca: desenha em escala até a nova sair
         const p = 0.5 + 0.5 * Math.sin(t * 3.2);
         if (p > 0.05) {
           const ew = e.c.width / e.res, eh = e.c.height / e.res;
@@ -9187,9 +9498,15 @@ body.in-play #toasts { opacity: 0; }
     const st = ensure(ctx, id, scrollY, t, H);
     advance(st, scrollY, t, H);
     fill(st, H);
-    // o que faltar do conjunto da fase sai da fila aos poucos
-    processQueue(st, W, H);
     ctx.save();
+    try { paintAll(ctx, st, W, H, t); } finally { ctx.restore(); } // um erro no meio nunca deixa a pilha save/restore do jogo torta
+    // o que faltar do conjunto da fase sai da fila aos poucos (depois do desenho: se um bloco
+    // precisou ser construído na hora neste quadro, a fila espera a vez dela)
+    processQueue(st, W, H);
+    // fora do jogo (resultado, loja, diálogo do fim): adianta a próxima fase
+    if (G.state !== 'play') prebuildPump();
+  }
+  function paintAll(ctx, st, W, H, t) {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     // tremor de tela (o core translada o canvas): cancela a fração de pixel para manter
     // o blit 1:1 rápido, e pinta uma margem para não sobrar borda sem fundo
@@ -9198,11 +9515,12 @@ body.in-play #toasts { opacity: 0; }
     st.shaking = Math.abs(st.tx) > 0.5 || Math.abs(st.ty) > 0.5;
     if (st.shaking) { ctx.fillStyle = st.P.edgeFill || st.P.grass; ctx.fillRect(-30, -30, W + 60, H + 60); }
     // chão: blocos desenhados 1:1 (sem filtro) quando a resolução bate com a tela
-    ctx.imageSmoothingEnabled = !st.crisp;
     for (const ch of st.seq) {
       const top = H + st.pos - (ch.y0 + ch.h);
       if (top + ch.h <= 0 || top >= H) continue;
-      blitBand(ctx, st, kindOf(st, ch.kind).c, top, ch.h, W, H);
+      const k = kindOf(st, ch.kind), res = k.res || st.res;
+      ctx.imageSmoothingEnabled = smoothFor(st, res);
+      blitBand(ctx, st, k.c, top, ch.h, W, H, res);
     }
     ctx.imageSmoothingEnabled = true;
     const sk = G.BG.skip; // só para medir custo nos testes
@@ -9211,9 +9529,6 @@ body.in-play #toasts { opacity: 0; }
     if (!sk || !sk.overs) drawOvers(ctx, st, W, H);
     if (!sk || !sk.upper) drawUpper(ctx, st, W, H, t);
     if (!sk || !sk.overlay) drawOverlay(ctx, st, W, H, t);
-    ctx.restore();
-    // fora do jogo (resultado, loja, diálogo do fim): adianta a próxima fase
-    if (G.state !== 'play') prebuildPump();
   }
   // memória de canvas (testes): conjuntos vivos e megapixels
   function cacheStats() {
@@ -9242,14 +9557,14 @@ body.in-play #toasts { opacity: 0; }
     // as fontes chegaram depois do boot: os outdoors pintados com a fonte reserva são refeitos
     // (os conjuntos fora de uso são descartados e a pré-construção recomeça; o da tela atual fica)
     fontsReady() {
-      for (const id in caches) if (!S || id !== S.cacheId) freeCache(id);
+      for (const id in caches) if (!S || (id !== S.cacheId && !(S.fb && id === S.fb.id))) freeCache(id);
       PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {};
     },
     // o roteiro da fase avisa que o cartão-postal deve passar agora ('itamaraty', 'jk'); ver landmarkDue
     landmark(id, g) { LMREQ = { id: String(id), g: g || G.game || null }; },
     // para testes: estado atual (posição do mundo, blocos visíveis, estacionamento no chefão)
     _state() { return S; },
-    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
+    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice(), fb: S.fb ? S.fb.id : null } : null; },
     builds() { return BUILDS.slice(); },
     cacheStats,
   });
@@ -9263,12 +9578,15 @@ body.in-play #toasts { opacity: 0; }
    trilha procedural (bossa, valsinha, baião, samba, rock-sertanejo,
    frevo, funk carioca e marchinha). Nenhum arquivo de áudio.
 
-   - O AudioContext só nasce no primeiro toque/tecla (unlock()).
+   - O AudioContext só nasce no primeiro toque/tecla (unlock()); o motor
+     é montado logo depois em fatias curtas e o reverb ≥ 1,5 s depois.
    - Barramentos: master -> limitador -> saída; música (0,32) e SFX (0,55).
-   - Sequenciador "look-ahead": setInterval de 25 ms agenda 0,12 s à
+   - Sequenciador "look-ahead": setInterval de 40 ms agenda 0,18 s à
      frente no relógio do áudio (aguenta quedas de frame).
    - O motor (Engine) funciona com qualquer BaseAudioContext, então
      dá para renderizar tudo num OfflineAudioContext nos testes.
+   - SFX frequentes e golpes de bateria são pré-renderizados (Offline-
+     AudioContext) e tocados como buffer; o sintetizador fica de reserva.
    - Todas as melodias são originais.
    ============================================================ */
 (function () {
@@ -9289,8 +9607,11 @@ body.in-play #toasts { opacity: 0; }
 
   // ===================== Utilidades =====================
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+  // FIX >= 0 fixa o sorteio de rnd()/pick() (variações pré-renderizadas, ver "Sons pré-renderizados")
+  let FIX = -1;
+  const R = () => (FIX >= 0 ? FIX : Math.random());
+  const rnd = (a, b) => a + R() * (b - a);
+  const pick = (arr) => arr[(R() * arr.length) | 0];
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
   const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   // 'C#5' -> 73 (C4 = 60). Retorna null se não for nota.
@@ -9354,10 +9675,14 @@ body.in-play #toasts { opacity: 0; }
   const DIST_SOFT = curve(3, 512);
 
   // ===================== Motor (qualquer BaseAudioContext) =====================
+  // opts: reverb:false (sem reverb), lazyReverb (reverb só com addReverb()), lazy (ruído preenchido aos
+  // poucos com fillWhite(); implica lazyReverb), white (reusa um buffer de ruído), bare (sem barramentos:
+  // pré-renderização), meter (ensaio: anota em tEnd/types até quando o som toca e os osciladores usados)
   function Engine(ac, opts) {
     opts = opts || {};
     const sr = ac.sampleRate;
-    const E = { ac, mv: 0, cur: null, voices: [], dying: [] };
+    const E = { ac, mv: 0, cur: null, voices: [], dying: [], tEnd: 0, types: {}, bank: null, hit: null };
+    const METER = !!opts.meter;
 
     // ---- primitivas ----
     E.gain = function (v, dest) { const g = ac.createGain(); g.gain.value = v; if (dest) g.connect(dest); return g; };
@@ -9379,14 +9704,16 @@ body.in-play #toasts { opacity: 0; }
       if (dest) o.connect(dest);
       o.start(t0); o.stop(t1);
       if (E.cur) E.cur.srcs.push(o);
+      if (METER) { if (t1 > E.tEnd) E.tEnd = t1; E.types[typeof type === 'string' ? type : 'pulse'] = 1; }
       return o;
     };
     E.noise = function (t0, t1, dest) {
       const s = ac.createBufferSource();
       s.buffer = E.white; s.loop = true;
       if (dest) s.connect(dest);
-      s.start(t0, Math.random() * 1.8); s.stop(t1);
+      s.start(t0, Math.random() * E.white.duration * 0.95); s.stop(t1);
       if (E.cur) E.cur.srcs.push(s);
+      if (METER && t1 > E.tEnd) E.tEnd = t1;
       return s;
     };
     // envelope percussivo
@@ -9433,17 +9760,37 @@ body.in-play #toasts { opacity: 0; }
     E.fin = function (src, g) { src.onended = function () { E.mv--; try { g.disconnect(); } catch (e) { /* nada */ } }; };
 
     // ---- buffers e formas de onda (criados uma vez) ----
-    E.white = (function () {
-      const len = Math.floor(sr * 2), b = ac.createBuffer(1, len, sr), d = b.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      return b;
-    })();
+    // ruído branco de 1 s, tocado em loop a partir de um ponto sorteado (os chiados longos dão a volta).
+    // fillWhite(n) preenche n amostras por chamada: o motor ao vivo faz isso em fatias depois do toque.
+    E.white = opts.white || null;
+    let wBuf = null, wFill = 0;
+    E.fillWhite = function (n) {
+      if (E.white) return true;
+      const len = Math.floor(sr * 1.0);
+      if (!wBuf) wBuf = ac.createBuffer(1, len, sr);
+      const d = wBuf.getChannelData(0), end = Math.min(len, wFill + n);
+      for (let i = wFill; i < end; i++) d[i] = Math.random() * 2 - 1;
+      wFill = end;
+      if (end >= len) E.white = wBuf;
+      return !!E.white;
+    };
+    if (!opts.lazy) E.fillWhite(Infinity);
     function pulseWave(duty) {
       const N = 40, re = new Float32Array(N), im = new Float32Array(N);
       for (let n = 1; n < N; n++) re[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
       return ac.createPeriodicWave(re, im);
     }
-    E.pulse25 = pulseWave(0.25);
+    let p25 = null;
+    Object.defineProperty(E, 'pulse25', { get() { return p25 || (p25 = pulseWave(0.25)); } });
+    // cada contexto monta a tabela de onda de um tipo de oscilador no 1º uso (5–10 ms a 4×):
+    // warm() faz isso fora da hora de tocar
+    E.warm = function (type) {
+      if (type === 'pulse') return E.pulse25;
+      const o = ac.createOscillator();
+      if (type !== 'sine') o.type = type;
+      return o;
+    };
+    if (opts.bare) return E;
 
     // ---- barramentos ----
     const master = E.gain(0.9, null);
@@ -9459,7 +9806,7 @@ body.in-play #toasts { opacity: 0; }
     // reverb global da música (só médios/agudos, para não embolar o grave).
     // Resposta ao impulso mono de 1 s com decaimento cúbico SEM Math.pow (antes: 1,5 s estéreo
     // com pow por amostra — e o ConvolverNode prepara a FFT da resposta na thread principal).
-    // Ao vivo é criada depois do toque (ver buildEngine) e fica desligada na qualidade baixa.
+    // Ao vivo é criada ≥ 1,5 s depois do motor (ver applyQuality/tick) e fica desligada na qualidade baixa.
     E.rev = null;
     E.addReverb = function () {
       if (E.rev) return E.rev;
@@ -9480,7 +9827,7 @@ body.in-play #toasts { opacity: 0; }
       if (!R || R.on === !!on) return;
       try { if (on) E.musicBus.connect(R.hp); else E.musicBus.disconnect(R.hp); R.on = !!on; } catch (e) { /* nada */ }
     };
-    if (opts.reverb !== false && !opts.lazyReverb) E.addReverb();
+    if (opts.reverb !== false && !opts.lazyReverb && !opts.lazy) E.addReverb();
 
     // ---- SFX: vozes com teto e "roubo" da mais antiga de prioridade <= ----
     E.playSfx = function (name, t, p) {
@@ -9488,6 +9835,13 @@ body.in-play #toasts { opacity: 0; }
       if (!d) return false;
       E.prune(t);
       if (E.voices.length >= MAX_SFX && !E.steal(d.pri, t)) return false;
+      // versão pré-renderizada (ao vivo): só 1 fonte direto no barramento, sem ganho nem envelope
+      const bk = E.bank && E.bank(name, p);
+      if (bk) {
+        const s = playBaked(E, bk, t, E.sfxBus);
+        E.voices.push({ out: null, end: t + s.buffer.duration + 0.02, pri: d.pri, srcs: null, name });
+        return true;
+      }
       const out = E.gain(1, E.sfxBus);
       const v = { out, end: t + 0.5, pri: d.pri, srcs: [], name };
       E.cur = v;
@@ -9501,7 +9855,9 @@ body.in-play #toasts { opacity: 0; }
       let k = -1;
       for (let i = 0; i < E.voices.length; i++) if (E.voices[i].pri <= pri) { k = i; break; } // lista em ordem de início
       if (k < 0) return false;
-      const v = E.voices.splice(k, 1)[0], g = v.out.gain;
+      const v = E.voices.splice(k, 1)[0];
+      if (!v.out) return true; // pré-renderizada: curta, termina sozinha (cortar daria estalo)
+      const g = v.out.gain;
       try { g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(0, now + 0.025); } catch (e) { /* nada */ }
       for (const s of v.srcs) { try { s.stop(now + 0.03); } catch (e) { /* já parou */ } }
       v.end = now + 0.06;
@@ -9513,7 +9869,7 @@ body.in-play #toasts { opacity: 0; }
         let j = 0;
         for (let i = 0; i < L.length; i++) {
           const v = L[i];
-          if (v.end < now) { try { v.out.disconnect(); } catch (e) { /* nada */ } } else L[j++] = v;
+          if (v.end < now) { if (v.out) try { v.out.disconnect(); } catch (e) { /* nada */ } } else L[j++] = v;
         }
         L.length = j;
       }
@@ -10918,9 +11274,9 @@ body.in-play #toasts { opacity: 0; }
       const keys = Object.keys(drums);
       if (fill) for (const k in fill) if (keys.indexOf(k) < 0) keys.push(k);
       for (const k of keys) {
-        const hi = k[0] === '+', fn = DRUM[(hi ? k.slice(1) : k).split('_')[0]];
+        const hi = k[0] === '+', nmD = (hi ? k.slice(1) : k).split('_')[0], fn = DRUM[nmD];
         if (!fn) continue;
-        sec.dk.push({ key: k, fn, hi, pat: drums[k] ? strip(drums[k]) : null, fill: fill && fill[k] != null ? strip(fill[k]) : null, vol: dv[k] != null ? dv[k] : 1 });
+        sec.dk.push({ key: k, nm: nmD, fn, hi, pat: drums[k] ? strip(drums[k]) : null, fill: fill && fill[k] != null ? strip(fill[k]) : null, vol: dv[k] != null ? dv[k] : 1 });
       }
       for (const p of r.parts || []) {
         const P = Object.assign({ vel: 0.8, oct: 0, gate: 0.95, hvel: 0.6 }, p), q = parseTokens(p.notes);
@@ -11027,8 +11383,9 @@ body.in-play #toasts { opacity: 0; }
       else if (D.pat) { pat = D.pat; idx = ss; } else continue;
       const c = pat[idx % pat.length];
       if (c === '.' || c === undefined) continue;
-      const vel = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol * (0.92 + Math.random() * 0.12);
-      D.fn(E, tt + Math.random() * 0.004, c, vel, out, sd);
+      const vn = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol, vr = 0.92 + Math.random() * 0.12, td = tt + Math.random() * 0.004;
+      // golpe pré-renderizado (ao vivo) ou sintetizado
+      if (!(E.hit && E.hit(E, D.nm, c, vn, vr, td, out))) D.fn(E, td, c, vn * vr, out, sd);
     }
     // baixo
     const B = sec.bass;
@@ -11116,8 +11473,43 @@ body.in-play #toasts { opacity: 0; }
     return probs;
   }
 
+  // ===================== Sons pré-renderizados =====================
+  // Os SFX que tocam o tempo todo e os golpes de bateria da trilha são renderizados uma vez num
+  // OfflineAudioContext (em outra thread) e depois tocam como 1 BufferSource + 1 ganho: 2 nós e
+  // nenhuma automação, contra 5–10 nós com envelopes por disparo. Até o buffer ficar pronto (ou se
+  // o navegador não tiver OfflineAudioContext), toca o sintetizador de sempre.
+  // nº de variações: a variação i fixa o rnd() em (i + 0,5) / n da faixa original (os tons sorteados
+  // viram n tons espalhados pela mesma faixa, tocados em ordem aleatória); o ruído de cada uma é outro.
+  // (Mexer no playbackRate a cada disparo custaria quase o mesmo que um nó a mais.)
+  const BAKE_SFX = {
+    shot_voto: 4, shot_boca: 4, shot_panela: 4, shot_jato: 4, hit: 4, tink: 1, boss_hit: 4, pan_hit: 4, graze: 2,
+    explode_s: 4, explode_m: 4, enemy_shot: 4, enemy_shot2: 2, split: 1, spawn: 1, pix: 1, ui_type: 5, ui_click: 1,
+  };
+  // renderizados logo que o motor nasce (os outros da lista: no 1º disparo)
+  const BAKE_FIRST = ['shot_voto', 'shot_boca', 'shot_panela', 'shot_jato', 'hit', 'tink', 'graze', 'enemy_shot', 'explode_s', 'ui_click', 'ui_type'];
+  const DRUM_SYNTH = { sweep: 1, rev: 1, vox: 1 }; // dependem do andamento ou são raros: sempre sintetizados
+  const ROLL = { snare: [0.75, 0.85], caixa: [0.8, 0.9] }; // rufo 'r' = 2 golpes (ver DRUM.snare/caixa)
+  const OAC = typeof window !== 'undefined' ? window.OfflineAudioContext || window.webkitOfflineAudioContext || null : null;
+
+  // toca uma variação pré-renderizada em dest
+  function playBaked(E, ent, t, dest) {
+    const s = E.ac.createBufferSource(), b = ent.bufs;
+    s.buffer = b[b.length > 1 ? (Math.random() * b.length) | 0 : 0];
+    s.connect(dest);
+    s.start(t);
+    ent.used = t;
+    return s;
+  }
+  // contexto de ensaio: roda um som sem criar nós de verdade, só para saber até quando ele toca
+  function dryCtx(sr) {
+    const P = { value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {}, cancelScheduledValues() {} };
+    const node = () => ({ gain: P, frequency: P, detune: P, Q: P, playbackRate: P, offset: P, connect() {}, disconnect() {}, start() {}, stop() {}, setPeriodicWave() {} });
+    return { sampleRate: sr, currentTime: 0, destination: node(), createGain: node, createOscillator: node, createBiquadFilter: node, createBufferSource: node, createWaveShaper: node, createConstantSource: node, createPeriodicWave: node };
+  }
+
   // ===================== Controle ao vivo (G.Audio) =====================
-  const L = { E: null, ac: null, building: false, pend: [], cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0 };
+  const L = { E: null, ac: null, building: false, pend: [], cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0,
+    musicOk: false, bank: {}, bq: [], bqKeys: {}, bakeT: 0, baking: false, bakeOff: !OAC, bakeKB: 0, revWant: false, revAt: 0 };
   const musicOn = () => { const s = G.save && G.save.settings; return !s || s.music !== false; };
   const sfxOn = () => { const s = G.save && G.save.settings; return !s || s.sfx !== false; };
   function report(err, where) {
@@ -11135,21 +11527,232 @@ body.in-play #toasts { opacity: 0; }
     L.ac = ac;
     return ac;
   }
-  function buildEngine() {
-    L.building = false;
-    if (L.E) return L.E;
-    const ac = L.ac;
-    if (!ac) return null;
-    try { L.E = Engine(ac, { lazyReverb: true }); } catch (err) { report(err, 'engine'); try { ac.close(); } catch (e) { /* nada */ } L.ac = null; L.pend.length = 0; return null; }
+  // O motor nasce em fatias curtas, cada uma uma tarefa própria: barramentos, ruído (em blocos, até
+  // ~4 ms por fatia) e as tabelas de onda dos sons de interface -> SFX prontos (tocam os sons pedidos
+  // no meio tempo, como o clique do próprio toque); depois as outras tabelas e a partitura pedida ->
+  // trilha pronta. A pré-renderização começa aí e o reverb vem ≥ 1,5 s depois (ver tick).
+  // Uma fatia só emenda o passo seguinte se ainda não gastou 2 ms (aparelho rápido: menos fatias;
+  // lento: 1 passo de ≤ ~10 ms a 4× por fatia). Passo que devolve false continua na próxima fatia.
+  const BOOT = [
+    () => { const E = (L.E0 = Engine(L.ac, { lazy: true })); noiseWav(L.ac, (b) => { if (b) { E.white = b; L.noise = 'wav'; } else L.noiseFail = true; }); },
+    () => { L.E0.warm('sine'); },
+    () => { L.E0.warm('square'); },
+    // ruído: vem do WAV decodificado; se o navegador recusar, é preenchido aqui em blocos (≤ ~4 ms por fatia)
+    () => {
+      if (L.E0.white) return true;
+      if (!L.noiseFail) return WAIT;
+      const t = performance.now();
+      while (!L.E0.fillWhite(2048)) if (performance.now() - t > 4) return false;
+      L.noise = 'js';
+      return true;
+    },
+    sfxReady,
+    () => { L.E.warm('triangle'); },
+    () => { L.E.warm('sawtooth'); },
+    () => { L.E.warm('pulse'); },
+    () => { const s = L.wanted && SONGS[L.wanted]; if (s) compile(s); },
+    musicReady,
+  ];
+  const SFX_READY = 4; // índice de sfxReady em BOOT
+  const WAIT = {}; // passo esperando algo assíncrono: tenta de novo daqui a 10 ms
+  function bootStep(i) {
+    if (!L.ac || (i <= SFX_READY && L.E)) { L.building = false; return; }
+    const t0 = performance.now();
+    let r;
+    try {
+      do { r = BOOT[i](); if (r !== false && r !== WAIT) i++; } while (r !== WAIT && i < BOOT.length && performance.now() - t0 < 2);
+    } catch (err) {
+      report(err, 'engine');
+      L.building = false; L.E0 = null; L.pend.length = 0;
+      if (L.E) { clearInterval(L.timer); L.E = null; }
+      try { L.ac.close(); } catch (e) { /* nada */ }
+      L.ac = null;
+      return;
+    }
+    if (i < BOOT.length) setTimeout(bootStep, r === WAIT ? 10 : 0, i);
+  }
+  // 1 s de ruído branco sem laço na thread principal: um WAV PCM de 16 bits com bytes sorteados pelo
+  // crypto (uniforme em [-1, 1), como Math.random() * 2 - 1) que o navegador decodifica em outra thread.
+  // done(AudioBuffer | null) é chamado uma vez.
+  function noiseWav(ac, done) {
+    let fin = false;
+    const end = (b) => { if (!fin) { fin = true; done(b && b.length ? b : null); } };
+    try {
+      const sr = ac.sampleRate, n = Math.floor(sr), ab = new ArrayBuffer(44 + n * 2), dv = new DataView(ab);
+      const tag = (o, s) => { for (let i = 0; i < 4; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+      tag(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+      dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, sr, true);
+      dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); tag(36, 'data'); dv.setUint32(40, n * 2, true);
+      const u8 = new Uint8Array(ab, 44);
+      for (let o = 0; o < u8.length; o += 65536) crypto.getRandomValues(u8.subarray(o, Math.min(u8.length, o + 65536)));
+      const p = ac.decodeAudioData(ab, end, () => end(null));
+      if (p && p.then) p.then(end, () => end(null));
+    } catch (e) { end(null); }
+    setTimeout(() => end(null), 1500); // decodificador mudo: cai no preenchimento em JS
+  }
+  function sfxReady() {
+    const E = L.E0;
+    L.E0 = null; L.building = false;
+    E.bank = bakedSfx; E.hit = bakedDrum;
+    L.E = E;
     L.mOn = L.sOn = null;
+    LOWQ = G.quality === 'low';
     applySettings(true);
     L.timer = setInterval(tick, TICK_MS);
-    if (L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
     // sons pedidos enquanto o motor nascia (ex.: o clique do próprio toque)
     const pend = L.pend.splice(0);
     for (const nm of pend) api.sfx(nm);
-    setTimeout(() => { try { applyQuality(); } catch (err) { report(err, 'reverb'); } }, 0);
-    return L.E;
+  }
+  function musicReady() {
+    const E = L.E;
+    L.musicOk = true;
+    L.revWant = !LOWQ; L.revAt = E.ac.currentTime + 1.5;
+    for (const nm of BAKE_FIRST) bakedSfx(nm);
+    if (L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
+  }
+  function buildReverb() {
+    const E = L.E;
+    if (!E || LOWQ) return;
+    try { if (!E.rev) E.addReverb(); else E.setReverb(true); } catch (err) { report(err, 'reverb'); }
+  }
+
+  // ---- fila de pré-renderização ----
+  // entrada do banco para um SFX (null: ainda não existe; pede a renderização)
+  function bakedSfx(name, p) {
+    const n = BAKE_SFX[name];
+    if (!n || L.bakeOff) return null;
+    const key = p == null ? name : name + ':' + p;
+    const ent = L.bank[key];
+    if (ent) return ent;
+    if (!L.bqKeys[key]) wantBake({ key, n, run: (E, t, o) => SFX[name].fn(E, t, o, p) });
+    return null;
+  }
+  // entrada do banco para um golpe de bateria na velocidade nominal vn (lane × acento); a variação
+  // humana de ±6% de cada golpe continua no ganho do golpe (bakedHit)
+  function drumEntry(nm, c, vn) {
+    const vq = Math.round(vn * 100) / 100, key = '#' + nm + c + vq, ent = L.bank[key];
+    if (ent) return ent;
+    if (!L.bqKeys[key] && vq > 0) wantBake({ key, n: 1, v: vq, run: (E, t, o) => DRUM[nm](E, t, c, vq, o, 0.1) });
+    return null;
+  }
+  function bakedDrum(E, nm, c, vn, vr, t, dest) {
+    if (DRUM_SYNTH[nm] || L.bakeOff) return false;
+    const roll = c === 'r' && ROLL[nm];
+    if (roll) {
+      const a = drumEntry(nm, 'x', vn * roll[0]), b = drumEntry(nm, 'x', vn * roll[1]);
+      if (!a || !b) return false;
+      const sd = L.cur ? L.cur.sd : 0.11;
+      bakedHit(E, a, vn * roll[0] * vr, t, dest);
+      bakedHit(E, b, vn * roll[1] * vr, t + sd / 2, dest);
+      return true;
+    }
+    const ent = drumEntry(nm, c, vn);
+    if (!ent) return false;
+    bakedHit(E, ent, vn * vr, t, dest);
+    return true;
+  }
+  function bakedHit(E, ent, vel, t, dest) {
+    const g = E.nv(dest, vel / ent.v);
+    E.fin(playBaked(E, ent, t, g), g);
+  }
+  // todos os golpes que uma faixa pode tocar (pedidos quando ela começa)
+  function wantSongDrums(song) {
+    const C = compile(song);
+    for (const sn in C.secs) {
+      for (const D of C.secs[sn].dk) {
+        if (DRUM_SYNTH[D.nm]) continue;
+        const seen = {};
+        for (const c of (D.pat || '') + (D.fill || '')) {
+          if (c === '.' || c === '-' || seen[c]) continue;
+          seen[c] = 1;
+          const vn = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol, roll = c === 'r' && ROLL[D.nm];
+          if (roll) { drumEntry(D.nm, 'x', vn * roll[0]); drumEntry(D.nm, 'x', vn * roll[1]); } else drumEntry(D.nm, c, vn);
+        }
+      }
+    }
+  }
+  // golpes de faixas que não tocam há 20 s saem do banco (voltam a ser renderizados se preciso)
+  function evictDrums(now) {
+    for (const k in L.bank) {
+      const e = L.bank[k];
+      if (e.v && e.used < now - 20) { L.bakeKB -= e.kb; delete L.bank[k]; }
+    }
+  }
+  function wantBake(job) {
+    L.bqKeys[job.key] = 1;
+    L.bq.push(job);
+    if (!L.baking && !L.bakeT) L.bakeT = setTimeout(bakeStart, 250);
+  }
+  function bakeFail(err) {
+    L.bakeOff = true; L.baking = false; L.bq.length = 0; L.bqKeys = {};
+    report(err, 'bake');
+  }
+  // Um lote: ensaio sem nós (duração exata e osciladores usados) -> OfflineAudioContext do tamanho
+  // certo -> 1 tabela de onda por fatia -> nós em fatias de ~4 ms -> render (fora da thread
+  // principal) -> recorte em buffers, também em fatias.
+  function bakeStart() {
+    L.bakeT = 0;
+    const E = L.E;
+    if (!E || L.baking || L.bakeOff || !L.bq.length) return;
+    L.baking = true;
+    let parts, oac, B, types, k = 0, off = 0;
+    const jobs = L.bq.splice(0, 64), sr = E.ac.sampleRate;
+    try {
+      const D = Engine(dryCtx(sr), { bare: true, white: E.white, meter: true });
+      parts = [];
+      for (const j of jobs) {
+        for (let i = 0; i < j.n; i++) {
+          D.tEnd = 0;
+          FIX = (i + 0.5) / j.n;
+          try { j.run(D, 0, D.ac.destination); } finally { FIX = -1; }
+          // cada som começa num limite de bloco de 128 amostras: os parâmetros k-rate (frequência dos
+          // osciladores) são lidos no início do bloco, e um som começando no meio dele tocaria o resto
+          // do bloco no valor padrão (440 Hz)
+          const len = Math.ceil(D.tEnd * sr) + 128;
+          parts.push({ j, i, off, len });
+          off = Math.ceil((off + len + 128) / 128) * 128;
+        }
+      }
+      // o 1º oscilador de um contexto já monta a tabela do seno: ela vem sozinha, antes das outras
+      types = Object.keys(D.types).filter((ty) => ty !== 'sine').concat('sine');
+      oac = new OAC(1, off, sr);
+      B = Engine(oac, { bare: true, white: E.white });
+    } catch (err) { bakeFail(err); return; }
+    const next = (fn) => setTimeout(() => { try { fn(); } catch (err) { bakeFail(err); } }, 0);
+    const build = () => {
+      if (types.length) { B.warm(types.pop()); next(build); return; }
+      const t0 = performance.now();
+      while (k < parts.length && (performance.now() - t0 < 4 || k === 0)) {
+        const p = parts[k++];
+        FIX = (p.i + 0.5) / p.j.n;
+        try { p.j.run(B, p.off / sr, oac.destination); } finally { FIX = -1; }
+      }
+      if (k < parts.length) { next(build); return; }
+      let fin = false;
+      const done = (buf) => { if (fin) return; fin = true; k = 0; next(() => cut(buf)); };
+      oac.oncomplete = (e) => done(e.renderedBuffer);
+      const pr = oac.startRendering();
+      if (pr && pr.then) pr.then(done, (err) => { if (!fin) { fin = true; bakeFail(err); } });
+    };
+    const cut = (buf) => {
+      const data = buf.getChannelData(0), ac = L.E ? L.E.ac : null, t0 = performance.now();
+      if (!ac) { L.baking = false; return; }
+      while (k < parts.length && performance.now() - t0 < 4) {
+        const p = parts[k++], j = p.j, b = ac.createBuffer(1, p.len, sr), seg = data.subarray(p.off, p.off + p.len);
+        if (b.copyToChannel) b.copyToChannel(seg, 0); else b.getChannelData(0).set(seg);
+        (j.bufs || (j.bufs = [])).push(b);
+        if (j.bufs.length === j.n) {
+          const kb = (j.n * p.len * 4) / 1024;
+          L.bank[j.key] = { bufs: j.bufs, v: j.v || 0, used: ac.currentTime, kb };
+          L.bakeKB += kb;
+          delete L.bqKeys[j.key];
+        }
+      }
+      if (k < parts.length) { next(() => cut(buf)); return; }
+      L.baking = false;
+      if (L.bq.length && !L.bakeT) L.bakeT = setTimeout(bakeStart, 100);
+    };
+    next(build);
   }
   function fadeOut(tr, dur) {
     if (!tr || tr.stopping) return;
@@ -11161,10 +11764,11 @@ body.in-play #toasts { opacity: 0; }
   }
   function startTrack(name) {
     const E = L.E;
-    if (!E || !SONGS[name]) return;
+    if (!E || !SONGS[name] || !L.musicOk) return; // antes do "trilha pronta": fica em L.wanted
     const had = !!L.cur;
     if (L.cur) fadeOut(L.cur, XFADE);
     L.cur = E.track(name, E.ac.currentTime + 0.06, had ? XFADE : 0.05);
+    if (!L.bakeOff) { evictDrums(E.ac.currentTime); wantSongDrums(SONGS[name]); }
   }
   function applySettings(force) {
     const E = L.E;
@@ -11182,7 +11786,10 @@ body.in-play #toasts { opacity: 0; }
     const E = L.E;
     LOWQ = G.quality === 'low';
     if (!E) return;
-    if (!LOWQ) { if (!E.rev) E.addReverb(); else E.setReverb(true); } else E.setReverb(false);
+    // montar o convolver custa ~60 ms a 4× (FFT da resposta na thread principal): fica para o tick
+    // escolher a hora (≥ 1,5 s depois e de preferência fora do 'play')
+    if (!LOWQ) { if (!E.rev) { if (!L.revWant) { L.revWant = true; L.revAt = E.ac.currentTime + 1.5; } } else E.setReverb(true); }
+    else { L.revWant = false; E.setReverb(false); }
   }
   // chefão nos últimos 34% de vida = trilha no clímax (camadas extras)
   function bossCritical() {
@@ -11214,6 +11821,7 @@ body.in-play #toasts { opacity: 0; }
         E.duckG.gain.setTargetAtTime(duck ? 0.5 : 1, now, 0.08);
       }
       if (ac.state !== 'running') return;
+      if (L.revWant && now >= L.revAt && (G.state !== 'play' || now >= L.revAt + 4.5)) { L.revWant = false; setTimeout(buildReverb, 0); }
       // chefão entrando/falando com a música parada: toca o "suspense" (vira a trilha do chefão no começo da luta)
       if (!L.cur && !L.wanted && L.mOn) {
         const b = G.game && G.game.boss;
@@ -11258,7 +11866,7 @@ body.in-play #toasts { opacity: 0; }
       if (!AC) return;
       const ac = ensureCtx();
       if (!ac) return;
-      if (!L.E && !L.building) { L.building = true; setTimeout(() => { try { buildEngine(); } catch (err) { L.building = false; report(err, 'engine'); } }, 0); }
+      if (!L.E && !L.building) { L.building = true; setTimeout(bootStep, 0, 0); }
       if (ac.state !== 'running' || L.first) {
         L.first = false;
         if (!(typeof document !== 'undefined' && document.hidden)) {
@@ -11308,6 +11916,7 @@ body.in-play #toasts { opacity: 0; }
         voices: E ? E.voices.length : 0, musicVoices: E ? E.mv : 0, reverb: !!(E && E.rev && E.rev.on), low: LOWQ,
         music: musicOn(), sfx: sfxOn(), climax: !!(L.cur && L.cur.hi), ducked: L.duck,
         time: E ? +E.ac.currentTime.toFixed(2) : 0,
+        baked: Object.keys(L.bank).length, bakeKB: Math.round(L.bakeKB), bakeQueue: L.bq.length, bakeOff: L.bakeOff, noise: L.noise || null,
       };
     },
     names: { sfx: Object.keys(SFX), music: Object.keys(SONGS) },
@@ -11317,6 +11926,9 @@ body.in-play #toasts { opacity: 0; }
     _songs: SONGS,
     _inst: INST,
     _drum: DRUM,
+    _sfx: SFX,
+    _bank: () => L.bank,
+    _fix(v) { FIX = v; }, // fixa o sorteio (comparar sintetizado x pré-renderizado)
     _ctxSuspendForTest() { if (L.E) L.E.ac.suspend(); },
   };
   G.Audio = Object.assign(G.Audio || {}, api);
@@ -11563,16 +12175,40 @@ body.in-play #toasts { opacity: 0; }
     motoqueiro: ['MOTOCIATA', 'passa jogando tiro pra baixo'],
     drone: ['DRONE DO GABINETE', 'piscou vermelho? Saia da mira'],
   };
-  function introduce(e) {
+  // Uma etiqueta por vez: várias espécies novas entrando juntas (fases 3 e 4 pelo menu) se
+  // cobriam umas às outras. A espécie que ficou na fila se apresenta num inimigo dela que ainda
+  // esteja no alto da tela assim que a etiqueta atual some, ou no próximo que entrar.
+  const TAG_DUR = 3.4;
+  function tagBusy(g) {
+    const o = g && g._tagE;
+    if (!o) return false;
+    if (!o.dead && o.data && o.data.tag && o.data.tagT <= TAG_DUR && g.t < g._tagMax) return true;
+    g._tagE = null; // morreu, saiu da tela ou a etiqueta acabou
+    return false;
+  }
+  function introduce(e, g) {
     const run = G.run, info = INTRO[e.kind];
+    e.data.tagWait = false;
     if (!info || !run || run.loop > 1) return;
     const seen = run._enSeen || (run._enSeen = {});
     if (seen[e.kind]) return;
+    g = g || G.game;
+    if (tagBusy(g)) { e.data.tagWait = true; return; }
     seen[e.kind] = 1;
     e.data.tag = info; e.data.tagT = 0;
+    if (g) { g._tagE = e; g._tagMax = g.t + TAG_DUR + 3; } // teto: a etiqueta só conta tempo depois de y > 26
+  }
+  // último inimigo (vivo, com a moldura deste arquivo) desenhado no quadro: calculado uma vez por quadro
+  function lastDrawn(g) {
+    if (g._tagFrame !== g.frame || !g._tagLast || g._tagLast.dead) {
+      g._tagFrame = g.frame; g._tagLast = null;
+      const l = g.enemies;
+      for (let i = l.length - 1; i >= 0; i--) { const e = l[i]; if (!e.dead && e.def && e.def.__tagDraw) { g._tagLast = e; break; } }
+    }
+    return g._tagLast;
   }
   function drawTag(ctx, e) {
-    const d = e.data, T = d.tagT || 0, DUR = 3.4;
+    const d = e.data, T = d.tagT || 0, DUR = TAG_DUR;
     if (!d.tag || T <= 0 || T > DUR) return;
     const a = Math.min(1, T / 0.25, (DUR - T) / 0.4);
     ctx.save();
@@ -11648,12 +12284,13 @@ body.in-play #toasts { opacity: 0; }
       if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * (g.stageIdx || 0); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
-      introduce(e);
+      introduce(e, g);
       syncCarrierDrop(e, g);
     };
     def.update = function (e, dt, g) {
       if (update) update.call(this, e, dt, g); else { e.x += e.vx * dt; e.y += e.vy * dt; }
       if (e.data.tag && e.y > 26) e.data.tagT += dt;
+      else if (e.data.tagWait && e.y > 26 && e.y < G.H * 0.5 && e.t < 8) introduce(e, g); // na fila: a etiqueta da vez acabou?
       if (e.drop || e.dropW) syncCarrierDrop(e, g);
     };
     def.draw = function (ctx, e, g) {
@@ -11663,8 +12300,11 @@ body.in-play #toasts { opacity: 0; }
       if (draw) draw.call(this, ctx, e, g);
       ctx.restore();
       if (ct) drawCarrierBadge(ctx, e, g, ct);
-      if (e.data.tag) drawTag(ctx, e);
+      // a etiqueta sai por cima de todos os inimigos (por baixo dos tiros, que o core desenha depois):
+      // quem a desenha é o último inimigo vivo da lista neste quadro
+      if (g && g._tagE && e === lastDrawn(g)) { const o = g._tagE; if (!o.dead && o.data.tag) drawTag(ctx, o); }
     };
+    def.__tagDraw = true;
     G.Enemies.define(kind, def);
   }
 
@@ -14640,38 +15280,109 @@ body.in-play #toasts { opacity: 0; }
   // ---------- sprites na resolução do aparelho (desempenho) ----------
   // Desenhos vetoriais caros e quase fixos (o corpo do Centrão, a maleta) vão para canvas fora da tela e são
   // reaproveitados. Só no canvas do jogo e na escala 1 (o retrato do diálogo continua vetorial).
-  const sprCache = new Map();
+  // Pintar um sprite grande no mesmo quadro em que ele é usado custa caro (o navegador rasteriza tudo na hora:
+  // 15-45 ms com a CPU 4× mais lenta). Por isso eles são pintados ANTES, numa fila (sprWant), em fatias: uma
+  // fatia (paint) por quadro, e o navegador rasteriza cada fatia no fim do próprio quadro.
+  const sprCache = new Map();   // chave → canvas pronto (cv._res = resolução em que foi pintado)
+  const sprStale = new Map();   // pintados na resolução anterior: desenhados escalados até a fila repintar
+  const sprRecipe = new Map();  // chave → { box, steps() } (receita, para repintar na troca de resolução)
+  const sprQ = [];              // fila: { key, box, steps: [fn(x)], i, cv, x, res }
   let sprRes = 0;
   function devRes() { return G.canvas && G.ctx ? G.canvas.width / G.W : 0; }
   function fontKey() { return document.fonts ? document.fonts.status : ''; } // refaz o texto quando a fonte chegar
-  // sprGet: só consulta (sem alocar nada por quadro); sprite: cria. box = [x, y, w, h] em unidades locais.
-  function sprGet(key) {
+  // troca de qualidade (resolução): os prontos viram "velhos" e voltam para a fila, na ordem em que estavam
+  function sprCheckRes() {
     const res = devRes();
-    if (res !== sprRes) { sprCache.clear(); sprRes = res; }
-    return sprCache.get(key) || null;
+    if (res === sprRes) return res;
+    const redo = [];
+    for (const [k, cv] of sprCache) { if (cv._res > 0) sprStale.set(k, cv); redo.push(k); }
+    for (const j of sprQ) redo.push(j.key);
+    sprCache.clear(); sprQ.length = 0; sprRes = res;
+    if (res > 0) for (const k of redo) { const r = sprRecipe.get(k); if (r) sprQ.push(sprJob(k, r.box, r.steps)); }
+    return res;
   }
-  function sprite(key, box, paint) {
-    const res = devRes();
-    if (!(res > 0)) return null;
-    if (res !== sprRes) { sprCache.clear(); sprRes = res; }
-    let cv = sprCache.get(key);
-    if (cv) return cv;
-    if (sprCache.size >= 24) sprCache.clear();
-    cv = document.createElement('canvas');
-    cv.width = Math.max(1, Math.ceil(box[2] * res)); cv.height = Math.max(1, Math.ceil(box[3] * res));
-    const x = cv.getContext('2d');
-    if (!x) return null;
-    x.setTransform(res, 0, 0, res, -box[0] * res, -box[1] * res);
-    x.lineJoin = 'round'; x.lineCap = 'round';
-    try { paint(x); } catch (err) { G.reportError(err, 'bosses sprite ' + key); }
+  function sprReset() { sprCache.clear(); sprStale.clear(); sprRecipe.clear(); sprQ.length = 0; sprRes = devRes(); }
+  function sprJob(key, box, steps) { return { key, box, steps: steps(), i: 0, cv: null, x: null, res: 0 }; }
+  // pinta a próxima fatia de um trabalho; true = terminou (entra no cache)
+  function sprStepJob(j) {
+    const res = sprRes;
+    if (!j.cv || j.res !== res) {
+      j.res = res; j.i = 0;
+      j.cv = document.createElement('canvas');
+      j.cv.width = Math.max(1, Math.ceil(j.box[2] * res)); j.cv.height = Math.max(1, Math.ceil(j.box[3] * res));
+      j.x = j.cv.getContext('2d');
+      if (!j.x) { j.i = j.steps.length; return true; }
+      j.x.setTransform(res, 0, 0, res, -j.box[0] * res, -j.box[1] * res);
+      j.x.lineJoin = 'round'; j.x.lineCap = 'round';
+    }
+    const x = j.x;
+    if (x) {
+      x.save();
+      try { j.steps[j.i](x); } catch (err) { G.reportError(err, 'bosses sprite ' + j.key); }
+      x.restore();
+    }
+    j.i++;
+    if (j.i < j.steps.length) return false;
+    if (x) sprPut(j.key, j.cv);
+    return true;
+  }
+  function sprPut(key, cv) {
+    if (sprCache.size >= 32) sprCache.delete(sprCache.keys().next().value); // rede de segurança (o mais antigo)
+    cv._res = sprRes;
     sprCache.set(key, cv);
-    return cv;
+    const old = sprStale.get(key);
+    if (old) { sprStale.delete(key); old.width = old.height = 1; }
+  }
+  // pede um sprite para logo (sem pintar agora). steps() devolve as fatias: [fn(ctx), ...]
+  function sprWant(key, box, steps) {
+    if (!sprRecipe.has(key)) sprRecipe.set(key, { box, steps });
+    if (sprCheckRes() > 0 && !sprCache.has(key) && !sprQ.some((j) => j.key === key)) sprQ.push(sprJob(key, box, steps));
+  }
+  // uma fatia da fila (chamado no máximo uma vez por quadro). true = ainda tem trabalho
+  function sprStep() {
+    if (!sprQ.length || !(sprCheckRes() > 0)) return false;
+    if (sprStepJob(sprQ[0])) sprQ.shift();
+    return sprQ.length > 0;
+  }
+  // descarta sprites (pronto, velho, na fila e receita) cuja chave satisfaz drop(key)
+  function sprDrop(drop) {
+    for (const k of Array.from(sprCache.keys())) if (drop(k)) sprCache.delete(k);
+    for (const k of Array.from(sprStale.keys())) if (drop(k)) { sprStale.get(k).width = 1; sprStale.delete(k); }
+    for (const k of Array.from(sprRecipe.keys())) if (drop(k)) sprRecipe.delete(k);
+    for (let i = sprQ.length - 1; i >= 0; i--) if (drop(sprQ[i].key)) sprQ.splice(i, 1);
+  }
+  // sprGet: só consulta (sem alocar nada por quadro). Um sprite da resolução anterior serve até sair o novo.
+  function sprGet(key) {
+    sprCheckRes();
+    const cv = sprCache.get(key);
+    if (cv) return cv;
+    const old = sprStale.get(key);
+    if (!old) return null;
+    if (!old._rq) { // o que está na tela é repintado primeiro
+      old._rq = 1;
+      const k = sprQ.findIndex((j) => j.key === key);
+      if (k > 0) { const j = sprQ.splice(k, 1)[0]; sprQ.splice(sprQ[0].i > 0 ? 1 : 0, 0, j); }
+    }
+    return old;
+  }
+  // precisa AGORA: termina o trabalho da fila (ou pinta tudo de uma vez, como antes). paint = fn(ctx) ou steps()
+  function sprite(key, box, paint, steps) {
+    const res = sprCheckRes();
+    if (!(res > 0)) return null;
+    const cv = sprCache.get(key);
+    if (cv) return cv;
+    if (steps && !sprRecipe.has(key)) sprRecipe.set(key, { box, steps });
+    let k = sprQ.findIndex((j) => j.key === key);
+    const j = k >= 0 ? sprQ[k] : sprJob(key, box, steps || (() => [paint]));
+    while (!sprStepJob(j));
+    if (k >= 0) sprQ.splice(k, 1);
+    return sprCache.get(key) || null;
   }
   // Cola um sprite feito por sprite() no lugar do box. exact = a transformação atual não tem escala (só ±1):
   // copia pixel a pixel, alinhado à grade do aparelho e sem suavização (bem mais barato na CPU; idêntico na tela).
   function blitExact(c, spr, box, exact) {
     if (exact && c.getTransform) {
-      const m = c.getTransform(), res = sprRes;
+      const m = c.getTransform(), res = spr._res || sprRes;
       if (m.b === 0 && m.c === 0 && Math.abs(Math.abs(m.a) - res) < 0.02 && Math.abs(m.d - res) < 0.02) {
         c.save();
         c.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
@@ -14684,10 +15395,14 @@ body.in-play #toasts { opacity: 0; }
     c.drawImage(spr, box[0], box[1], box[2], box[3]);
   }
   // maleta (desenho compartilhado: na mão e sub-inimigo)
+  function caseKey(w, fl, label) { return 'case|' + w + '|' + (fl ? 1 : 0) + '|' + (label || '') + '|' + fontKey(); }
+  function caseSteps(w, fl, label) { return () => [(x2) => briefcaseVec(x2, 0, 0, w, 0, fl, label)]; }
+  function caseBox(w) { const B = w * 0.7 + 2; return [-B, -B, 2 * B, 2 * B]; }
+  function caseWant(w, label) { for (const fl of [false, true]) sprWant(caseKey(w, fl, label), caseBox(w), caseSteps(w, fl, label)); }
   function briefcase(c, x, y, w, rot, fl, label) {
     if (c === G.ctx) {
-      const B = w * 0.7 + 2, key = 'case|' + w + '|' + (fl ? 1 : 0) + '|' + (label || '') + '|' + fontKey();
-      const spr = sprGet(key) || sprite(key, [-B, -B, 2 * B, 2 * B], (x2) => briefcaseVec(x2, 0, 0, w, 0, fl, label));
+      const B = w * 0.7 + 2, key = caseKey(w, fl, label);
+      const spr = sprGet(key) || sprite(key, caseBox(w), null, caseSteps(w, fl, label));
       if (spr) { c.save(); c.translate(x, y); if (rot) c.rotate(rot); c.drawImage(spr, -B, -B, 2 * B, 2 * B); c.restore(); return; }
     }
     briefcaseVec(c, x, y, w, rot, fl, label);
@@ -14728,14 +15443,18 @@ body.in-play #toasts { opacity: 0; }
   // (só no desenho vetorial: o retrato do diálogo). Área ocupada: CEN_BOX.
   const CEN_BOX = [-86, -56, 172, 126];
   const NO_WOB = () => 1;
-  function cenBody(c, sd, fl, hp, t, wobble, banner) {
+  // p0..p1 (para pintar o sprite em fatias; sem eles, tudo): 0 contorno, 1-6 calombos, 7 rasgos e faixa
+  function cenBody(c, sd, fl, hp, t, wobble, banner, p0, p1) {
+    if (p0 == null) { p0 = 0; p1 = 7; }
     const C = (col) => (fl ? WHITE : col);
     const wob = wobble ? (i, a) => 1 + 0.035 * Math.sin(t * 2.4 + i * 1.9 + a) : NO_WOB;
     // corpo: contorno único por fora + calombos
-    c.beginPath();
-    for (let i = 0; i < CEN_LUMPS.length; i++) { const L = CEN_LUMPS[i]; E(c, L[0], L[1], L[2] * wob(i, 0), L[3] * wob(i, 1.3)); }
-    c.lineWidth = 6; c.strokeStyle = INK; c.stroke();
-    for (let i = 0; i < CEN_LUMPS.length; i++) {
+    if (p0 <= 0) {
+      c.beginPath();
+      for (let i = 0; i < CEN_LUMPS.length; i++) { const L = CEN_LUMPS[i]; E(c, L[0], L[1], L[2] * wob(i, 0), L[3] * wob(i, 1.3)); }
+      c.lineWidth = 6; c.strokeStyle = INK; c.stroke();
+    }
+    for (let i = Math.max(0, p0 - 1), n = Math.min(CEN_LUMPS.length, p1); i < n; i++) {
       const L = CEN_LUMPS[i], rx = L[2] * wob(i, 0), ry = L[3] * wob(i, 1.3);
       c.beginPath(); E(c, L[0], L[1], rx, ry);
       c.fillStyle = C(L[4]); c.fill();
@@ -14747,6 +15466,7 @@ body.in-play #toasts { opacity: 0; }
       c.lineWidth = 1.6; c.strokeStyle = 'rgba(16,20,24,0.4)'; c.beginPath(); E(c, L[0], L[1], rx, ry); c.stroke();
       if (i < 5) cenTorso(c, L, i, sd, hp);
     }
+    if (p1 < 7) return;
     // rasgos (dano)
     if (!fl && hp < 0.45) { rip(c, -55, 22, 16, 5, 0.5); rip(c, 52, 28, 14, 4.5, -0.4); }
     if (!fl && hp < 0.25) { rip(c, -20, 46, 13, 4, 0.1); rip(c, 30, 4, 10, 3.5, 1.2); }
@@ -14760,13 +15480,25 @@ body.in-play #toasts { opacity: 0; }
     }
   }
   // sprite do corpo + parte fixa do rosto: muda só com o lado, o estado de dano, o letreiro e o flash
-  function cenBodySprite(side, fl, hpSt, banner) {
-    const key = fl ? 'cenF' : 'cen|' + side + '|' + hpSt + '|' + banner + '|' + fontKey();
-    return sprGet(key) || sprite(key, CEN_BOX, (x) => {
-      cenBody(x, SIDE[side], fl, hpSt === 2 ? 0.2 : hpSt === 1 ? 0.4 : 1, 0, false, banner);
-      cenFaceBase(x, fl);
-    });
+  const HP_ST = [1, 0.4, 0.2]; // hp usado no desenho de cada estado de dano (ver hpSt em drawCentrao)
+  function cenBodyKey(side, fl, hpSt, banner) { return fl ? 'cenF' : 'cen|' + side + '|' + hpSt + '|' + banner + '|' + fontKey(); }
+  // as fatias do corpo (5, uma por quadro na fila); o flash é barato (sem sombras nem detalhes): uma só
+  function cenBodySteps(side, fl, hpSt, banner) {
+    const sd = SIDE[side], hp = HP_ST[hpSt];
+    if (fl) return () => [(x) => { cenBody(x, sd, true, 1, 0, false, ''); cenFaceBase(x, true); }];
+    return () => [
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 0, 3),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 4, 5),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 6, 6),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 7, 7),
+      (x) => cenFaceBase(x, false),
+    ];
   }
+  function cenBodySprite(side, fl, hpSt, banner) {
+    const key = cenBodyKey(side, fl, hpSt, banner);
+    return sprGet(key) || sprite(key, CEN_BOX, null, cenBodySteps(side, fl, hpSt, banner));
+  }
+  function cenBodyWant(side, fl, hpSt, banner) { sprWant(cenBodyKey(side, fl, hpSt, banner), CEN_BOX, cenBodySteps(side, fl, hpSt, banner)); }
 
   // sapatinhos (muitos pés), braços com maleta e bandeira
   function cenShoes(c, t, fl) {
@@ -14789,21 +15521,26 @@ body.in-play #toasts { opacity: 0; }
     sideFlag(c, hRx - 2, hRy, sd, t, fl);
   }
   // O REFLEXO (fase 2) é translúcido e não leva dano: pés, corpo, rosto (sorrisinho olhando pra frente), braços em
-  // repouso e bandeira ficam todos num sprite só. As cabecinhas continuam ao vivo (elas avisam os tiros dele).
+  // repouso e bandeira ficam todos num sprite só. As cabecinhas e a maleta (com a mão por cima) são ao vivo.
   const GH_BOX = [-104, -58, 216, 130];
-  const GH_FACE = { t: 0, mood: 'smug', mouth: 0, look: [0, 0.25], hp: 1, armL: 0, armR: 0, holdCase: true };
-  function cenGhostSprite(side, hpSt, banner, holdCase) {
-    const key = 'cenG|' + side + '|' + hpSt + '|' + banner + '|' + (holdCase ? 1 : 0) + '|' + fontKey();
-    return sprGet(key) || sprite(key, GH_BOX, (x) => {
-      const sd = SIDE[side];
-      cenShoes(x, 0, false);
-      cenBody(x, sd, false, hpSt === 2 ? 0.2 : hpSt === 1 ? 0.4 : 1, 0, false, banner);
-      cenFaceBase(x, false);
-      GH_FACE.hp = hpSt ? 0.5 : 1; GH_FACE.holdCase = holdCase;
-      cenFaceLive(x, GH_FACE, false);
-      cenArms(x, GH_FACE, sd, false, 0);
-    });
+  const GH_FACE = { t: 0, mood: 'smug', mouth: 0, look: [0, 0.25], hp: 1, armL: 0, armR: 0, holdCase: false };
+  function cenGhostKey(side, hpSt, banner) { return 'cenG|' + side + '|' + hpSt + '|' + banner + '|' + fontKey(); }
+  function cenGhostSteps(side, hpSt, banner) {
+    const sd = SIDE[side], hp = HP_ST[hpSt];
+    return () => [
+      (x) => { cenShoes(x, 0, false); cenBody(x, sd, false, hp, 0, false, banner, 0, 3); },
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 4, 5),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 6, 6),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 7, 7),
+      (x) => { cenFaceBase(x, false); GH_FACE.hp = hpSt ? 0.5 : 1; cenFaceLive(x, GH_FACE, false); },
+      (x) => cenArms(x, GH_FACE, sd, false, 0),
+    ];
   }
+  function cenGhostSprite(side, hpSt, banner) {
+    const key = cenGhostKey(side, hpSt, banner);
+    return sprGet(key) || sprite(key, GH_BOX, null, cenGhostSteps(side, hpSt, banner));
+  }
+  function cenGhostWant(side, hpSt, banner) { sprWant(cenGhostKey(side, hpSt, banner), GH_BOX, cenGhostSteps(side, hpSt, banner)); }
 
   /**
    * Desenha o Centrão. k = escala (1 = jogo). S = estado visual:
@@ -14828,11 +15565,16 @@ body.in-play #toasts { opacity: 0; }
     if (!S.ghost && !S.noShadow) { c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(0, 68, 66, 9, 0, 0, TAU); c.fill(); }
     const hpSt = hp < 0.25 ? 2 : hp < 0.45 ? 1 : 0;
     const exact = sq === 0 && (fx === 1 || fx === -1);
-    const ghostSpr = game && S.ghost && !S.orbit && !fl ? cenGhostSprite(side, hpSt, banner, !!S.holdCase) : null;
+    const ghostSpr = game && S.ghost && !S.orbit && !fl ? cenGhostSprite(side, hpSt, banner) : null;
     if (!ghostSpr) cenShoes(c, t, fl);
     // cabecinhas atrás do corpo
     if (!S.orbit) for (let i = 0; i < 8; i++) { const pop = S.pops ? S.pops[i] : 0.5; if (pop < 0.06) continue; const p = cenSlot(i, pop); cenHead(c, p[0], p[1], i, S, fl); }
-    if (ghostSpr) { blitExact(c, ghostSpr, GH_BOX, exact); c.restore(); return; }
+    if (ghostSpr) {
+      blitExact(c, ghostSpr, GH_BOX, exact);
+      // maleta na mão esquerda (braço em repouso: mão em -86, 34), com a mão por cima, como em cenArms
+      if (S.holdCase) { briefcase(c, -88, 43, 22, -0.15, false, 'EMENDA'); c.beginPath(); O(c, -86, 34, 6.2); inked(c, CEN_SKIN, 2); }
+      c.restore(); return;
+    }
     // corpo + rosto
     const spr = game ? cenBodySprite(side, fl, hpSt, banner) : null;
     if (spr) {
@@ -15152,7 +15894,7 @@ body.in-play #toasts { opacity: 0; }
     // vira o casaco
     yield* tween(b, 0.8, (u) => { d.flipX = Math.max(0.07, Math.abs(Math.cos(u * TAU))); if (u > 0.25 && d.side === 0) { d.side = 1; G.burst(b.x, b.y, 16, { colors: [SIDE[1].main, SIDE[1].acc], speed: 200 }); } });
     d.flipX = 1;
-    d.ghost = { x: G.W - b.x, y: b.y, a: 0 };
+    d.ghost = { x: G.W - b.x, y: b.y, a: 0 }; d.ghostBanner = d.banner;
     hint('reflexo', G.W / 2, G.H * 0.45, 'O REFLEXO NÃO LEVA DANO!', '#ffffff');
     yield* cenSwap(b, true);
     for (;;) {
@@ -15183,8 +15925,7 @@ body.in-play #toasts { opacity: 0; }
       b.x = M.lerp(x0, b.homeX, e); b.y = M.lerp(b.y, b.homeY, 0.2);
       if (d.ghost) { d.ghost.x = M.lerp(gx0, b.homeX, e); d.ghost.a = 1 - u; }
     });
-    d.ghost = null;
-    if (d.side !== 0 && Math.random() < 0.5) d.side = 0;
+    d.ghost = null; cenEvict(b); // (a cor do 3º turno já veio no onPhase: d.p3Side)
     say(b, 'VEM PRA BASE, PESSOAL!', 2.2);
     d.mv = cenSway; d.depOn = true; d.depT = 0.6;
     yield 1.2;
@@ -15232,6 +15973,43 @@ body.in-play #toasts { opacity: 0; }
     }
   }
 
+  // ---------- sprites do Centrão: o que cada turno vai usar, pintado ANTES (fila, uma fatia por quadro) ----------
+  const CEN_BAN = ['TOMA LÁ DÁ CÁ', 'SOMOS GOVERNO', 'BALCÃO ABERTO', 'BASE ALIADA']; // letreiro de cada turno
+  function cenHpSt(hp) { return hp < 0.25 ? 2 : hp < 0.45 ? 1 : 0; } // igual ao drawCentrao
+  function cenPlan(b) {
+    const d = b.data, ph = b.state === 'fight' ? b.phase : 0, hp = b.hp / b.maxHp, s3 = d.p3Side;
+    if (ph === 0) {
+      cenBodyWant(0, true, 0, ''); caseWant(22, 'EMENDA'); cenBodyWant(0, false, 0, CEN_BAN[0]); caseWant(24, 'EMENDA');
+      // começo do 2º turno: vira o casaco (lado 1), o reflexo aparece (lado 0) e a 1ª troca de lado
+      cenBodyWant(1, false, 0, CEN_BAN[1]); cenGhostWant(0, 0, CEN_BAN[1]); cenBodyWant(0, false, 0, CEN_BAN[1]); cenGhostWant(1, 0, CEN_BAN[1]);
+    } else if (ph === 1) {
+      for (let st = cenHpSt(hp); st <= 1; st++) for (let sd = 0; sd < 2; sd++) { cenBodyWant(sd, false, st, CEN_BAN[1]); cenGhostWant(sd, st, CEN_BAN[1]); }
+      if (hp < 0.5) cenBodyWant(s3, false, 1, CEN_BAN[2]);
+    } else if (ph === 2) {
+      if (d.ghost) cenGhostWant(s3 ^ 1, cenHpSt(hp), d.ghostBanner); // o reflexo voltando para o corpo
+      cenBodyWant(s3, false, cenHpSt(hp), CEN_BAN[2]);
+      if (hp < 0.34) cenBodyWant(s3, false, 2, CEN_BAN[2]);
+      if (hp < 0.2) cenBodyWant(s3, false, 2, CEN_BAN[3]);
+    } else cenBodyWant(s3, false, 2, CEN_BAN[3]);
+  }
+  // libera a memória do turno que passou: corpos com o letreiro de agora e do próximo; reflexo só enquanto existe
+  function cenEvict(b) {
+    const d = b.data, ph = b.phase;
+    sprDrop((k) => {
+      const p = k.split('|'), bi = CEN_BAN.indexOf(p[3]);
+      if (p[0] === 'cen') return bi < ph || bi > ph + 1;
+      if (p[0] === 'cenG') return ph > 1 && !d.ghost;
+      return false;
+    });
+  }
+  // durante o "ALERTA!" o core não chama nada do chefão: a fila anda por um timer (uma fatia a cada ~2 quadros)
+  function sprWarm(b) {
+    const tick = () => { const g = G.game; if (g && g.boss === b && b.state === 'warning' && sprStep()) setTimeout(tick, 30); };
+    setTimeout(tick, 30);
+  }
+  // uma fatia por quadro (chamado no draw do chefão), fora dos quadros cheios de balas
+  function sprPump(b, g) { if (sprQ.length && (b.state !== 'fight' || b.invulnT > 0 || g.eb.length < 120)) sprStep(); }
+
   const CEN_HB = [[0, -6, 46], [-46, 16, 28], [46, 16, 28], [0, 38, 30]];
   // todo (estilo, cor) que o Centrão atira (o reflexo usa violeta; as emendas estouram em laranja/violeta)
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold], ['bs_cedula', COL.orange], ['bs_cedula', COL.violet]];
@@ -15247,7 +16025,6 @@ body.in-play #toasts { opacity: 0; }
     ],
     init(b) {
       const d = b.data;
-      sprCache.clear();
       d.fx = []; d.side = 0; d.flipX = 1; d.nHeads = 6;
       d.pops = [0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0]; d.popT = d.pops.slice(); d.hold = [0, 0, 0, 0, 0, 0, 0, 0];
       d.hmood = ['smug', 'smug', 'smug', 'smug', 'smug', 'smug', 'smug', 'smug']; d.warn = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -15255,9 +16032,12 @@ body.in-play #toasts { opacity: 0; }
       d.holdCase = true; d.caseT = 0; d.tx = b.homeX; d.ty = b.homeY;
       d.ghost = null; d.orbit = null; d.banner = 'TOMA LÁ DÁ CÁ'; d.swapWarn = 0;
       d.depOn = false; d.depT = 0; d.depSide = 1;
-      d.S = {}; d.GS = {};
+      d.S = {}; d.GS = {}; d.ghostBanner = null; d.planT = 0;
+      d.p3Side = Math.random() < 0.75 ? 0 : 1; // cor do 3º turno em diante (decidida já: os sprites saem antes)
       b.bubbleY = 72;
       b.hitboxes = CEN_HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      // sprites do 1º turno e do começo do 2º: pintados durante o aviso e a entrada
+      sprReset(); cenPlan(b); sprWarm(b);
       // cabecinhas da 1ª fase (sorrisinho) e os tiros de todas as fases
       warmPeople(b, 'heads', CEN_HEADS.map((spec) => ({ spec, size: 34, mood: 'smug' })));
       warmShots(b, CEN_SHOTS);
@@ -15276,6 +16056,7 @@ body.in-play #toasts { opacity: 0; }
       fatigue(b, 'CANSEI DE APANHAR!');
       if (d.mv) { d.mv(b, d, dt); glide(b, dt, 2.6); }
       cenAnim(b, dt);
+      if ((d.planT -= dt) <= 0) { d.planT = 0.4; cenPlan(b); }
       // deputadinhos (fase 3)
       if (d.depOn) {
         d.depT -= dt;
@@ -15298,8 +16079,11 @@ body.in-play #toasts { opacity: 0; }
     },
     onPhase(b, idx) {
       const d = b.data;
-      sprCache.clear(); // letreiro novo: os sprites da fase anterior não servem mais (memória do celular)
-      cenBodySprite(0, true, 0, ''); // flash de novo já (no quadro da troca, que tem hitstop)
+      // letreiro novo já no 1º quadro do turno; libera os sprites do turno que passou e pede os que faltam
+      d.banner = CEN_BAN[idx] || d.banner;
+      if (idx === 2) d.side = d.p3Side;
+      if (idx === 3) d.ghost = null;
+      cenEvict(b); cenPlan(b); d.planT = 0.4;
       // próximas fases: cabecinhas suadas (HP < 66%) e os deputadinhos do apoio (fase 3, de gravata vermelha ou verde)
       if (idx === 1) {
         warmPeople(b, 'headsSw', CEN_HEADS_SW.map((spec) => ({ spec, size: 34, mood: 'smug' })));
@@ -15309,7 +16093,7 @@ body.in-play #toasts { opacity: 0; }
       d.armLT = 0; d.armRT = 0; d.flipX = 1; d.swapWarn = 0;
       if (idx === 1) { co(b, cenP2(b)); co(b, cenBg(b, 1.9), 1); }
       else if (idx === 2) { co(b, cenP3(b)); co(b, cenBg(b, 1.3), 1); }
-      else if (idx === 3) { d.ghost = null; d.flipX = 1; co(b, cenP4(b)); co(b, null, 1); }
+      else if (idx === 3) { d.flipX = 1; co(b, cenP4(b)); co(b, null, 1); }
     },
     onHit(b) { b.data.sq = Math.max(b.data.sq, 0.02); },
     // chamado pelo deputadinho quando chega
@@ -15329,9 +16113,12 @@ body.in-play #toasts { opacity: 0; }
       const d = b.data;
       stopCo(b); d.depOn = false; d.ghost = null; d.fx.length = 0;
       if (d.orbit) d.orbit.w = 0;
+      // na queda e na fuga só aparece o corpo com o letreiro de agora (e o flash): o resto da memória já volta
+      sprDrop((k) => !(k === 'cenF' || k.startsWith('case|') || (k.startsWith('cen|') && k.split('|')[3] === d.banner)));
     },
     draw(ctx, b, g) {
       const d = b.data;
+      sprPump(b, g);
       bubbleAt(b, 72);
       drawFx(ctx, b, 'under');
       const S = d.S, hpF = b.hp / b.maxHp;
@@ -15346,7 +16133,7 @@ body.in-play #toasts { opacity: 0; }
       if (d.ghost && d.ghost.a > 0.02 && b.state === 'fight') {
         const GS = d.GS;
         Object.assign(GS, S);
-        GS.flash = false; GS.side = d.side ^ 1; GS.ghost = true; GS.alpha = 0.4 * d.ghost.a; GS.flipX = -S.flipX; GS.look = lookAt(d.ghost.x, d.ghost.y);
+        GS.flash = false; GS.side = d.side ^ 1; GS.ghost = true; GS.banner = d.ghostBanner || S.banner; GS.alpha = 0.4 * d.ghost.a; GS.flipX = -S.flipX; GS.look = lookAt(d.ghost.x, d.ghost.y);
         drawCentrao(ctx, d.ghost.x, d.ghost.y, 1, GS);
       }
       if (b.state === 'leaving') balloons(ctx, b.x, b.y, b.t, Math.min(1, b.t / 0.6));
@@ -15669,14 +16456,15 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data;
     for (;;) {
       yield every * M.rand(0.85, 1.15);
-      const side = Math.random() < 0.5 ? 0 : 1;
+      let side = Math.random() < 0.5 ? 0 : 1;
+      if (d.jarT[side] > 0.6) side ^= 1; // o pote da rajada já está aberto: usa o outro
       d.jarT[side] = 0.6;
       yield 0.32;
       const jx = b.x + (side ? 66 : -66), jy = b.y + 16;
       fan(jx, jy, aimFrom(jx, jy), 3, 0.32, 120, { style: 'bs_vento', color: COL.magenta });
       sfx('enemy_shot');
       yield 0.3;
-      d.jarT[side] = 0;
+      if (d.jarT[side] === 0.6) d.jarT[side] = 0;
     }
   }
   // fase 3: sementinhas miradas da mão
@@ -15857,7 +16645,7 @@ body.in-play #toasts { opacity: 0; }
     d.jarGlow = true;
     say(b, 'EU ESTOQUEI O VENTO!', 2.2);
     d.mv = (bb, dd) => { dd.tx = bb.homeX + Math.sin(bb.ft * 0.35) * 40; dd.ty = bb.homeY; };
-    hint('vento', G.W / 2, G.H * 0.66, 'SEGURE CONTRA O VENTO!', '#ffffff');
+    hint('vento', G.W / 2, G.H * 0.66, 'ARRASTE CONTRA O VENTO!', '#ffffff');
     yield 1.0;
     let dir = pl().x < G.W / 2 ? -1 : 1; // empurra pro lado mais perto da parede
     for (;;) {
@@ -15912,7 +16700,7 @@ body.in-play #toasts { opacity: 0; }
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
-    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.06,
+    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.12,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
@@ -15922,7 +16710,7 @@ body.in-play #toasts { opacity: 0; }
     ],
     init(b) {
       const d = b.data;
-      sprCache.clear(); // libera os sprites do Centrão
+      sprReset(); // libera os sprites do Centrão
       d.fx = []; d.pose = 'idle'; d.glowT = 0; d.mouth = 0; d.mouthT = 0;
       d.jar = [0, 0]; d.jarT = [0, 0]; d.jarGlow = false; d.windy = false;
       d.wind = { dir: 1, str: 0, target: 0, warn: 0 };
@@ -15972,8 +16760,9 @@ body.in-play #toasts { opacity: 0; }
       if (idx === 2) warmPeople(b, 'p4', poses(DILMA_SW, DIL_BIKE, ['drive']));
       if (idx >= 2) { d.wind.target = 0; d.windy = false; }
       d.jarT[0] = d.jarT[1] = 0;
-      if (idx === 1) { co(b, dilP2(b)); co(b, null, 1); }
-      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.7), 1); }
+      // pressão de fundo: os potes também arrotam vento mirado durante as rajadas (o 2º turno era o mais calmo)
+      if (idx === 1) { co(b, dilP2(b)); co(b, dilBgJars(b, L2() ? 2.2 : 2.6), 1); }
+      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.45), 1); }
       else if (idx === 3) { co(b, dilP4(b)); co(b, null, 1); }
     },
     onDeath(b) {
@@ -16504,7 +17293,8 @@ body.in-play #toasts { opacity: 0; }
     d.smokeOn = false;
   }
   // jet ski: avança rente à água deixando uma cortina com duas frestas
-  function* bolJetDash(b, dir, y) {
+  // prev = brechas da passada anterior (a 2ª passada de cada par abre as brechas perto delas)
+  function* bolJetDash(b, dir, y, prev) {
     const d = b.data;
     const edge = dir > 0 ? 44 : G.W - 44, sx = b.x, sy = b.y;
     d.dir = dir;
@@ -16515,13 +17305,18 @@ body.in-play #toasts { opacity: 0; }
     yield 0.7;
     sfx('dash'); sfx('splash');
     const x0 = b.x, x1 = dir > 0 ? G.W + 64 : -64, T = Math.abs(x1 - x0) / (L2() ? 520 : 480);
-    const g1 = M.rand(50, G.W / 2 - 40), g2 = M.rand(G.W / 2 + 40, G.W - 50);
+    // brecha (meia largura): mais larga no 1º Mandato. As 4 fileiras de um par de passadas chegam a ~0,8 s uma
+    // da outra, mas no lado onde a 2ª passada começa a fileira lenta da 1ª e a rápida da 2ª chegam quase juntas
+    // (0,2-0,4 s): por isso as brechas da 2ª ficam a no máximo 3/4 de brecha das da 1ª (sempre sobra passagem).
+    const gapR = L2() ? 31 : 42, sh = prev ? gapR * 0.75 : 0;
+    const g1 = prev ? clamp(prev[0] + M.rand(-sh, sh), 50, G.W / 2 - 40) : M.rand(50, G.W / 2 - 40);
+    const g2 = prev ? clamp(prev[1] + M.rand(-sh, sh), G.W / 2 + 40, G.W - 50) : M.rand(G.W / 2 + 40, G.W - 50);
     let lastX = x0;
     yield* tween(b, T, (u) => {
       b.x = M.lerp(x0, x1, u);
       if (Math.abs(b.x - lastX) >= 15 && b.x > 6 && b.x < G.W - 6) {
         lastX = b.x;
-        if (Math.abs(b.x - g1) > 31 && Math.abs(b.x - g2) > 31) {
+        if (Math.abs(b.x - g1) > gapR && Math.abs(b.x - g2) > gapR) {
           shoot(b.x, b.y + 30, DOWN, 40, { style: 'bs_gota', color: COL.hot, ay: 115, data: { vmax: 165 }, update: smokeFall });
           shoot(b.x, b.y + 30, DOWN, 12, { style: 'bs_gota', color: COL.magenta, ay: 80, data: { vmax: 130 }, update: smokeFall });
         }
@@ -16529,6 +17324,7 @@ body.in-play #toasts { opacity: 0; }
       }
     });
     b.x = dir > 0 ? -64 : G.W + 64;
+    return [g1, g2];
   }
 
   function* bolP1(b) {
@@ -16586,8 +17382,8 @@ body.in-play #toasts { opacity: 0; }
     let dir = b.x < G.W / 2 ? 1 : -1, r = 0;
     const rows = [146, 200];
     for (;;) {
-      yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3)); dir = -dir;
-      yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3)); dir = -dir;
+      const gaps = yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3), null); dir = -dir;
+      yield* bolJetDash(b, dir, Math.min(rows[r++ % 2], G.H * 0.3), gaps); dir = -dir;
       // volta ao centro
       const sx = b.x;
       d.dir = sx < 0 ? 1 : -1;
@@ -16617,7 +17413,7 @@ body.in-play #toasts { opacity: 0; }
     ],
     init(b) {
       const d = b.data;
-      sprCache.clear();
+      sprReset();
       d.fx = []; d.mode = 'moto'; d.dir = 1; d.lastX = b.x; d.th = 0; d.w = 0;
       d.helmet = true; d.mood = 'angry'; d.pose = 'drive'; d.mouth = 0; d.wheelie = 0; d.wheelieT = 0;
       d.cans = []; d.puddles = []; d.box = null; d.smokeOn = false; d.smT = 0; d.smK = 0; d.canHand = false;
@@ -16625,6 +17421,8 @@ body.in-play #toasts { opacity: 0; }
       b.hitboxes = BOL_HB_MOTO.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       warmPeople(b, 'p1', poses(bolSpec(true, false), BOL_SIZE, ['drive', 'point']));
       warmShots(b, BOL_SHOTS);
+      // a escolta da motociata (1º turno): se a luta começou direto (boss=1 / bossid=), a fase não aqueceu os motoqueiros
+      G.call(G.EnemyArt, 'prewarm', ['motoqueiro']);
     },
     updateEnter(b) { if (b.t > 0.3 && !b.data.revved) { b.data.revved = true; sfx('motor'); } warmShotsStep(b, 1); },
     start(b) { warmShotsStep(b, 99); co(b, bolP1(b)); say(b, 'É MOTOCIATA, TALKEY?', 2); sfx('motor'); },
@@ -17060,7 +17858,12 @@ body.in-play #toasts { opacity: 0; }
       const b = g.boss;
       if (opts && opts.silent) return;
       G.text(e.x, e.y - 12, M.pick(['VOLTA AQUI!', 'COMPANHEIRO!', 'FUI!']), { color: '#ffd23f', size: 10, life: 0.8 });
-      if (b && b.id === 'lule' && fighting(b) && b.data.wantComps) b.data.respawn.push(5.2);
+      if (b && b.id === 'lule' && fighting(b) && b.data.wantComps) {
+        b.data.respawn.push(5.2);
+        // derrubar um companheiro tira apoio do Lule: ~60% da vida dele passa para o chefão (as panelas
+        // teleguiadas miram no alvo mais perto; sem isso a Companheirada virava um moedor com a arma fraca)
+        G.hitBoss(b, 11);
+      }
     },
   });
 
@@ -17493,7 +18296,7 @@ body.in-play #toasts { opacity: 0; }
       for (let i = 0; i < 2; i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
         yield 0.7;
-        dropStamp(b, d, { track: 0.65, warn: 1.1 });
+        dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
         yield 1.7;
       }
       yield 0.8;
@@ -18302,9 +19105,10 @@ body.in-play #toasts { opacity: 0; }
     'A sessão volta assim que alguém achar o quórum.',
   ];
   const RANKS = {
-    // S aceita até 1 Delação (G.rankFor): lineBomb é a frase quando houve uma
+    // frase do boletim (rankLine): lineHit quando perdeu vida, lineBomb quando usou Delação.
+    // S = sem perder vida e até 1 Delação; A = sem perder vida (com mais delações) ou 1 vida com até 1 (G.rankFor)
     S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.', lineBomb: 'Ficha limpa, só uma delaçãozinha. O povo agradece.' },
-    A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.' },
+    A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.', lineBomb: 'Nenhum arranhão, mas delatou geral.', lineHit: 'Um arranhão só. Quase um santo.' },
     B: { label: '2º TURNO', line: 'Uns arranhões, mas passou.' },
     C: { label: 'SUPLENTE', line: 'Passou raspando. Igual ao orçamento.' },
   };
@@ -18408,6 +19212,7 @@ body.in-play #toasts { opacity: 0; }
     if (u) { u.appendChild(root); u.classList.add('open'); u.setAttribute('data-screen', kind); }
     cur = { root, kind, alive: true, timers: [], cleanups: [], onKey: null, born: performance.now() };
     flushToasts(); // conquistas guardadas durante a partida
+    placeToastsSoon(); // toasts que já estavam na tela vão para o lugar certo da tela nova
     return cur;
   }
   function close() {
@@ -18420,6 +19225,7 @@ body.in-play #toasts { opacity: 0; }
     }
     const u = uiRoot();
     if (u) { u.innerHTML = ''; u.classList.remove('open'); u.removeAttribute('data-screen'); }
+    if (s) placeToastsSoon();
   }
   function later(scr, ms, fn) {
     const id = setTimeout(() => { if (scr.alive) G.safe(fn, 'ui.timer ' + scr.kind); }, ms);
@@ -18468,16 +19274,54 @@ body.in-play #toasts { opacity: 0; }
     if (el.classList.contains('key-corrige')) return 'ui_back';
     return 'ui_click';
   }
+  // Toques. O Chromium não gera 'click' para um toque feito enquanto outro dedo segura a
+  // tela (o dedão que continua pilotando no diálogo do chefão, na pausa, no game over).
+  // Por isso teclas e áreas de "toque para continuar" agem já no pointerup do mesmo dedo,
+  // se ele quase não andou (< 14 px) e foi rápido (< 0,5 s). O 'click' que o navegador ainda
+  // manda depois de um toque comum é engolido (mesmo dedo ou mesmo lugar, até 0,6 s): sem
+  // isso a ação valeria duas vezes, ou cairia na tela nova que abriu embaixo do dedo.
+  // Mouse e teclado (Enter/Espaço numa tecla focada) continuam pelo 'click'.
+  const TAP_SLOP = 14, TAP_MS = 500, GHOST_MS = 600;
+  let lastTap = null; // { id, x, y, t } do último toque que já agiu no pointerup
+  function bindTap(el, fn, isKey) {
+    let d = null;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') d = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() };
+    });
+    el.addEventListener('pointercancel', (e) => { if (d && d.id === e.pointerId) d = null; });
+    el.addEventListener('pointerup', (e) => {
+      const s = d;
+      if (!s || s.id !== e.pointerId) return;
+      d = null;
+      if (e.__uiTap) return; // uma tecla dentro desta área já cuidou deste toque
+      // área: toque numa tecla (ou no slider) não é "toque para continuar" (no 'click' a tecla segura o evento)
+      if (!isKey) {
+        const c = e.target && e.target.closest ? e.target.closest('button, input, select, textarea, a') : null;
+        if (c && c !== el && el.contains(c)) return;
+      }
+      const now = performance.now();
+      if (now - s.t > TAP_MS || Math.hypot(e.clientX - s.x, e.clientY - s.y) > TAP_SLOP) return;
+      e.__uiTap = true;
+      lastTap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: now };
+      fn(e);
+    });
+    el.addEventListener('click', (e) => {
+      if (isKey) { e.preventDefault(); e.stopPropagation(); }
+      fn(e);
+    });
+  }
   // Liga um botão: som + ação. sound=false → sem som automático
   function onTap(el, fn, sound) {
     if (!el) return;
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    bindTap(el, (e) => {
       if (el.disabled) return; // .off é só visual (ex.: sem saldo ainda dá o aviso)
       if (sound !== false) sfx(sound || soundFor(el));
       G.safe(fn, 'ui.tap', e);
-    });
+    }, true);
+  }
+  // "Toque em qualquer lugar" de uma tela (história, diálogo, abertura, boletim, créditos)
+  function onArea(el, fn) {
+    if (el) bindTap(el, (e) => G.safe(fn, 'ui.area', e), false);
   }
   // rola a área da telinha até o elemento (ex.: confirmação que abre embaixo da dobra)
   function reveal(el) {
@@ -18502,6 +19346,17 @@ body.in-play #toasts { opacity: 0; }
     };
     u.addEventListener('pointerup', up);
     u.addEventListener('pointercancel', up);
+    // engole o 'click' que segue um toque que já agiu no pointerup (ver bindTap). Teclado
+    // (detail 0) passa sempre; o mesmo dedo (pointerId) ou o mesmo lugar identifica o fantasma.
+    window.addEventListener('click', (e) => {
+      const t = lastTap;
+      if (!t || !e.isTrusted || e.detail === 0) return;
+      if (performance.now() - t.t > GHOST_MS) { lastTap = null; return; }
+      if (e.pointerId !== t.id && (Math.abs(e.clientX - t.x) > 24 || Math.abs(e.clientY - t.y) > 24)) return;
+      lastTap = null;
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Tab' || e.key.indexOf('Arrow') === 0) kbdMode = true;
       const s = cur;
@@ -18907,7 +19762,7 @@ body.in-play #toasts { opacity: 0; }
       if (idx < panels.length - 1) { sfx('ui_click'); show(idx + 1); }
       else { sfx('ui_confirm'); finish(); }
     };
-    scr.root.addEventListener('click', advance);
+    onArea(scr.root, advance);
     // o final abre logo depois do chefão: um toque perdido no canto não pula a cena
     onTap(q(scr.root, '.st-skip'), () => { if (performance.now() - scr.born < 600) return; sfx('ui_click'); finish(); }, false);
     scr.onKey = (e, k) => {
@@ -18991,7 +19846,7 @@ body.in-play #toasts { opacity: 0; }
       if (i < lines.length - 1) { sfx('ui_click'); show(i + 1); }
       else { sfx('ui_click'); finish(); }
     };
-    scr.root.addEventListener('click', advance);
+    onArea(scr.root, advance);
     onTap(skipBtn, () => { if (performance.now() - scr.born < SKIP_GUARD) return; sfx('ui_click'); finish(); }, false);
     scr.onKey = (e, k) => {
       if (k === 'Enter' || k === ' ') { e.preventDefault(); advance(); }
@@ -19040,7 +19895,7 @@ body.in-play #toasts { opacity: 0; }
       sfx('whoosh');
       later(scr, reducedMotion() ? 0 : 360, () => { close(); fin(); });
     };
-    scr.root.addEventListener('click', () => { if (performance.now() - scr.born > 300) leave(); });
+    onArea(scr.root, () => { if (performance.now() - scr.born > 300) leave(); });
     scr.onKey = (e, k) => { if (k === 'Enter' || k === ' ' || k === 'Escape') { e.preventDefault(); leave(); } };
     later(scr, 2500, leave);
     later(scr, 420, () => sfx('stamp'));
@@ -19061,21 +19916,33 @@ body.in-play #toasts { opacity: 0; }
     if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
   }
   function fmtTime(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
-  // Dica da próxima nota, tirada das regras do próprio core (G.rankFor), sem copiar números
+  function rankLine(rank, stats) {
+    const R = RANKS[rank];
+    if ((stats.hits | 0) > 0 && R.lineHit) return R.lineHit;
+    if ((stats.bombsUsed | 0) > 0 && R.lineBomb) return R.lineBomb;
+    return R.line;
+  }
+  // Dica da próxima nota, tirada das regras do próprio core (G.rankFor), sem copiar números:
+  // pergunta ao core quantas vidas perdidas e quantas delações ainda dão a nota seguinte.
   function rankTip(rank, idx) {
-    if (typeof G.rankFor !== 'function' || rank === 'S') return '';
+    if (typeof G.rankFor !== 'function' || !RANK_ORDER[rank] || rank === 'S') return '';
     try {
+      const ANY = 9; // "qualquer número de delações"
+      const at = (h, b) => RANK_ORDER[G.rankFor(h, b, idx)] || 0;
       const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
-      if (rank === 'A') {
-        let b = -1;
-        for (let n = 0; n <= 9; n++) if (G.rankFor(0, n, idx) === 'S') b = n;
-        if (b < 0) return '';
-        return 'Nota S: sem perder vida e ' + (b === 0 ? 'sem Delação.' : 'no máximo ' + plural(b, 'Delação.', 'Delações.'));
-      }
-      if (rank === 'B') return G.rankFor(0, 99, idx) === 'A' ? 'Nota A: termine a fase sem perder vida.' : '';
-      let h = 0;
-      for (let n = 1; n <= 20; n++) if (G.rankFor(n, 0, idx) === 'B') h = n;
-      return h ? 'Nota B: perca no máximo ' + plural(h, 'vida', 'vidas') + ' nesta fase.' : '';
+      const dels = (n) => 'no máximo ' + plural(n, 'Delação', 'Delações');
+      const want = RANK_ORDER[rank] + 1, next = rank === 'A' ? 'S' : rank === 'B' ? 'A' : 'B';
+      let h = -1; // mais vidas perdidas que ainda dão a nota (sem delação)
+      for (let n = 0; n <= 20; n++) if (at(n, 0) >= want) h = n;
+      if (h < 0) return '';
+      const bombsWith = (hits) => { let b = -1; for (let n = 0; n <= ANY; n++) if (at(hits, n) >= want) b = n; return b; };
+      const b = bombsWith(h), b0 = bombsWith(0);
+      const lives = h === 0 ? 'sem perder vida' : 'perdendo no máximo ' + plural(h, 'vida', 'vidas');
+      let txt;
+      if (b >= ANY) txt = h === 0 ? 'termine a fase sem perder vida' : 'perca no máximo ' + plural(h, 'vida', 'vidas') + ' nesta fase';
+      else if (h > 0 && b0 >= ANY) txt = 'não perca vida, ou perca ' + (h === 1 ? 'só 1' : 'até ' + h) + ' e use ' + (b === 0 ? 'nenhuma Delação' : dels(b)); // regra atual da nota A
+      else txt = lives + ' e ' + (b === 0 ? 'sem Delação' : dels(b));
+      return 'Nota ' + next + ': ' + txt + '.';
     } catch (e) { return ''; }
   }
   function showStageClear(stats, done) {
@@ -19095,7 +19962,7 @@ body.in-play #toasts { opacity: 0; }
       { k: 'POLÍTICOS CASSADOS', v: stats.kills },
       { k: 'RASPÕES', v: stats.grazes },
       { k: 'DELAÇÕES USADAS', v: stats.bombsUsed },
-      { k: 'TIROS LEVADOS', v: stats.hits },
+      { k: 'VIDAS PERDIDAS', v: stats.hits },
       { k: 'TEMPO DE SESSÃO', txt: fmtTime(stats.time) },
       { sep: 'BÔNUS' + (loopN > 1 ? ' (2º MANDATO ×1,5)' : '') },
       { k: 'FICHA LIMPA', v: b.fichaLimpa, plus: 1 },
@@ -19123,9 +19990,9 @@ body.in-play #toasts { opacity: 0; }
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p></div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
-      '<p class="rc-line">' + esc((stats.bombsUsed > 0 && RANKS[rank].lineBomb) || RANKS[rank].line) + '</p>' +
+      '<p class="rc-line">' + esc(rankLine(rank, stats)) + '</p>' +
       (tip ? '<p class="rc-tip">' + esc(tip) + '</p>' : '') +
-      (better ?'<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
+      (better ? '<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
       '<div class="rc-foot"><i class="barcode"></i><span>CÓD. VERIFICAÇÃO 171-' + String(((stats.score || 0) % 9973) + 1000).slice(0, 4) + '-ZÉ</span><b>FIM</b></div>' +
       '</div></div></div>' +
       '<div class="cl-keys">' + keyHTML('confirma', 'CONTINUAR', 'CONFIRMA', 'k-next key-wide') + '</div>' +
@@ -19155,7 +20022,7 @@ body.in-play #toasts { opacity: 0; }
     };
     const finish = () => { if (ended || !scr.root.classList.contains('ready')) return; ended = true; close(); fin(); };
     onTap(nextKey, finish);
-    scr.root.addEventListener('click', () => {
+    onArea(scr.root, () => {
       if (performance.now() - scr.born < 450) return;
       if (phase !== 'done') stamp();
       else if (scr.root.classList.contains('ready')) { sfx('ui_confirm'); finish(); }
@@ -19528,7 +20395,7 @@ body.in-play #toasts { opacity: 0; }
     const finish = () => { if (ended) return; ended = true; close(); fin(); };
     onTap(q(scr.root, '.roll-skip'), showFinal);
     onTap(q(scr.root, '.k-menu'), finish);
-    scr.root.addEventListener('click', () => { if (!shown && performance.now() - scr.born > 400) showFinal(); });
+    onArea(scr.root, () => { if (!shown && performance.now() - scr.born > 400) showFinal(); });
     scr.onKey = (e, k) => {
       if (k === 'Enter' || k === ' ' || k === 'Escape') { e.preventDefault(); if (!shown) showFinal(); else if (k !== 'Escape') { sfx('ui_confirm'); finish(); } }
     };
@@ -19860,6 +20727,32 @@ body.in-play #toasts { opacity: 0; }
   const pendingToasts = [];
   let toastFlushT = 0;
   const inPlay = () => !!(document.body && document.body.classList.contains('in-play'));
+  // Na pausa e no boletim o topo é o título da tela ("SESSÃO SUSPENSA", "BOLETIM DE URNA"):
+  // lá os toasts vão para perto das teclas (embaixo delas quando sobra espaço, senão logo
+  // acima; na pausa, se o alto da urna tiver espaço, por cima da marca) e saem um de cada vez.
+  const TOAST_SPOT = { clear: '.cl-keys', pause: '.pz-keys' };
+  const toastSpot = () => !!(cur && cur.alive && TOAST_SPOT[cur.kind]);
+  let placeQ = 0;
+  function placeToastsSoon() { if (!placeQ) placeQ = requestAnimationFrame(() => { placeQ = 0; G.safe(placeToasts, 'ui.toasts'); }); }
+  function placeToasts() {
+    const host = document.getElementById('toasts');
+    if (!host) return;
+    const keys = toastSpot() ? q(cur.root, TOAST_SPOT[cur.kind]) : null;
+    if (!keys) { host.style.top = ''; host.style.bottom = ''; return; }
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 10;
+    const gap = Math.round(0.6 * rem);
+    const need = (host.firstElementChild ? host.firstElementChild.offsetHeight : 5.8 * rem) + gap * 2;
+    let ty = 0; // as teclas do boletim entram subindo (translateY): mede onde elas param
+    try { const tf = getComputedStyle(keys).transform; if (tf && tf !== 'none') ty = new DOMMatrixReadOnly(tf).m42 || 0; } catch (e) { /* nada */ }
+    const r = keys.getBoundingClientRect(), kTop = r.top - ty, kBot = r.bottom - ty;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    const title = cur.kind === 'pause' ? q(cur.root, '.lcd-titles') : null;
+    if (vh - kBot >= need) { host.style.top = Math.round(kBot + gap) + 'px'; host.style.bottom = 'auto'; }
+    else if (title && title.getBoundingClientRect().top >= need) { host.style.top = gap + 'px'; host.style.bottom = 'auto'; }
+    else { host.style.top = 'auto'; host.style.bottom = Math.round(vh - kTop + gap) + 'px'; }
+  }
+  window.addEventListener('resize', placeToastsSoon);
+  const toastBusy = () => { const h = document.getElementById('toasts'); return !!(h && h.firstElementChild); };
   function flushToasts() {
     if (!pendingToasts.length || toastFlushT) return;
     const l = pendingToasts.splice(0);
@@ -19868,14 +20761,23 @@ body.in-play #toasts { opacity: 0; }
       toastFlushT = 0;
       if (i >= l.length) { if (pendingToasts.length) flushToasts(); return; }
       if (inPlay()) { pendingToasts.unshift.apply(pendingToasts, l.slice(i)); return; } // a partida voltou: espera de novo
-      showToast(l[i++]);
+      if (toastSpot() && toastBusy()) { toastFlushT = setTimeout(next, 250); return; } // pausa/boletim: um de cada vez
+      renderToast(l[i++]);
       toastFlushT = setTimeout(next, 650);
     };
     toastFlushT = setTimeout(next, 350);
   }
   function showToast(o) {
     o = o || {};
-    if (inPlay()) { if (pendingToasts.length < 12) pendingToasts.push(o); return; }
+    // durante a partida espera; na pausa e no boletim entra na fila (um de cada vez)
+    if (inPlay() || (toastSpot() && (toastFlushT || toastBusy()))) {
+      if (pendingToasts.length < 12) pendingToasts.push(o);
+      if (!inPlay()) flushToasts();
+      return;
+    }
+    renderToast(o);
+  }
+  function renderToast(o) {
     const host = document.getElementById('toasts');
     if (!host) return;
     const t = document.createElement('div');
@@ -19884,6 +20786,7 @@ body.in-play #toasts { opacity: 0; }
     t.innerHTML = '<i class="toast-ico" aria-hidden="true"></i><span class="toast-txt"><small>' + esc(o.title || '') + '</small><b>' + esc(o.text || '') + '</b></span>';
     host.appendChild(t);
     while (host.children.length > 3) host.removeChild(host.firstChild);
+    G.safe(placeToasts, 'ui.toasts');
     setTimeout(() => t.classList.add('out'), 2900);
     setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 3400);
   }
@@ -19918,7 +20821,8 @@ body.in-play #toasts { opacity: 0; }
 <script>/* main.js */
 /* ============================================================
    FUSCA A JATO — main.js
-   Inicializa o jogo quando as fontes carregam (ou depois de 0,6 s, com as fontes do sistema).
+   Inicializa o jogo quando as fontes carregam (ou depois de 0,6 s, com as fontes do sistema;
+   na hora, se o CSS das fontes já falhou ou foi bloqueado).
    O CSS das fontes do Google não bloqueia mais a página (shell.html injeta o <link>);
    se elas chegarem depois do boot, G.fontsReady() avisa os módulos para redesenhar o que
    tinha texto guardado em cache.
@@ -19937,6 +20841,26 @@ body.in-play #toasts { opacity: 0; }
     started = true;
     try { G.boot(); } catch (err) { G.reportError(err, 'boot'); }
   }
+  // As fontes da web já falharam? (Google Fonts bloqueado no iframe do artifact, sem rede, CSS
+  // vazio, arquivos .woff2 recusados.) Então não há o que esperar: o jogo começa na hora com as
+  // fontes do sistema, sem gastar os 0,6 s do tempo limite.
+  // Sinais: o <link> do CSS já terminou (link.sheet existe, com erro ou não) e nenhuma @font-face
+  // do Bungee chegou; o 'error' do <link>; ou todas as faces do Bungee deram erro. (O CSS é de
+  // outra origem: as regras não podem ser lidas, e o responseStatus do Resource Timing é 0 mesmo
+  // quando dá certo; a entrada aparece antes de o CSS ser lido, então ela sozinha não basta.)
+  const fontLink = () => { try { return document.querySelector('link[rel=stylesheet][href*="fonts.googleapis"]'); } catch (e) { return null; } };
+  function bungeeFaces() {
+    const out = [];
+    try { document.fonts.forEach((f) => { if (/bungee/i.test(f.family)) out.push(f.status); }); } catch (e) { return null; }
+    return out;
+  }
+  function fontsFailed() {
+    const faces = bungeeFaces();
+    if (!faces) return false; // sem FontFaceSet: fica no tempo limite
+    if (faces.length) return faces.every((s) => s === 'error');
+    const l = fontLink();
+    return !l || !!l.sheet; // sem <link> (nada a esperar) ou CSS já terminado sem @font-face
+  }
   function whenReady() {
     const fontsReady = document.fonts && document.fonts.load
       ? Promise.all([
@@ -19950,8 +20874,16 @@ body.in-play #toasts { opacity: 0; }
       if (!started) { start(); notified = true; } // já começou com as fontes certas
       else notifyFonts(); // chegaram depois do boot
     };
-    // ok = false: o CSS das fontes ainda não chegou; espera o 'loadingdone' ou o tempo limite
-    fontsReady.then((ok) => { if (ok) onFonts(); });
+    const ifFailed = () => { if (!started && fontsFailed()) start(); };
+    ifFailed();
+    // ok = false: o CSS das fontes ainda não chegou (espera o 'loadingdone' ou o tempo limite) ou já falhou
+    fontsReady.then((ok) => { if (ok) onFonts(); else ifFailed(); });
+    const l = fontLink();
+    if (l) {
+      l.addEventListener('error', () => { if (!started) start(); }, { once: true });
+      l.addEventListener('load', ifFailed, { once: true }); // CSS chegou vazio (sem @font-face)
+    }
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingerror', ifFailed);
     setTimeout(start, 600);
     // o CSS das fontes pode chegar bem depois (rede lenta): quando as fontes terminarem, avisa
     if (document.fonts && document.fonts.addEventListener) {

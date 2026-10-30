@@ -10,7 +10,7 @@ const path = require('path');
 const ROOT = __dirname;
 const SRC = path.join(ROOT, 'src');
 // Ordem importa: data -> core -> módulos -> main
-const JS = ['data', 'core', 'art', 'bg', 'audio', 'enemies', 'stages', 'bosses', 'lule', 'ui', 'main'];
+const JS = ['data', 'core', 'art', 'bg', 'audio', 'enemies', 'stages', 'bosses', 'erika', 'lule', 'ui', 'main'];
 const CSS = ['base', 'ui'];
 
 const shell = fs.readFileSync(path.join(SRC, 'shell.html'), 'utf8');
