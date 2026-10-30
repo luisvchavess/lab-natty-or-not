@@ -61,7 +61,7 @@
     'O Leão da Receita mandou lembranças.',
     'Não foi derrota. Foi "vitória adiada".',
     'Calma: em Brasília ninguém perde de verdade.',
-    'Recontagem liberada. Só não vale pedalada.',
+    'Recurso aceito. Só não vale pedalada.',
     'Faz o L de Lamentável.',
   ];
   const PAUSE_JOKES = [
@@ -95,13 +95,15 @@
   };
   const BOSS_FALLBACK_NAME = { centrao: 'O Centrão', dilmae: 'Dilmãe', erika: 'Erika Viralton', lule: 'Lule' };
   const BOSS_SLOGAN = {
-    centrao: 'Apoio quem estiver ganhando',
+    centrao: 'Apoio quem estiver pagando',
     dilmae: 'Atingiu a meta? Dobra a meta',
     erika: 'Segue o fio!',
     lule: 'A picanha tá chegando',
   };
-  // abertura de fase: "CHEFONA" para elas, "CHEFÃO" para o resto
+  // abertura de fase: "CHEFONA" para elas, "CHEFÃO" para o resto. Vale o def.fem do chefão;
+  // BOSS_FEM é a reserva (módulos isolados ou def ainda sem a marca)
   const BOSS_FEM = { dilmae: 1, erika: 1 };
+  function bossFem(id) { const d = G.Bosses && G.Bosses.defs && G.Bosses.defs[id]; return !!((d && d.fem) || BOSS_FEM[id]); }
   // a manha de cada chefão (abertura de fase, linha "MANHA:")
   const BOSS_MECH = { centrao: 'pegue a emenda', dilmae: 'fique na META', erika: 'corte os fios da live', lule: 'olé no Leão' };
   // cartão "CADA CHEFÃO TEM UMA MANHA" do Como Jogar (chefão ainda não visto = '???')
@@ -414,7 +416,7 @@
   // ------------------------------------------------------------------
   // Pedaços de HTML reaproveitados
   // ------------------------------------------------------------------
-  const BRAND = '<div class="urna-head"><span class="brand"><i class="flag"></i>JUSTIÇA ELEITORAL DO POVO</span><span class="model">URNA MOD. 171</span></div>';
+  const BRAND = '<div class="urna-head"><span class="brand"><i class="flag"></i>JUSTIÇA ELEITORAL DO POVO</span><span class="model">URNA MOD. 78</span></div>';
   function keyHTML(kind, label, small, cls, attrs) {
     return '<button type="button" class="key key-' + kind + (cls ? ' ' + cls : '') + '"' + (attrs || '') + '><span class="kl">' + label + '</span>' + (small ? '<small class="ks">' + small + '</small>' : '') + '</button>';
   }
@@ -878,7 +880,7 @@
       '<div class="in-photo"><canvas aria-hidden="true"></canvas><div class="in-num"><small>Nº</small>171</div></div>' +
       '<h2 class="in-name">' + esc(s.name) + '</h2>' +
       '<p class="in-sub">' + esc(s.subtitle) + '</p>' +
-      '<div class="in-boss"><small>' + (BOSS_FEM[s.boss] ? 'CHEFONA' : 'CHEFÃO') + '</small><b>' + esc(castName(s.boss)) + '</b><em>“' + esc(bossTitle(s.boss)) + '”</em>' +
+      '<div class="in-boss"><small>' + (bossFem(s.boss) ? 'CHEFONA' : 'CHEFÃO') + '</small><b>' + esc(castName(s.boss)) + '</b><em>“' + esc(bossTitle(s.boss)) + '”</em>' +
       (BOSS_MECH[s.boss] ? '<span class="in-manha">' + esc('MANHA: ' + BOSS_MECH[s.boss]) + '</span>' : '') + '</div>' +
       '<p class="in-gag">' + esc(STAGE_GAG[s.id] || 'Todo político aqui é o nº 171.') + '</p>' +
       '</div>' +
@@ -1203,7 +1205,7 @@
       (buy ? 'Já dá pra comprar <b>' + esc(buy.name) + '</b> na Lojinha!' : 'Seu Pix fica guardado para a Lojinha do Zé.');
     scr.root.innerHTML =
       '<div class="go-wrap">' +
-      '<div class="go-title" aria-label="Derrotado nas urnas"><span>DERROTADO</span><span>NAS URNAS</span></div>' +
+      '<div class="go-title" aria-label="Você foi derrotado"><span>VOCÊ FOI</span><span>DERROTADO</span></div>' +
       '<p class="go-joke">' + esc(pick(OVER_JOKES)) + '</p>' + near +
       '<div class="urna urna-compact">' + BRAND +
       '<div class="bezel"><div class="lcd lcd-stats">' +
@@ -1214,9 +1216,9 @@
       '</div></div>' +
       '<div class="go-keys">' +
       (left > 0
-        ? '<button type="button" class="key key-confirma key-wide k-cont"><span class="kl">PEDIR RECONTAGEM</span><b class="kbadge">' + left + '</b><small class="ks">CONFIRMA</small></button>' +
+        ? '<button type="button" class="key key-confirma key-wide k-cont"><span class="kl">ENTRAR COM RECURSO</span><b class="kbadge">' + left + '</b><small class="ks">CONFIRMA</small></button>' +
           '<p class="go-explain">Continua daqui, com vidas e delações cheias. <b>O placar volta a zero.</b></p>'
-        : '<p class="go-explain">Acabaram os pedidos de recontagem. A urna é soberana.</p>') +
+        : '<p class="go-explain">Acabaram os recursos. Transitou em julgado.</p>') +
       '<div class="row go-quit">' + keyHTML('corrige', 'MENU', 'CORRIGE', 'k-quit') +
       keyHTML('branco', 'LOJINHA', buy ? 'tem melhoria!' : 'melhorias', 'k-shop' + (buy ? ' has-buy' : '')) + '</div>' +
       '</div></div></div>';
@@ -1445,7 +1447,7 @@
         qualityHTML() +
         '<div class="set-danger">' +
         '<button type="button" class="key key-danger k-wipe"><span class="kl">APAGAR PROGRESSO</span></button>' +
-        '<div class="wipe-confirm" hidden><p><b>Tem certeza?</b> Some tudo: Pix, melhorias, fases liberadas, recorde e conquistas. Não tem recontagem.</p>' +
+        '<div class="wipe-confirm" hidden><p><b>Tem certeza?</b> Some tudo: Pix, melhorias, fases liberadas, recorde e conquistas. Não cabe recurso.</p>' +
         '<div class="row">' + keyHTML('branco', 'NÃO', '', 'k-no') + '<button type="button" class="key key-danger k-yes"><span class="kl">SIM, APAGAR</span></button></div></div>' +
         '</div></div>',
       foot: lcdFoot('', 'VOLTAR') + '<span class="foot-msg">Tudo é salvo na hora.</span>',

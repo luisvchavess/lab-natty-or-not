@@ -226,7 +226,7 @@
     cabo: ['CABO ELEITORAL', 'distribui santinho do 171'],
     fantasma: ['VEREADOR FANTASMA', 'só aparece pra receber'],
     deputado: ['DEPUTADO DO CENTRÃO', 'apoia quem pagar mais'],
-    assessor: ['ASSESSOR DA RACHADINHA', 'derrube e ele racha em dois!'],
+    assessor: ['ASSESSOR DO LOTEAMENTO', 'derrube e ele se divide!'],
     lobista: ['LOBISTA', 'derrube e a mala é sua'],
     marqueteiro: ['MARQUETEIRO', 'blinda os aliados: mire nele!'],
     bot: ['BOT DE ENGAJAMENTO', 'curte em bando e mergulha'],
@@ -612,7 +612,7 @@
   });
 
   // ======================================================================
-  // ASSESSOR DA RACHADINHA — ao cair, racha em duas metades (literalmente)
+  // ASSESSOR DO LOTEAMENTO — ao cair, racha em duas metades (literalmente)
   // ======================================================================
   const ASS = [
     { skin: '#f0c49c', hair: 'side', hairColor: '#3a2a20', body: 'shirt', shirt: '#dfe8ff', tie: '#1b3fa0', glasses: 'square', face: 'long', seed: 9 },
@@ -779,7 +779,7 @@
   // MARQUETEIRO — blinda (shieldT) quem está perto; alvo prioritário; foge
   // ======================================================================
   const MKT = { skin: '#f0c49c', hair: 'pompadour', hairColor: '#2a2a2a', body: 'shirt', shirt: '#ff5d8f', glasses: 'square', beard: 'goatee', beardColor: '#2a2a2a', seed: 12 };
-  const MKT_LINES = ['É tudo narrativa!', 'Engajamento, gente!', 'Bora lacrar!', 'Isso aí é fake!', 'A culpa é do algoritmo!', 'Ângulo bom, sorri!', 'Faz o L, gente!', 'A culpa é da herança!'];
+  const MKT_LINES = ['É tudo narrativa!', 'Engajamento, gente!', 'Bora mudar a narrativa!', 'Isso aí é fake!', 'A culpa é do algoritmo!', 'Ângulo bom, sorri!', 'Faz o L, gente!', 'A culpa é da herança!'];
   define('marqueteiro', {
     hp: 14, r: 14, score: 800, pix: 6,
     init(e, o) {

@@ -52,7 +52,7 @@
     { id: 'primeiro_voto', name: 'Primeiro Voto',    desc: 'Derrube seu primeiro político',               counter: 'kills', goal: 1 },
     { id: 'ficha_limpa',   name: 'Ficha Limpa',      desc: 'Termine uma fase sem perder vida' },
     { id: 'bico_calado',   name: 'Bico Calado',      desc: 'Vença um chefão sem usar Delação' },
-    { id: 'rachou',        name: 'Rachou!',          desc: 'Divida 30 Assessores da Rachadinha',            counter: 'rachadinha', goal: 30 },
+    { id: 'rachou',        name: 'Rachou!',          desc: 'Divida 30 Assessores do Loteamento',            counter: 'rachadinha', goal: 30 },
     { id: 'por_um_fio',    name: 'Por um Fio',       desc: 'Faça 300 raspões numa partida' },
     { id: 'arsenal',       name: 'Arsenal Completo', desc: 'Chegue ao nível máximo de uma arma' },
     { id: 'centrao',       name: 'Fora, Centrão',    desc: 'Derrote O Centrão' },
@@ -93,7 +93,7 @@
     ],
     ending: [
       { scene: 'planalto', text: 'Fatura entregue em mãos, com juros e correção monetária. Nunca antes na história deste país um governo leu a conta até o fim.' },
-      { scene: 'brasilia', text: 'No dia seguinte criaram o Ministério do Compromisso Histórico. O Centrão já pediu três cargos e a deputada abriu um fio sobre ele.' },
+      { scene: 'brasilia', text: 'No dia seguinte criaram o 40º ministério: o da Fatura. O Centrão já pediu três cargos e a deputada abriu um fio sobre ele.' },
       { scene: 'fusca',    text: 'Zé devolveu o Fusca para a Vó Dirce e foi dormir. Segunda-feira tem corrida às seis da manhã. Escala 7x0, como sempre.' },
       { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em quinto mandato." Zé: "Liga o motor, vó."' },
     ],
@@ -113,7 +113,7 @@
         intro: [
           { who: 'vo', text: 'Esplanada dos Ministérios. Dizem que são 38 ministérios, Zezinho.' },
           { who: 'ze', text: 'E pelo jeito cada um tem uns mil assessores atirando em mim.' },
-          { who: 'vo', text: 'Cuidado com o Assessor da Rachadinha. Quando você acerta, ele se divide!' },
+          { who: 'vo', text: 'Cuidado com o Assessor do Loteamento. Quando você acerta, ele se divide!' },
           { who: 'vo', text: 'A Dilmãe tá lá no fim. Diz que vai dobrar a meta. Ninguém sabe qual.' },
         ],
       },
@@ -153,7 +153,7 @@
           { who: 'dilmae', text: 'Não vamos colocar meta. Vamos deixar a meta aberta. Quando atingir a meta, nós dobramos a meta.' },
           { who: 'ze', text: 'Hã?' },
           { who: 'dilmae', text: 'E eu estoquei o vento, querido. Agora ele é todo seu!' },
-          { who: 'vo', text: 'Zezinho, para o Fusca dentro do círculo da META até encher. Ela não sabe o que fazer quando alguém bate a meta!' },
+          { who: 'vo', text: 'Zezinho, estaciona o Fusca dentro do círculo da META até encher. Ela não sabe o que fazer quando alguém bate a meta!' },
         ],
         post: [
           { who: 'dilmae', text: 'Eu não perdi. Eu só ganhei de uma forma diferente, entende?' },
@@ -162,8 +162,8 @@
       },
       erika: {
         pre: [
-          { who: 'erika', text: 'Oi, gente! Tô AO VIVO do Lago Paranoá. E olha quem apareceu: um Fusca a jato atrapalhando a minha live!' },
-          { who: 'ze', text: 'Deputada, eu só quero passar. Tenho corrida às seis da manhã.' },
+          { who: 'erika', mood: 'laugh', text: 'Oi, gente! Tô AO VIVO do Lago Paranoá. E olha quem apareceu: um Fusca a jato atrapalhando a minha live!' },
+          { who: 'ze', text: 'Deputada, eu só quero passar. Amanhã é sábado e tenho corrida às seis da manhã.' },
           { who: 'erika', text: 'Às seis? Num sábado?! Isso é escala 6x1! Vou protocolar o fim dela agora, ao vivo!' },
           { who: 'ze', text: 'Sou motorista de aplicativo, deputada. Minha escala é 7x0. Quem paga a minha folga?' },
           { who: 'erika', text: 'Que fala problemática! Vou abrir um fio sobre você. SEGUE O FIO, gente!' },
@@ -200,6 +200,6 @@
     'Todos os personagens são caricaturas. Qualquer semelhança com políticos reais é pura sátira.',
     'Nenhum político foi ferido na produção deste jogo. Só a reputação.',
     'Vote consciente. E guarde a nota fiscal.',
-    'Nenhuma live foi interrompida na produção deste jogo. Só o sinal.',
+    'Nenhum fio foi cortado na produção deste jogo. Só os da live.',
   ];
 })();

@@ -17,7 +17,7 @@ Shoot'em up vertical para celular, de paródia política. A eleição acabou, a 
 - **Aprovação:** derrubar políticos em sequência sobe o multiplicador de votos (placar). Levar tiro derruba.
 - **Pix:** o dinheiro que cai dos políticos fica com você entre partidas (é gravado também quando o app vai para o fundo). Gaste na **Lojinha do Zé** em melhorias permanentes (o Gatilho Turbinado, por exemplo, dá +10% de cadência por nível em todas as armas). O que você compra na parada entre fases já vale na partida em andamento.
 - **Nota da fase:** S (sem morrer, no máximo 1 Delação), A (sem morrer, ou só 1 vida perdida com no máximo 1 Delação), B (poucas mortes; a régua sobe a cada fase) ou C. Nota boa paga mais Pix, e as fases finais pagam mais.
-- **Recontagem:** perdeu todas as vidas? Peça recontagem e continue de onde parou (o placar zera e as vidas extras por pontos não se repetem).
+- **Recurso:** perdeu todas as vidas? Entre com recurso e continue de onde parou (o placar zera e as vidas extras por pontos não se repetem).
 - **Pausa:** ao voltar, o jogo espera um segundo ("PRONTO? VAI!") para você pôr o dedo na tela. Com o celular deitado, o jogo fica pausado e pede para girar.
 
 No computador: setas/WASD movem, Shift deixa lento, X ou espaço solta a Delação, P ou Esc pausa.
