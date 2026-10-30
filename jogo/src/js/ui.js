@@ -65,7 +65,8 @@
     'A sessão volta assim que alguém achar o quórum.',
   ];
   const RANKS = {
-    S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.' },
+    // S aceita até 1 Delação (G.rankFor): lineBomb é a frase quando houve uma
+    S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.', lineBomb: 'Ficha limpa, só uma delaçãozinha. O povo agradece.' },
     A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.' },
     B: { label: '2º TURNO', line: 'Uns arranhões, mas passou.' },
     C: { label: 'SUPLENTE', line: 'Passou raspando. Igual ao orçamento.' },
@@ -206,15 +207,19 @@
   // mantém a classe 'short' da tela atual em dia quando o celular gira/redimensiona
   // (adiado um quadro: o core recalcula G.H e o tamanho do #ui no próprio listener de resize)
   window.addEventListener('resize', () => requestAnimationFrame(() => { if (cur) cur.root.classList.toggle('short', G.H < 700); }));
+  // fn roda no resize e também quando as fontes da web chegam (G.UI.fontsReady): o texto muda de
+  // tamanho e o que foi medido ou pintado uma vez (silhuetas com "?", altura da urna) fica velho
   function onResize(scr, fn) {
     const h = () => requestAnimationFrame(() => { if (scr.alive) G.safe(fn, 'ui.resize'); });
     window.addEventListener('resize', h);
     scr.cleanups.push(() => window.removeEventListener('resize', h));
+    (scr.refresh || (scr.refresh = [])).push(h);
   }
-  // Ajusta a resolução do canvas ao tamanho na tela; desenha em px CSS
-  function fitCanvas(cv) {
-    const w = cv.clientWidth || 1, h = cv.clientHeight || 1;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Ajusta a resolução do canvas ao tamanho na tela; desenha em px CSS.
+  // cw/ch: tamanho já medido (evita ler o layout a cada quadro); maxDpr: teto da densidade
+  function fitCanvas(cv, cw, ch, maxDpr) {
+    const w = cw || cv.clientWidth || 1, h = ch || cv.clientHeight || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr || 2);
     const pw = Math.max(1, Math.round(w * dpr)), ph = Math.max(1, Math.round(h * dpr));
     if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
     const ctx = cv.getContext('2d');
@@ -486,7 +491,7 @@
       '<button type="button" class="key key-num" data-go="conq"><i>3</i><span>CONQUISTAS<em>' + ac.got + '/' + ac.total + '</em></span></button>' +
       '<button type="button" class="key key-num" data-go="como"><i>4</i><span>COMO JOGAR</span></button>' +
       '<button type="button" class="key key-num" data-go="ajustes"><i>5</i><span>AJUSTES</span></button>' +
-      '<button type="button" class="key key-num" data-go="creditos"><i>6</i><span>CRÉDITOS</span></button>' +
+      '<button type="button" class="key key-num" data-go="creditos"><i>6</i><span>CRÉDITOS<em>+ HISTÓRIA</em></span></button>' +
       '</div>' +
       '<div class="keyrow">' +
       (S.cleared ? keyHTML('branco', '2º MANDATO', 'mais difícil · mais Pix', 'k-mandato', ' data-go="mandato"') : '') +
@@ -529,12 +534,36 @@
     txt.addEventListener('animationend', nextNews);
     nextNews();
 
-    // arte animada (G.Art.titleArt) ocupando a área acima da urna
+    // arte animada (G.Art.titleArt) ocupando a área acima da urna.
+    // As medidas (tamanho do canvas, topo da urna) só são lidas no começo, no resize, quando as
+    // fontes chegam ou quando o ResizeObserver avisa; nunca a cada quadro.
     const cv = q(scr.root, '.t-art'), urna = q(scr.root, '.urna-title');
+    let L = null;
+    const measure = () => {
+      const w = cv.clientWidth || 1, h = cv.clientHeight || 1;
+      L = { w, h, ah: clamp(urna.offsetTop + 26, 160, h) };
+    };
+    onResize(scr, measure);
+    if (typeof ResizeObserver === 'function') {
+      try {
+        const ro = new ResizeObserver(() => { L = null; });
+        ro.observe(cv); ro.observe(urna);
+        scr.cleanups.push(() => ro.disconnect());
+      } catch (e) { /* sem ResizeObserver: o resize da janela basta */ }
+    }
+    // no máximo 60 quadros/s (telas de 90/120 Hz) e 30 na qualidade leve; a densidade do
+    // canvas segue a qualidade (leve = 1, média = 1,5), como o canvas do jogo
+    let acc = 1;
     loop(scr, (dt) => {
       artT += dt;
-      const f = fitCanvas(cv);
-      const ah = clamp(urna.offsetTop + 26, 160, f.h);
+      acc += dt;
+      const low = G.quality === 'low';
+      const step = low ? 1 / 30 : 1 / 60;
+      if (acc + 0.002 < step) return;
+      acc = Math.min(acc - step, step);
+      if (!L) measure();
+      const f = fitCanvas(cv, L.w, L.h, low ? 1 : G.quality === 'mid' ? 1.5 : 2);
+      const ah = L.ah;
       f.ctx.clearRect(0, 0, f.w, f.h);
       if (G.Art && typeof G.Art.titleArt === 'function') G.call(G.Art, 'titleArt', f.ctx, f.w, ah, artT);
       else fallbackTitleArt(f.ctx, f.w, ah, artT);
@@ -661,9 +690,11 @@
     onResize(scr, layout);
     loop(scr, (dt) => {
       pt += dt;
+      // mede o canvas ANTES de a máquina de escrever mexer no texto (ler depois de escrever
+      // força um layout extra a cada quadro)
+      const f = fitCanvas(cv);
       typer.update(dt);
       if (typer.done) scr.root.classList.add('typed');
-      const f = fitCanvas(cv);
       if (G.Art && typeof G.Art.scene === 'function') G.call(G.Art, 'scene', f.ctx, panels[idx].scene || 'urna', f.w, f.h, pt);
     });
   }
@@ -732,9 +763,9 @@
     show(0);
     loop(scr, (dt) => {
       lt += dt;
+      const f = fitCanvas(cv); // antes da máquina de escrever (sem layout forçado por quadro)
       typer.update(dt);
       if (typer.done) scr.root.classList.add('typed');
-      const f = fitCanvas(cv);
       const mouth = typer.done ? 0 : Math.round(Math.abs(Math.sin(lt * 13)) * 4) / 4;
       f.ctx.clearRect(0, 0, f.w, f.h);
       drawPhoto(f.ctx, f.w, f.h, who, lt + 0.3, { mouth, mood, size: f.w * 1.02, cy: f.h * 0.52, light: '#fff7d6' });
@@ -793,6 +824,23 @@
     if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
   }
   function fmtTime(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+  // Dica da próxima nota, tirada das regras do próprio core (G.rankFor), sem copiar números
+  function rankTip(rank, idx) {
+    if (typeof G.rankFor !== 'function' || rank === 'S') return '';
+    try {
+      const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+      if (rank === 'A') {
+        let b = -1;
+        for (let n = 0; n <= 9; n++) if (G.rankFor(0, n, idx) === 'S') b = n;
+        if (b < 0) return '';
+        return 'Nota S: sem perder vida e ' + (b === 0 ? 'sem Delação.' : 'no máximo ' + plural(b, 'Delação.', 'Delações.'));
+      }
+      if (rank === 'B') return G.rankFor(0, 99, idx) === 'A' ? 'Nota A: termine a fase sem perder vida.' : '';
+      let h = 0;
+      for (let n = 1; n <= 20; n++) if (G.rankFor(n, 0, idx) === 'B') h = n;
+      return h ? 'Nota B: perca no máximo ' + plural(h, 'vida', 'vidas') + ' nesta fase.' : '';
+    } catch (e) { return ''; }
+  }
   function showStageClear(stats, done) {
     stats = stats || {};
     const fin = once(done);
@@ -804,6 +852,7 @@
     const rank = RANKS[stats.rank] ? stats.rank : 'C';
     // subiu a nota desta fase? (só quando já havia uma nota antes)
     const better = !!prevRank && (RANK_ORDER[rank] || 0) > (RANK_ORDER[prevRank] || 0);
+    const tip = rankTip(rank, stats.index | 0);
     const rows = [
       { k: 'VOTOS', v: stats.score, cls: 'big' },
       { k: 'POLÍTICOS CASSADOS', v: stats.kills },
@@ -837,8 +886,9 @@
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p></div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
-      '<p class="rc-line">' + esc(RANKS[rank].line) + '</p>' +
-      (better ? '<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
+      '<p class="rc-line">' + esc((stats.bombsUsed > 0 && RANKS[rank].lineBomb) || RANKS[rank].line) + '</p>' +
+      (tip ? '<p class="rc-tip">' + esc(tip) + '</p>' : '') +
+      (better ?'<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
       '<div class="rc-foot"><i class="barcode"></i><span>CÓD. VERIFICAÇÃO 171-' + String(((stats.score || 0) % 9973) + 1000).slice(0, 4) + '-ZÉ</span><b>FIM</b></div>' +
       '</div></div></div>' +
       '<div class="cl-keys">' + keyHTML('confirma', 'CONTINUAR', 'CONFIRMA', 'k-next key-wide') + '</div>' +
@@ -929,7 +979,8 @@
       kicker: fromRun ? 'PARADA NA ESTRADA' : 'MELHORIAS PERMANENTES',
       title: 'LOJINHA<br>DO ZÉ',
       right: '<div class="saldo">' + PIX_ICO + '<span><small>SALDO</small><b class="saldo-v">' + money(G.save.pix) + '</b></span></div>',
-      body: '<p class="quip"><b>Zé:</b> <span class="quip-t">' + esc(pick(SHOP_QUIPS)) + '</span></p><div class="up-list">' + rows + '</div>',
+      // na parada entre fases a compra já vale para a viagem em andamento (G.buyUpgrade aplica na hora)
+      body: '<p class="quip"><b>Zé:</b> <span class="quip-t">' + esc(fromRun ? 'Comprou aqui na parada? Já vale nesta viagem.' : pick(SHOP_QUIPS)) + '</span></p><div class="up-list">' + rows + '</div>',
       foot: fromRun
         ? lcdFoot('SEGUIR VIAGEM', '') + (nextInfo ? '<span class="foot-msg">Próxima parada: <b>' + esc(nextInfo.name) + '</b></span>' : '')
         : lcdFoot('COMPRAR', 'VOLTAR'),
@@ -1337,14 +1388,40 @@
     scr.onKey = (e, k) => { if (k === 'Escape' || k === 'Backspace') { sfx('ui_back'); showTitle(true); } };
   }
 
-  // Cartões ilustrados do "Como jogar"
+  // Regras do item P lidas do core (G.POWER_CYCLE, G.powerNeed), com os valores de hoje de reserva
+  const powerCycle = () => (+G.POWER_CYCLE > 0 ? +G.POWER_CYCLE : 3);
+  const numPT = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
+  const listPT = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1]);
+  function powerNeeds() {
+    const out = [], max = G.MAX_LEVEL || 5;
+    for (let lv = 1; lv < max; lv++) {
+      let n = typeof G.powerNeed === 'function' ? +G.powerNeed(lv) : NaN;
+      if (!(n > 0)) n = [1, 2, 3, 3][lv - 1] || 3;
+      out.push(n);
+    }
+    return out;
+  }
+  function howtoPower() {
+    const c = powerCycle();
+    return 'Ele troca de arma a cada ' + numPT(c) + (c === 1 ? ' segundo' : ' segundos') + ': a <b>cor escolhe a arma</b>. ' +
+      '<b>Todo P deixa a arma mais forte</b> (' + listPT(powerNeeds()) + ' P por nível). ' +
+      'Perdeu uma vida? O nível perdido cai como um P "de volta".';
+  }
+  // Uma linha por arma no cartão do P (o que cada uma faz de verdade no core)
+  const WEAPON_TIP = {
+    voto: 'Tiro reto e rápido. Mais tiros a cada nível.',
+    boca: 'Rajada reta no meio e um leque largo dos lados.',
+    panela: 'Panelas teleguiadas caçam o alvo. Plém!',
+    jato: 'Jato contínuo que fura a fila: o 1º leva mais.',
+  };
+  // Cartões ilustrados do "Como jogar" (d pode ser função: texto montado com as regras do core)
   const HOWTO = [
     { t: 'ARRASTE EM QUALQUER LUGAR', d: 'O Fusca segue o <b>movimento</b> do dedo, sem ficar embaixo dele. Dá pra pilotar com o dedão lá embaixo.', draw: 'drag' },
     { t: 'TIRO AUTOMÁTICO', d: 'O Fusca atira sozinho. Sua única preocupação é desviar.', draw: 'fire' },
     { t: 'SÓ O PONTO BRANCO CONTA', d: 'O <b>ponto branco</b> no meio do Fusca é o único ponto vulnerável. O resto é lataria: o tiro passa.', draw: 'hitbox' },
     { t: 'RASPÃO DÁ VOTO', d: 'Passar <b>raspando</b> nos tiros dá pontos e carrega a Delação Premiada. Cheio = delação de graça.', draw: 'graze' },
-    { t: 'O ITEM P MUDA DE COR', d: 'Ele troca de arma a cada 3 segundos. Pegue na <b>cor da arma que você quer</b>. Mesma cor: sobe o nível.', draw: 'power', weapons: true },
-    { t: 'DELAÇÃO PREMIADA', d: 'O botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Use quando apertar.', draw: 'bomb' },
+    { t: 'O ITEM P MUDA DE COR', d: howtoPower, draw: 'power', weapons: true },
+    { t: 'DELAÇÃO PREMIADA', d: 'Um <b>toque rápido</b> no botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Arrastar a partir dele só pilota, não gasta.', draw: 'bomb' },
     { t: 'APROVAÇÃO', d: 'Derrube políticos sem parar e a aprovação sobe, <b>multiplicando os votos</b> (até ×5). Levar tiro derruba ela.', draw: 'approval' },
     { t: 'PIX E LOJINHA', d: 'Político derrubado solta <b>Pix</b>. Junte e gaste em melhorias permanentes na Lojinha do Zé.', draw: 'pix' },
     { t: 'O LEÃO DA RECEITA', d: 'Ele dá o bote no Fusca e <b>morde parte do seu Pix</b>. Fique de olho na linha laranja e derrube-o antes.', draw: 'leao' },
@@ -1404,8 +1481,8 @@
     power(c, w, h, t) {
       tileBG(c, w, h);
       const order = G.WEAPON_ORDER || ['voto', 'boca', 'panela', 'jato'];
-      // mesmo ritmo do jogo: troca de arma a cada 3 s (anel mostra quanto falta)
-      const PER = 3, k = (t % PER) / PER;
+      // mesmo ritmo do jogo: troca de arma a cada G.POWER_CYCLE s (anel mostra quanto falta)
+      const PER = powerCycle(), k = (t % PER) / PER;
       const wt = order[Math.floor(t / PER) % order.length];
       const cx = w / 2, cy = h * 0.44;
       c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = 2.5;
@@ -1468,8 +1545,12 @@
     let cards = '';
     HOWTO.forEach((it, i) => {
       cards += '<div class="how' + (i % 2 ? ' alt' : '') + '"><span class="how-cv"><canvas data-draw="' + it.draw + '" aria-hidden="true"></canvas></span>' +
-        '<span class="how-txt"><b><i>' + (i + 1) + '</i>' + it.t + '</b><small>' + it.d + '</small></span>' +
-        (it.weapons ? '<span class="how-weap">' + (G.WEAPON_ORDER || []).map((w) => '<span><canvas data-weapon="' + w + '"></canvas><em style="color:' + (G.WEAPONS[w] || {}).color + '">' + esc((G.WEAPONS[w] || {}).name || w) + '</em></span>').join('') + '</span>' : '') +
+        '<span class="how-txt"><b><i>' + (i + 1) + '</i>' + it.t + '</b><small>' + (typeof it.d === 'function' ? it.d() : it.d) + '</small></span>' +
+        (it.weapons ? '<span class="how-weap">' + (G.WEAPON_ORDER || []).map((w) => {
+          const wd = G.WEAPONS[w] || {};
+          return '<span><canvas data-weapon="' + w + '"></canvas><span class="hw-t"><em style="color:' + wd.color + '">' + esc(wd.name || w) + '</em>' +
+            '<small>' + esc(WEAPON_TIP[w] || wd.desc || '') + '</small></span></span>';
+        }).join('') + '</span>' : '') +
         '</div>';
     });
     const scr = pageShell('howto', {
@@ -1505,15 +1586,32 @@
     });
   }
 
+  // Rever a abertura: o core só a passa na primeira partida (G.save.seenIntro)
+  const hasIntro = () => !!(G.STORY && G.STORY.intro && G.STORY.intro.length);
+  function rewatchStory() {
+    if (!hasIntro()) { showTitle(true); return; }
+    G.call(G.Audio, 'music', 'story');
+    UI.story(G.STORY.intro, () => {
+      if (G.state !== 'menu') return; // (algo já tirou o jogo do menu)
+      G.call(G.Audio, 'music', 'menu');
+      showTitle(true);
+    });
+  }
   function showCredits() {
+    const story = hasIntro();
     const scr = pageShell('credits', {
       kicker: 'FICHA TÉCNICA', title: 'CRÉDITOS',
       body: '<div class="cr-page">' + creditsHTML(false) + '</div>',
-      foot: lcdFoot('', 'VOLTAR'),
-      keys: backKey(),
+      foot: lcdFoot(story ? 'REVER A HISTÓRIA' : '', 'VOLTAR'),
+      keys: backKey() + (story ? keyHTML('confirma', 'HISTÓRIA', 'CONFIRMA', 'k-story') : ''),
     });
     onTap(q(scr.root, '.k-back'), () => showTitle(true));
-    scr.onKey = (e, k) => { if (k === 'Escape' || k === 'Backspace') { sfx('ui_back'); showTitle(true); } };
+    onTap(q(scr.root, '.k-story'), rewatchStory);
+    scr.onKey = (e, k) => {
+      if (k === 'Escape' || k === 'Backspace') { sfx('ui_back'); showTitle(true); }
+      else if (story && k === 'Enter') { e.preventDefault(); sfx('ui_confirm'); rewatchStory(); }
+    };
+    focusEl(q(scr.root, '.k-story'));
   }
 
   // ==================================================================
@@ -1572,7 +1670,9 @@
     // extras (debug/integração)
     close() { close(); },
     current() { return cur ? cur.kind : null; },
-    show(name) { const f = { stages: showStages, settings: showSettings, achievements: showAchievements, howto: showHowTo, credits: showCredits }[name]; if (f) f(); },
+    show(name) { const f = { stages: showStages, settings: showSettings, achievements: showAchievements, howto: showHowTo, credits: showCredits, story: rewatchStory }[name]; if (f) f(); },
+    // o core chama quando as fontes da web chegam depois do boot: remede e repinta a tela atual
+    fontsReady() { const s = cur; if (s && s.alive && s.refresh) for (const h of s.refresh) h(); },
   };
   G.UI = UI;
 })();

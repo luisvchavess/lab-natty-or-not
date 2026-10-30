@@ -22,15 +22,17 @@
   const INK = '#101418', WHITE = '#ffffff';
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
   const L2 = () => !!(G.game && G.game.loop > 1);
-  // qualidade 'low' (ENGINE §10): sem partículas puramente decorativas contínuas
-  const deco = () => G.quality !== 'low';
+  // qualidade (ENGINE §10): partículas puramente decorativas contínuas e brilhos extras
+  // 'high' tudo, 'mid' metade das partículas (sem o brilho dourado), 'low' nenhuma partícula decorativa
+  const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
 
-  // HP medido com o bot "humano" (tools/humanbot.js): jogador bom com VOTO nv.5 (≈ 56 dps) leva ~80 s na
-  // 1ª vida + ~55 s na 2ª — a luta mais longa do jogo, como deve ser. Quem chega fraco (nv.1–2) não fica
-  // preso para sempre: o Lule CANSA (veja FAT1/FAT2) e passa a levar até 2× de dano.
-  const HP1 = 4600, HP2 = 3000, HOME_Y = 178;
+  // HP medido com o bot "humano" (tools/humanbot.js --mode ttk, só mirando): VOTO/PANELAÇO/LAVA-JATO nv.5 levam
+  // ~64 s na 1ª vida + ~44 s na 2ª (≈ 110–120 s com a cena da volta) — a luta mais longa do jogo, como deve ser.
+  // Nv.3: 150–210 s. Quem chega fraco não fica preso para sempre: o Lule CANSA (FAT1/FAT2) e leva até 2× de dano.
+  const HP1 = 4400, HP2 = 2850, HOME_Y = 178;
   // Cansaço (anti-empate), contado por vida: começa aos FAT1 s na 1ª vida / FAT2 s na 2ª, chega a 2× em FAT_RAMP s.
-  const FAT1 = 115, FAT2 = 75, FAT_RAMP = 60;
+  // (nv.5 com arma de alvo único termina cada vida antes disso)
+  const FAT1 = 75, FAT2 = 50, FAT_RAMP = 35;
   // Lule (G.Art.person) é desenhado com este tamanho, centrado em (0, PY) relativo ao chefão
   const PS = 136, PY = -30, GY = 6; // GY: churrasqueira um pouco mais baixa
 
@@ -101,6 +103,24 @@
     G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10 });
   }
   function pose(b, name, dur) { b.data.pose = name; b.data.poseT = dur || 0.8; }
+
+  // ---------- aquecimento (evita a travadinha no 1º quadro de cada desenho novo) ----------
+  // Lule: G.Art.prewarm pinta os sprites do corpo (pose × balanço × flash) em segundo plano, uma vez por chave.
+  function warmPoses(b, key, spec, list) {
+    const d = b.data, w = d.warmed || (d.warmed = {});
+    if (w[key] || !G.Art || !G.Art.prewarm) return;
+    w[key] = 1;
+    G.call(G.Art, 'prewarm', list.map((ps) => ({ spec, size: PS, mood: 'normal', pose: ps })));
+  }
+  // Tiros: um sprite de (estilo, cor) por passo durante a entrada (updateEnter); start() termina a fila.
+  const SHOTS = [['lule_picanha', COL.meat], ['lule_picanhao', COL.ember], ['lule_lata', COL.orange], ['lule_lata_f', COL.orange],
+    ['lule_espuma', COL.red], ['lule_pacote', COL.orange], ['lule_blusa', COL.hot], ['lule_blusa', COL.violet], ['lule_blusa', COL.magenta],
+    ['lule_estrela', COL.red], ['lule_neon', COL.pink], ['lule_neon', COL.magenta], ['rice', COL.magenta], ['orb', COL.red],
+    ['small', COL.pink], ['small', COL.orange]];
+  function warmShotsStep(b, n) {
+    const q = b.data.warmQ; if (!q || !q.length) return;
+    for (let i = 0; i < n && q.length; i++) { const p = q.shift(); G.call(G.BulletStyles, 'sprite', p[0], p[1]); }
+  }
 
   // ---------- corrotinas (várias em paralelo) ----------
   function co(b, gen) { b.data.cos.push({ gen, wait: 0, until: null, done: false }); }
@@ -577,7 +597,7 @@
           bl.ang += M.clamp(M.wrapAngle(want - bl.ang), -1.35 * dt, 1.35 * dt);
         }
         bl.vx = Math.cos(bl.ang) * sp; bl.vy = Math.sin(bl.ang) * sp;
-        if (deco() && Math.random() < 0.25) G.part({ x: bl.x + M.rand(-14, 14), y: bl.y - 16, vx: M.rand(-10, 10), vy: -50, type: 'smoke', size: 4, life: 0.5, color: 'rgba(230,230,240,0.35)' });
+        if (Math.random() < 0.25 * decoK()) G.part({ x: bl.x + M.rand(-14, 14), y: bl.y - 16, vx: M.rand(-10, 10), vy: -50, type: 'smoke', size: 4, life: 0.5, color: 'rgba(230,230,240,0.35)' });
       },
     });
   }
@@ -857,7 +877,7 @@
     if (d.revStep >= 3) {
       d.dim = Math.max(0, d.dim - dt * 0.6);
       b.hp = b.maxHp * M.clamp((t - d.refill0) / 2.2, 0, 1); // barra enchendo de novo
-      if (Math.random() < 0.25) G.part({ x: b.x + M.rand(-70, 70), y: b.y + M.rand(-80, 60), vx: 0, vy: -60, type: 'spark', size: 2.5, life: 0.5, color: '#ff5d6e' });
+      if (Math.random() < 0.25 * (0.4 + 0.6 * decoK())) G.part({ x: b.x + M.rand(-70, 70), y: b.y + M.rand(-80, 60), vx: 0, vy: -60, type: 'spark', size: 2.5, life: 0.5, color: '#ff5d6e' });
     }
     if (d.revStep === 3 && t > d.refill0 + 2.5) {
       d.revStep = 4;
@@ -879,7 +899,9 @@
     G.setBossPhases(b, PH2, 1);
     b.invulnT = 1.2;
     G.call(G.Audio, 'music', 'boss_final');
-    G.banner('FASE 1', PH2[0].name, { color: G.C.yellow, dur: 1.8, small: true });
+    // "FASE" é o nome das etapas e o core anuncia as fases do chefão como "Nº TURNO". Mandato novo,
+    // contagem nova: depois deste vêm "2º TURNO — Picanha Infinita" e "3º TURNO — A Última Picanha".
+    G.banner('NOVO MANDATO', PH2[0].name, { color: G.C.yellow, dur: 1.8, small: true });
     startPhase(b, 0);
   }
 
@@ -1078,7 +1100,7 @@
     d.smokeT -= dt;
     if (d.smokeT <= 0 && b.state !== 'warning') {
       d.smokeT = 0.16 - heat * 0.06;
-      if (d.smoke.length < 26) d.smoke.push({ x: b.x + M.rand(-60, 60), y: b.y + 10, vx: M.rand(-8, 8), r: M.rand(5, 9), t: 0, life: M.rand(1.6, 2.4), dark: heat > 0.5 || d.slump > 0.3 });
+      if (d.smoke.length < 10 + 16 * decoK()) d.smoke.push({ x: b.x + M.rand(-60, 60), y: b.y + 10, vx: M.rand(-8, 8), r: M.rand(5, 9), t: 0, life: M.rand(1.6, 2.4), dark: heat > 0.5 || d.slump > 0.3 });
     }
     for (let i = d.smoke.length - 1; i >= 0; i--) {
       const s = d.smoke[i];
@@ -1244,7 +1266,7 @@
     if (d.life === 2 && !fl) {
       const pul = 0.85 + 0.15 * Math.sin(t * 5);
       glow(c, b.x, b.y - 14, 160 * pul, 'rgba(255,36,56,0.95)', 1);
-      glow(c, b.x, b.y - 50, 80, 'rgba(255,210,63,0.5)', pul);
+      if (G.quality === 'high') glow(c, b.x, b.y - 50, 80, 'rgba(255,210,63,0.5)', pul); // brilho extra
     }
 
     const bob = bobY(b);
@@ -1338,8 +1360,11 @@
       d.hpMul = b.maxHp / HP1; // 2º mandato: o core já multiplicou o HP
       b.hitboxes = HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       b.phases = PH1.slice();
+      warmPoses(b, 'p1', SPEC, ['idle', 'wave', 'point']);
+      d.warmQ = SHOTS.slice();
     },
-    start(b) { startPhase(b, 0); },
+    updateEnter(b) { warmShotsStep(b, 1); },
+    start(b) { warmShotsStep(b, 99); startPhase(b, 0); },
     update(b, dt, g) {
       const d = b.data;
       d.poseT -= dt; if (d.poseT <= 0 && d.pose !== 'idle' && !d.lsign) d.pose = 'idle';
@@ -1365,7 +1390,7 @@
       b.y += (d.ty - b.y) * f;
       d.compA += dt * (L2() ? 1.05 : 0.85);
       // 4º mandato: faíscas vermelhas e douradas subindo em volta dele
-      if (d.life === 2 && deco() && Math.random() < dt * 10) {
+      if (d.life === 2 && Math.random() < dt * 10 * decoK()) {
         const a = M.rand(0, TAU);
         G.part({ x: b.x + Math.cos(a) * 78, y: b.y - 10 + Math.sin(a) * 70, vx: 0, vy: M.rand(-70, -40), type: 'spark', size: 2.4, life: 0.55, color: Math.random() < 0.7 ? '#ff3b4e' : '#ffd23f', drag: 0.96 });
       }
@@ -1388,6 +1413,9 @@
     onPhase(b, idx) {
       const d = b.data;
       if (d.reviving) return;
+      // o que vem a seguir: suado (HP < 50% e a 2ª vida inteira), a cena da volta e os espetinhos da 2ª vida
+      if (d.life === 1 && idx === 1) warmPoses(b, 'sw', SPEC_SWEAT, ['idle', 'point', 'up']);
+      if (d.life === 1 && idx === 3) warmPoses(b, 'sw2', SPEC_SWEAT, ['shrug', 'wave']);
       startPhase(b, idx);
     },
     onHit(b, dmg) {

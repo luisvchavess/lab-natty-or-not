@@ -990,6 +990,29 @@
     return cv;
   }
   const q2 = (v) => Math.round(v * 2) / 2;
+  // Chave de cache de um spec. Os chamadores reaproveitam objetos constantes (o Centrão desenha 7–16
+  // cabeças por quadro): o JSON.stringify sai uma vez por objeto, guardado num WeakMap, e vira um id
+  // curto ('#12'), igual para specs de mesmo conteúdo (as chaves dos sprites ficam pequenas). Um objeto
+  // novo a cada quadro continua funcionando (só paga o stringify, como antes). null = spec não serializável.
+  const specKeys = new WeakMap(), specIds = new Map();
+  function specKey(spec) {
+    if (!spec || typeof spec !== 'object') return null;
+    let k = specKeys.get(spec);
+    if (k === undefined) {
+      let js = null;
+      try { js = JSON.stringify(spec); } catch (e) { /* circular etc. */ }
+      if (js == null) k = null;
+      else {
+        k = specIds.get(js);
+        if (k === undefined) { k = '#' + specIds.size; specIds.set(js, k); }
+      }
+      specKeys.set(spec, k);
+    }
+    return k;
+  }
+  // Cópia exata (pixel a pixel, sem filtro) quando a transformação final é só uma translação na escala
+  // do sprite (o padrão blitExact do bosses.js): ~4x mais barata na rasterização em CPU.
+  let EXACT = true;
   // resolução dos sprites do jogo (px do aparelho por px lógico); muda com a qualidade
   function gameRes() {
     const res = G.canvas ? G.canvas.width / G.W : 0;
@@ -1003,8 +1026,8 @@
     const sz = Math.round(size);
     const s = sz / 100;
     const t = o.t || 0, seed = spec.seed || 0;
-    let sk;
-    try { sk = JSON.stringify(spec); } catch (e) { return false; }
+    let sk = specKey(spec);
+    if (sk === null) return false;
     if (resOver) sk += '@' + resOver;
     const flash = !!o.flash;
     const body = spec.body || 'suit';
@@ -1050,9 +1073,25 @@
     ctx.translate(x, y);
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
-    if (bodyS) ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
-    ctx.drawImage(headS, (BOX_HEAD[0] + hx) * s, (BOX_HEAD[1] + bob) * s, BOX_HEAD[2] * s, BOX_HEAD[3] * s);
-    if (armS) ctx.drawImage(armS, BOX_ARMS[0] * s, BOX_ARMS[1] * s, BOX_ARMS[2] * s, BOX_ARMS[3] * s);
+    let m = null;
+    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+      m = ctx.getTransform();
+      if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
+    }
+    if (m) {
+      // na escala do sprite: copia na grade do aparelho (a origem do sprite já é box * s * res)
+      const r = s * res;
+      ctx.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
+      ctx.imageSmoothingEnabled = false;
+      if (bodyS) ctx.drawImage(bodyS, Math.round(BOX_BODY[0] * r), Math.round(BOX_BODY[1] * r));
+      ctx.drawImage(headS, Math.round((BOX_HEAD[0] + hx) * r), Math.round((BOX_HEAD[1] + bob) * r));
+      if (armS) ctx.drawImage(armS, Math.round(BOX_ARMS[0] * r), Math.round(BOX_ARMS[1] * r));
+      if (!flash && needEmotes(mood, spec)) ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f); // o restore() desfaz o resto
+    } else {
+      if (bodyS) ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
+      ctx.drawImage(headS, (BOX_HEAD[0] + hx) * s, (BOX_HEAD[1] + bob) * s, BOX_HEAD[2] * s, BOX_HEAD[3] * s);
+      if (armS) ctx.drawImage(armS, BOX_ARMS[0] * s, BOX_ARMS[1] * s, BOX_ARMS[2] * s, BOX_ARMS[3] * s);
+    }
     if (!flash && needEmotes(mood, spec)) {
       ctx.scale(s, s); ctx.translate(hx, 0);
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -1073,8 +1112,8 @@
     if (!(res > 0)) return false;
     const sz = Math.round(size), s = sz / 100;
     const t = o.t || 0, seed = spec.seed || 0;
-    let sk;
-    try { sk = JSON.stringify(spec); } catch (e) { return false; }
+    const sk = specKey(spec);
+    if (sk === null) return false;
     const flash = !!o.flash;
     const pose = o.pose || spec.pose || 'idle';
     const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
@@ -1091,7 +1130,18 @@
     ctx.translate(x, y);
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
-    ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
+    let m = null;
+    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+      m = ctx.getTransform();
+      if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
+    }
+    if (m) { // corpo copiado na grade do aparelho (ver personCached); a cabeça segue em vetor
+      ctx.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bodyS, Math.round(BOX_BODY[0] * s * res), Math.round(BOX_BODY[1] * s * res));
+      ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+      ctx.imageSmoothingEnabled = true;
+    } else ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
     ctx.scale(s, s);
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     const bob = mood === 'laugh' ? -Math.abs(Math.sin(t * 12 + seed)) * 2.4 : Math.sin(t * 6 + seed) * 1.2;
@@ -1180,8 +1230,8 @@
     if (!(res > 0)) return;
     for (const it of [].concat(list)) {
       if (!it || !it.spec || !(it.size > 1)) continue;
-      let sk;
-      try { sk = JSON.stringify(it.spec); } catch (e) { continue; }
+      const sk = specKey(it.spec);
+      if (sk === null) continue;
       const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
       const id = sk + '|' + sz + '|' + mood + '|' + pose;
       if ((WARM.seen.get(id) || 0) >= 2) continue;
@@ -2728,6 +2778,7 @@
     prewarm,
     fontsReady,
     // depuração: tamanho do cache de sprites dos personagens
-    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size }; },
+    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size, specs: specIds.size, exact: EXACT }; },
+    _exact(v) { EXACT = !!v; }, // testes A/B da cópia exata
   });
 })();

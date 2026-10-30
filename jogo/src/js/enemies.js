@@ -283,15 +283,11 @@
     if (type === 'power') return ((G.WEAPONS || {})[carrierWeapon(g)] || {}).color || '#fff';
     return { life: '#ff5d8f', shield: '#4cc9f0', bomb: '#f4f1e8', cafe: '#d4a373' }[type] || '#fff';
   }
-  // chamado logo depois do core soltar os itens do carregador (killEnemy solta antes do onDeath)
+  // e.dropW = arma do P que o core solta na morte (G.killEnemy lê e.dropW). Atualizado a cada
+  // quadro no update, junto do desenho do selo: cai a cor que o jogador viu por último.
   function syncCarrierDrop(e, g) {
-    if (!g || !g.pickups || e.big || carrierType(e) !== 'power') return;
-    const w = carrierWeapon(g);
-    const P = g.pickups;
-    for (let i = P.length - 1, n = 0; i >= 0 && n < 40; i--, n++) {
-      const it = P[i];
-      if (it.type === 'power' && !it.restore && it.t === 0 && it.x === e.x && it.y === e.y) { it.wtype = w; it.wtype0 = w; }
-    }
+    if (e.drop && !e.big && carrierType(e) === 'power') e.dropW = carrierWeapon(g || G.game);
+    else if (e.dropW) e.dropW = undefined;
   }
   function drawCarrierUnder(ctx, e, g, type) {
     const pulse = 0.5 + 0.5 * Math.sin(g.t * 8);
@@ -320,21 +316,19 @@
   }
   // Define com moldura: chama introdução, desenha carregador/etiqueta em volta do desenho próprio
   function define(kind, def) {
-    const draw = def.draw, update = def.update, init = def.init, onDeath = def.onDeath;
-    def.onDeath = function (e, g, opts) {
-      if (!(opts && opts.silent)) syncCarrierDrop(e, g || G.game);
-      if (onDeath) return onDeath.call(this, e, g, opts);
-    };
+    const draw = def.draw, update = def.update, init = def.init;
     def.init = function (e, o, g) {
       // fases mais adiantadas: inimigos comuns mais resistentes (o Zé também chega mais forte)
       if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * (g.stageIdx || 0); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
       introduce(e);
+      syncCarrierDrop(e, g);
     };
     def.update = function (e, dt, g) {
       if (update) update.call(this, e, dt, g); else { e.x += e.vx * dt; e.y += e.vy * dt; }
       if (e.data.tag && e.y > 26) e.data.tagT += dt;
+      if (e.drop || e.dropW) syncCarrierDrop(e, g);
     };
     def.draw = function (ctx, e, g) {
       const ct = e.big ? null : carrierType(e);
@@ -2044,4 +2038,84 @@
       person(ctx, e, 28, MIN[d.v], { pose: posing ? 'up' : 'hold', facing: d.facing, mood: d.dieAt ? 'hurt' : posing ? 'laugh' : 'normal' });
     },
   });
+
+  // ======================================================================
+  // AQUECIMENTO — pinta os políticos (G.Art.prewarm) e os sprites de tiro ANTES de um tipo novo
+  // entrar, para a primeira aparição de uma onda não engasgar o quadro.
+  // G.EnemyArt.prewarm(['cabo', 'fantasma', ...]) pode ser chamado à vontade (repetir não custa);
+  // o stages.js chama na apresentação da fase, no começo do roteiro e uns segundos antes de cada tipo.
+  // ======================================================================
+  // [spec(s), tamanho EXATO passado ao G.Art.person, [[pose, humor], ...]]
+  const ROSTER = {
+    cabo: () => [[CABO, 31, [['wave', 'normal']]]],
+    fantasma: () => [[GHOST, 36, [['up', 'normal'], ['up', 'laugh']]]],
+    deputado: () => [[DEP, 38, [['idle', 'smug']]]],
+    assessor: () => [[ASS, 33, [['hold', 'normal'], ['hold', 'hurt']]]], // 'hurt' = as metades rachadas
+    lobista: () => [[LOB, 46, [['idle', 'smug'], ['idle', 'laugh']]]],
+    marqueteiro: () => [[MKT, 36, [['wave', 'smug'], ['wave', 'laugh']]]],
+    sindicalista: () => [[SIND, 38, [['point', 'normal'], ['point', 'angry']]]],
+    ministro: () => [[MIN, 31, [['idle', 'normal'], ['hold', 'normal']]]],
+    motoqueiro: () => [[MOTO, 27, [['drive', 'laugh']]]],
+    trio: () => [[TRIO_C, 54, [['wave', 'smug'], ['up', 'smug'], ['wave', 'laugh'], ['up', 'laugh']]]],
+    lobista_mor: () => [[LOBMOR, 112, [['hold', 'normal']]]], // ≥ 70 px: o art.js guarda só o corpo
+    comitiva: () => [[COMI_CHEF, 46, [['wave', 'smug'], ['up', 'laugh'], ['wave', 'laugh']]],
+      [MIN, 28, [['hold', 'normal'], ['up', 'laugh'], ['hold', 'hurt']]]],
+  };
+  // estilo × cor de cada tipo (inclui os filhos: metades, malinhas, bots do servidor, a fila da comitiva)
+  const BULLETS = {
+    cabo: [['santinho', COL.red], ['small', COL.pink]],
+    fantasma: [['orb', COL.violet], ['small', COL.violet], ['small', COL.magenta]],
+    deputado: [['rice', COL.pink]],
+    assessor: [['rice', COL.orange], ['small', COL.pink]],
+    lobista: [['en_cedula', COL.nota50]],
+    marqueteiro: [['star', COL.magenta]],
+    bot: [['small', COL.magenta], ['small', COL.pink]],
+    carro_som: [['en_onda', COL.magenta], ['en_onda', COL.orange]],
+    sindicalista: [['rice', COL.orange]],
+    leao: [['en_imposto', COL.orange]],
+    ministro: [['rice', COL.pink], ['small', COL.pink]],
+    motoqueiro: [['rice', COL.orange]],
+    drone: [['needle', COL.red]],
+    trio: [['en_onda', COL.magenta], ['en_onda', COL.orange], ['santinho', COL.red], ['en_nota', COL.pink]],
+    lobista_mor: [['en_cedula', COL.nota50], ['en_cedula', COL.nota10]],
+    servidor: [['needle', COL.red], ['needle', COL.magenta], ['small', COL.magenta]],
+    comitiva: [['rice', COL.pink], ['star', COL.magenta], ['orb', COL.orange], ['small', COL.pink]],
+  };
+  const PWQ = [], BWQ = [];   // pedidos esperando a vez
+  const pwAsked = {};         // tipos já pedidos (por resolução do canvas)
+  let pwRes = 0, pwTimer = 0;
+  // O art.js aceita ~400 tarefas na fila e descarta (marcando como feito) o que passar disso:
+  // entregamos aos poucos, com a fila dele abaixo de ~200 tarefas (17 por combinação pequena).
+  function pwPump() {
+    pwTimer = 0;
+    try {
+      const A = G.Art;
+      if (A && A.prewarm) {
+        const st = A.cacheStats ? A.cacheStats() : null;
+        let room = 200 - (st && st.warmQueue > 0 ? st.warmQueue : 0);
+        while (PWQ.length && room > 0) { const it = PWQ.shift(); A.prewarm([it]); room -= it.size >= 70 ? 10 : 17; }
+      } else PWQ.length = 0;
+      // sprites de tiro: cada um custa 1-6 ms (shadowBlur); no máximo ~2 ms por vez
+      const t0 = performance.now();
+      while (BWQ.length && performance.now() - t0 < 2) { const b = BWQ.shift(); BS.sprite(b[0], b[1]); }
+    } catch (err) { PWQ.length = 0; BWQ.length = 0; G.reportError(err, 'enemies.prewarm'); }
+    if (PWQ.length || BWQ.length) pwTimer = setTimeout(pwPump, 60);
+  }
+  function prewarm(kinds) {
+    const res = G.canvas && G.W ? G.canvas.width / G.W : 0;
+    if (res !== pwRes) { pwRes = res; for (const k in pwAsked) delete pwAsked[k]; } // o art.js limpou o cache
+    for (const k of [].concat(kinds || [])) {
+      if (!k || pwAsked[k]) continue;
+      pwAsked[k] = 1;
+      const R = ROSTER[k];
+      if (R && res > 0) {
+        for (const [specs, size, combos] of R()) {
+          for (const spec of [].concat(specs)) for (const c of combos) PWQ.push({ spec, size, pose: c[0], mood: c[1] });
+        }
+      }
+      for (const b of BULLETS[k] || []) BWQ.push(b);
+    }
+    if (!pwTimer && (PWQ.length || BWQ.length)) pwTimer = setTimeout(pwPump, 0);
+  }
+  G.EnemyArt = { prewarm, pending: () => PWQ.length + BWQ.length };
 })();

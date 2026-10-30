@@ -895,6 +895,8 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .rc-stamp-area { position: relative; min-height: 9.4rem; margin-top: .8rem; padding-top: .8rem; border-top: .15rem dashed rgba(42, 45, 49, .5); }
 #ui .rc-line { max-width: 46%; margin: .2rem 0 0; font-size: 1.1rem; line-height: 1.35; opacity: 0; transition: opacity .3s .2s; }
 #ui .stamped .rc-line { opacity: 1; }
+#ui .rc-tip { max-width: 46%; margin: .45rem 0 0; font: 700 1rem/1.3 var(--font-body); color: #3c4a40; opacity: 0; transition: opacity .3s .35s; }
+#ui .stamped .rc-tip { opacity: 1; }
 #ui .rc-best { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2rem; margin: .6rem 0 0; padding: .4rem .7rem .4rem; border-radius: .5rem; background: #121519; color: var(--u-yel); opacity: 0; transform: scale(.6) rotate(-2deg); transform-origin: left center; transition: opacity .2s .45s, transform .3s cubic-bezier(.3, 1.6, .5, 1) .45s; }
 #ui .rc-best small { font: 900 1rem/1 var(--font-display); white-space: nowrap; }
 #ui .rc-best b { font: 900 1.6rem/1 var(--font-display); color: #fff; white-space: nowrap; }
@@ -1193,9 +1195,11 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .how-txt small { display: block; margin-top: .45rem; font: 600 1.3rem/1.28 var(--font-body); color: #2c3a30; }
 #ui .how-txt small b { font-weight: 800; color: var(--u-lcd-ink); }
 #ui .how-weap { flex: 1 0 100%; display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-#ui .how-weap > span { display: flex; align-items: center; gap: .5rem; padding: .3rem .6rem .3rem .3rem; border-radius: .6rem; background: #0b1022; }
+#ui .how-weap > span { display: flex; align-items: flex-start; gap: .5rem; padding: .45rem .6rem .5rem .3rem; border-radius: .6rem; background: #0b1022; }
 #ui .how-weap canvas { flex: none; width: 2.6rem; height: 2.6rem; }
 #ui .how-weap em { font: 800 1.1rem/1 var(--font-body); font-style: normal; letter-spacing: .04em; }
+#ui .how-weap .hw-t { display: flex; flex-direction: column; gap: .3rem; min-width: 0; padding-top: .2rem; }
+#ui .how-weap .hw-t small { font: 600 1.05rem/1.2 var(--font-body); color: rgba(255, 255, 255, .8); }
 
 /* ============================================================
    TOASTS
@@ -5001,6 +5005,29 @@ body.in-play #toasts { opacity: 0; }
     return cv;
   }
   const q2 = (v) => Math.round(v * 2) / 2;
+  // Chave de cache de um spec. Os chamadores reaproveitam objetos constantes (o Centrão desenha 7–16
+  // cabeças por quadro): o JSON.stringify sai uma vez por objeto, guardado num WeakMap, e vira um id
+  // curto ('#12'), igual para specs de mesmo conteúdo (as chaves dos sprites ficam pequenas). Um objeto
+  // novo a cada quadro continua funcionando (só paga o stringify, como antes). null = spec não serializável.
+  const specKeys = new WeakMap(), specIds = new Map();
+  function specKey(spec) {
+    if (!spec || typeof spec !== 'object') return null;
+    let k = specKeys.get(spec);
+    if (k === undefined) {
+      let js = null;
+      try { js = JSON.stringify(spec); } catch (e) { /* circular etc. */ }
+      if (js == null) k = null;
+      else {
+        k = specIds.get(js);
+        if (k === undefined) { k = '#' + specIds.size; specIds.set(js, k); }
+      }
+      specKeys.set(spec, k);
+    }
+    return k;
+  }
+  // Cópia exata (pixel a pixel, sem filtro) quando a transformação final é só uma translação na escala
+  // do sprite (o padrão blitExact do bosses.js): ~4x mais barata na rasterização em CPU.
+  let EXACT = true;
   // resolução dos sprites do jogo (px do aparelho por px lógico); muda com a qualidade
   function gameRes() {
     const res = G.canvas ? G.canvas.width / G.W : 0;
@@ -5014,8 +5041,8 @@ body.in-play #toasts { opacity: 0; }
     const sz = Math.round(size);
     const s = sz / 100;
     const t = o.t || 0, seed = spec.seed || 0;
-    let sk;
-    try { sk = JSON.stringify(spec); } catch (e) { return false; }
+    let sk = specKey(spec);
+    if (sk === null) return false;
     if (resOver) sk += '@' + resOver;
     const flash = !!o.flash;
     const body = spec.body || 'suit';
@@ -5061,9 +5088,25 @@ body.in-play #toasts { opacity: 0; }
     ctx.translate(x, y);
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
-    if (bodyS) ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
-    ctx.drawImage(headS, (BOX_HEAD[0] + hx) * s, (BOX_HEAD[1] + bob) * s, BOX_HEAD[2] * s, BOX_HEAD[3] * s);
-    if (armS) ctx.drawImage(armS, BOX_ARMS[0] * s, BOX_ARMS[1] * s, BOX_ARMS[2] * s, BOX_ARMS[3] * s);
+    let m = null;
+    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+      m = ctx.getTransform();
+      if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
+    }
+    if (m) {
+      // na escala do sprite: copia na grade do aparelho (a origem do sprite já é box * s * res)
+      const r = s * res;
+      ctx.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
+      ctx.imageSmoothingEnabled = false;
+      if (bodyS) ctx.drawImage(bodyS, Math.round(BOX_BODY[0] * r), Math.round(BOX_BODY[1] * r));
+      ctx.drawImage(headS, Math.round((BOX_HEAD[0] + hx) * r), Math.round((BOX_HEAD[1] + bob) * r));
+      if (armS) ctx.drawImage(armS, Math.round(BOX_ARMS[0] * r), Math.round(BOX_ARMS[1] * r));
+      if (!flash && needEmotes(mood, spec)) ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f); // o restore() desfaz o resto
+    } else {
+      if (bodyS) ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
+      ctx.drawImage(headS, (BOX_HEAD[0] + hx) * s, (BOX_HEAD[1] + bob) * s, BOX_HEAD[2] * s, BOX_HEAD[3] * s);
+      if (armS) ctx.drawImage(armS, BOX_ARMS[0] * s, BOX_ARMS[1] * s, BOX_ARMS[2] * s, BOX_ARMS[3] * s);
+    }
     if (!flash && needEmotes(mood, spec)) {
       ctx.scale(s, s); ctx.translate(hx, 0);
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -5084,8 +5127,8 @@ body.in-play #toasts { opacity: 0; }
     if (!(res > 0)) return false;
     const sz = Math.round(size), s = sz / 100;
     const t = o.t || 0, seed = spec.seed || 0;
-    let sk;
-    try { sk = JSON.stringify(spec); } catch (e) { return false; }
+    const sk = specKey(spec);
+    if (sk === null) return false;
     const flash = !!o.flash;
     const pose = o.pose || spec.pose || 'idle';
     const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
@@ -5102,7 +5145,18 @@ body.in-play #toasts { opacity: 0; }
     ctx.translate(x, y);
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
-    ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
+    let m = null;
+    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+      m = ctx.getTransform();
+      if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
+    }
+    if (m) { // corpo copiado na grade do aparelho (ver personCached); a cabeça segue em vetor
+      ctx.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bodyS, Math.round(BOX_BODY[0] * s * res), Math.round(BOX_BODY[1] * s * res));
+      ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+      ctx.imageSmoothingEnabled = true;
+    } else ctx.drawImage(bodyS, BOX_BODY[0] * s, BOX_BODY[1] * s, BOX_BODY[2] * s, BOX_BODY[3] * s);
     ctx.scale(s, s);
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     const bob = mood === 'laugh' ? -Math.abs(Math.sin(t * 12 + seed)) * 2.4 : Math.sin(t * 6 + seed) * 1.2;
@@ -5191,8 +5245,8 @@ body.in-play #toasts { opacity: 0; }
     if (!(res > 0)) return;
     for (const it of [].concat(list)) {
       if (!it || !it.spec || !(it.size > 1)) continue;
-      let sk;
-      try { sk = JSON.stringify(it.spec); } catch (e) { continue; }
+      const sk = specKey(it.spec);
+      if (sk === null) continue;
       const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
       const id = sk + '|' + sz + '|' + mood + '|' + pose;
       if ((WARM.seen.get(id) || 0) >= 2) continue;
@@ -6739,7 +6793,8 @@ body.in-play #toasts { opacity: 0; }
     prewarm,
     fontsReady,
     // depuração: tamanho do cache de sprites dos personagens
-    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size }; },
+    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size, specs: specIds.size, exact: EXACT }; },
+    _exact(v) { EXACT = !!v; }, // testes A/B da cópia exata
   });
 })();
 
@@ -7108,6 +7163,26 @@ body.in-play #toasts { opacity: 0; }
     if (k === S.lastLoop) k = list[(list.indexOf(k) + 1) % list.length];
     S.lastLoop = k;
     return k;
+  }
+  // Cartão-postal do meio da fase (def.landmark = { kind, prog, dist }: Itamaraty, Ponte JK).
+  // Entra quando o roteiro pede (g.landmark ou G.BG.landmark(id, g)), quando g.progress passa de prog,
+  // ou — se a fase não manda sinal nenhum — depois de `dist` px de mundo rolado.
+  let LMREQ = null; // pedido de G.BG.landmark(id, g)
+  function landmarkDue(S, g) {
+    const L = S.def.landmark, f = S.flags;
+    if (!L || f.lm || f.boss || !g) return false;
+    if (g.landmark === L.kind || (LMREQ && LMREQ.g === g && LMREQ.id === L.kind)) return true;
+    if (typeof g.progress === 'number') return g.progress >= L.prog;
+    return S.pos >= L.dist;
+  }
+  // Garantia: o chefão chegou antes do marco (fase curta, ?boss=1, roteiro sem sinal). O marco passa
+  // durante o aviso/entrada, logo antes do bloco do chefão; o mundo corre um pouco mais (ver advance)
+  // para o palco do chefão estacionar quase no mesmo tempo de antes.
+  function lateLandmark(S, g) {
+    const L = S.def.landmark, f = S.flags, b = g && g.boss;
+    if (!L || f.lm || !b || (b.state !== 'warning' && b.state !== 'enter')) return null;
+    f.lm = true; f.lmLate = true;
+    return L.kind;
   }
 
   // =================================================================
@@ -7547,6 +7622,7 @@ body.in-play #toasts { opacity: 0; }
 
   STAGES.esplanada = {
     pal: PAL.esplanada, first: 'catedral', firstAt: 0, bossKind: 'congresso',
+    landmark: { kind: 'itamaraty', prog: 0.75, dist: 4600 },
     kinds: {
       catedral: {
         h: 640,
@@ -7656,9 +7732,9 @@ body.in-play #toasts { opacity: 0; }
     },
     next(S, g, n) {
       const f = S.flags;
-      if (g && g.boss && !f.boss) { f.boss = true; f.after = false; return 'congresso'; }
+      if (g && g.boss && !f.boss) { const lm = lateLandmark(S, g); if (lm) return lm; f.boss = true; f.after = false; return 'congresso'; }
       if (f.boss && !f.after) { f.after = true; return 'after'; }
-      if (g && g.t > 110 && !f.ita && !f.boss) { f.ita = true; return 'itamaraty'; }
+      if (landmarkDue(S, g)) { f.lm = true; return 'itamaraty'; }
       return loopPick(S, ['a', 'b', 'a', 'c'], n);
     },
     traffic: [
@@ -7797,6 +7873,7 @@ body.in-play #toasts { opacity: 0; }
 
   STAGES.paranoa = {
     pal: PAL.paranoa, first: 'shore', firstAt: 0, bossKind: 'alvorada',
+    landmark: { kind: 'jk', prog: 0.45, dist: 3600 },
     kinds: {
       // partida: a orla da cidade (Pontão) e o lago se abrindo à frente
       shore: {
@@ -7961,9 +8038,9 @@ body.in-play #toasts { opacity: 0; }
     },
     next(S, g, n) {
       const f = S.flags;
-      if (g && g.boss && !f.boss) { f.boss = true; f.after = false; return 'alvorada'; }
+      if (g && g.boss && !f.boss) { const lm = lateLandmark(S, g); if (lm) return lm; f.boss = true; f.after = false; return 'alvorada'; }
       if (f.boss) return 'land';
-      if (g && g.t > 75 && !f.jk) { f.jk = true; return 'jk'; }
+      if (landmarkDue(S, g)) { f.lm = true; return 'jk'; }
       return loopPick(S, ['a', 'b', 'a', 'c'], n);
     },
     anim: animLake,
@@ -8514,8 +8591,11 @@ body.in-play #toasts { opacity: 0; }
     st.bossK = approach(st.bossK, boss && boss.state !== 'leaving' ? 1 : 0, dt * 0.7);
     const vb = (g && g.scrollSpeed) || 42;
     let target = st.def.speed || 1;
+    // cartão-postal enfiado na chegada do chefão (lateLandmark): +1 bloco até o palco, então o mundo
+    // corre e freia mais forte, para estacionar quase no mesmo tempo (o mundo para no diálogo)
+    const late = !!st.flags.lmLate;
     // chefão chegou e o marco ainda não entrou na fila: acelera até ele aparecer
-    if (boss && st.def.bossKind && !st.flags.boss && boss.state !== 'leaving') target = 4.2;
+    if (boss && st.def.bossKind && !st.flags.boss && boss.state !== 'leaving') target = late ? 6.5 : 4.2;
     // fase vencida (diálogo final, resultado, loja): o mundo para, como num diálogo
     if (G.state === 'clear' && st.g) target = 0;
     const pk = st.park;
@@ -8525,7 +8605,7 @@ body.in-play #toasts { opacity: 0; }
       if (pk.state === 'go') {
         if (!boss) pk.state = 'free';
         else if (D <= 0.5) pk.state = 'hold';
-        else target = Math.min(5.2, Math.max(0.22, Math.sqrt(2 * 80 * D) / vb));
+        else target = Math.min(late ? 7.5 : 5.2, Math.max(0.22, Math.sqrt(2 * (late ? 130 : 80) * D) / vb));
       }
       if (pk.state === 'hold') { target = 0; if (!boss || boss.state === 'leaving') pk.state = 'free'; }
       if (pk.state === 'free') st.park = null;
@@ -9165,9 +9245,11 @@ body.in-play #toasts { opacity: 0; }
       for (const id in caches) if (!S || id !== S.cacheId) freeCache(id);
       PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {};
     },
+    // o roteiro da fase avisa que o cartão-postal deve passar agora ('itamaraty', 'jk'); ver landmarkDue
+    landmark(id, g) { LMREQ = { id: String(id), g: g || G.game || null }; },
     // para testes: estado atual (posição do mundo, blocos visíveis, estacionamento no chefão)
     _state() { return S; },
-    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
+    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
     builds() { return BUILDS.slice(); },
     cacheStats,
   });
@@ -11527,15 +11609,11 @@ body.in-play #toasts { opacity: 0; }
     if (type === 'power') return ((G.WEAPONS || {})[carrierWeapon(g)] || {}).color || '#fff';
     return { life: '#ff5d8f', shield: '#4cc9f0', bomb: '#f4f1e8', cafe: '#d4a373' }[type] || '#fff';
   }
-  // chamado logo depois do core soltar os itens do carregador (killEnemy solta antes do onDeath)
+  // e.dropW = arma do P que o core solta na morte (G.killEnemy lê e.dropW). Atualizado a cada
+  // quadro no update, junto do desenho do selo: cai a cor que o jogador viu por último.
   function syncCarrierDrop(e, g) {
-    if (!g || !g.pickups || e.big || carrierType(e) !== 'power') return;
-    const w = carrierWeapon(g);
-    const P = g.pickups;
-    for (let i = P.length - 1, n = 0; i >= 0 && n < 40; i--, n++) {
-      const it = P[i];
-      if (it.type === 'power' && !it.restore && it.t === 0 && it.x === e.x && it.y === e.y) { it.wtype = w; it.wtype0 = w; }
-    }
+    if (e.drop && !e.big && carrierType(e) === 'power') e.dropW = carrierWeapon(g || G.game);
+    else if (e.dropW) e.dropW = undefined;
   }
   function drawCarrierUnder(ctx, e, g, type) {
     const pulse = 0.5 + 0.5 * Math.sin(g.t * 8);
@@ -11564,21 +11642,19 @@ body.in-play #toasts { opacity: 0; }
   }
   // Define com moldura: chama introdução, desenha carregador/etiqueta em volta do desenho próprio
   function define(kind, def) {
-    const draw = def.draw, update = def.update, init = def.init, onDeath = def.onDeath;
-    def.onDeath = function (e, g, opts) {
-      if (!(opts && opts.silent)) syncCarrierDrop(e, g || G.game);
-      if (onDeath) return onDeath.call(this, e, g, opts);
-    };
+    const draw = def.draw, update = def.update, init = def.init;
     def.init = function (e, o, g) {
       // fases mais adiantadas: inimigos comuns mais resistentes (o Zé também chega mais forte)
       if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * (g.stageIdx || 0); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
       introduce(e);
+      syncCarrierDrop(e, g);
     };
     def.update = function (e, dt, g) {
       if (update) update.call(this, e, dt, g); else { e.x += e.vx * dt; e.y += e.vy * dt; }
       if (e.data.tag && e.y > 26) e.data.tagT += dt;
+      if (e.drop || e.dropW) syncCarrierDrop(e, g);
     };
     def.draw = function (ctx, e, g) {
       const ct = e.big ? null : carrierType(e);
@@ -13288,6 +13364,86 @@ body.in-play #toasts { opacity: 0; }
       person(ctx, e, 28, MIN[d.v], { pose: posing ? 'up' : 'hold', facing: d.facing, mood: d.dieAt ? 'hurt' : posing ? 'laugh' : 'normal' });
     },
   });
+
+  // ======================================================================
+  // AQUECIMENTO — pinta os políticos (G.Art.prewarm) e os sprites de tiro ANTES de um tipo novo
+  // entrar, para a primeira aparição de uma onda não engasgar o quadro.
+  // G.EnemyArt.prewarm(['cabo', 'fantasma', ...]) pode ser chamado à vontade (repetir não custa);
+  // o stages.js chama na apresentação da fase, no começo do roteiro e uns segundos antes de cada tipo.
+  // ======================================================================
+  // [spec(s), tamanho EXATO passado ao G.Art.person, [[pose, humor], ...]]
+  const ROSTER = {
+    cabo: () => [[CABO, 31, [['wave', 'normal']]]],
+    fantasma: () => [[GHOST, 36, [['up', 'normal'], ['up', 'laugh']]]],
+    deputado: () => [[DEP, 38, [['idle', 'smug']]]],
+    assessor: () => [[ASS, 33, [['hold', 'normal'], ['hold', 'hurt']]]], // 'hurt' = as metades rachadas
+    lobista: () => [[LOB, 46, [['idle', 'smug'], ['idle', 'laugh']]]],
+    marqueteiro: () => [[MKT, 36, [['wave', 'smug'], ['wave', 'laugh']]]],
+    sindicalista: () => [[SIND, 38, [['point', 'normal'], ['point', 'angry']]]],
+    ministro: () => [[MIN, 31, [['idle', 'normal'], ['hold', 'normal']]]],
+    motoqueiro: () => [[MOTO, 27, [['drive', 'laugh']]]],
+    trio: () => [[TRIO_C, 54, [['wave', 'smug'], ['up', 'smug'], ['wave', 'laugh'], ['up', 'laugh']]]],
+    lobista_mor: () => [[LOBMOR, 112, [['hold', 'normal']]]], // ≥ 70 px: o art.js guarda só o corpo
+    comitiva: () => [[COMI_CHEF, 46, [['wave', 'smug'], ['up', 'laugh'], ['wave', 'laugh']]],
+      [MIN, 28, [['hold', 'normal'], ['up', 'laugh'], ['hold', 'hurt']]]],
+  };
+  // estilo × cor de cada tipo (inclui os filhos: metades, malinhas, bots do servidor, a fila da comitiva)
+  const BULLETS = {
+    cabo: [['santinho', COL.red], ['small', COL.pink]],
+    fantasma: [['orb', COL.violet], ['small', COL.violet], ['small', COL.magenta]],
+    deputado: [['rice', COL.pink]],
+    assessor: [['rice', COL.orange], ['small', COL.pink]],
+    lobista: [['en_cedula', COL.nota50]],
+    marqueteiro: [['star', COL.magenta]],
+    bot: [['small', COL.magenta], ['small', COL.pink]],
+    carro_som: [['en_onda', COL.magenta], ['en_onda', COL.orange]],
+    sindicalista: [['rice', COL.orange]],
+    leao: [['en_imposto', COL.orange]],
+    ministro: [['rice', COL.pink], ['small', COL.pink]],
+    motoqueiro: [['rice', COL.orange]],
+    drone: [['needle', COL.red]],
+    trio: [['en_onda', COL.magenta], ['en_onda', COL.orange], ['santinho', COL.red], ['en_nota', COL.pink]],
+    lobista_mor: [['en_cedula', COL.nota50], ['en_cedula', COL.nota10]],
+    servidor: [['needle', COL.red], ['needle', COL.magenta], ['small', COL.magenta]],
+    comitiva: [['rice', COL.pink], ['star', COL.magenta], ['orb', COL.orange], ['small', COL.pink]],
+  };
+  const PWQ = [], BWQ = [];   // pedidos esperando a vez
+  const pwAsked = {};         // tipos já pedidos (por resolução do canvas)
+  let pwRes = 0, pwTimer = 0;
+  // O art.js aceita ~400 tarefas na fila e descarta (marcando como feito) o que passar disso:
+  // entregamos aos poucos, com a fila dele abaixo de ~200 tarefas (17 por combinação pequena).
+  function pwPump() {
+    pwTimer = 0;
+    try {
+      const A = G.Art;
+      if (A && A.prewarm) {
+        const st = A.cacheStats ? A.cacheStats() : null;
+        let room = 200 - (st && st.warmQueue > 0 ? st.warmQueue : 0);
+        while (PWQ.length && room > 0) { const it = PWQ.shift(); A.prewarm([it]); room -= it.size >= 70 ? 10 : 17; }
+      } else PWQ.length = 0;
+      // sprites de tiro: cada um custa 1-6 ms (shadowBlur); no máximo ~2 ms por vez
+      const t0 = performance.now();
+      while (BWQ.length && performance.now() - t0 < 2) { const b = BWQ.shift(); BS.sprite(b[0], b[1]); }
+    } catch (err) { PWQ.length = 0; BWQ.length = 0; G.reportError(err, 'enemies.prewarm'); }
+    if (PWQ.length || BWQ.length) pwTimer = setTimeout(pwPump, 60);
+  }
+  function prewarm(kinds) {
+    const res = G.canvas && G.W ? G.canvas.width / G.W : 0;
+    if (res !== pwRes) { pwRes = res; for (const k in pwAsked) delete pwAsked[k]; } // o art.js limpou o cache
+    for (const k of [].concat(kinds || [])) {
+      if (!k || pwAsked[k]) continue;
+      pwAsked[k] = 1;
+      const R = ROSTER[k];
+      if (R && res > 0) {
+        for (const [specs, size, combos] of R()) {
+          for (const spec of [].concat(specs)) for (const c of combos) PWQ.push({ spec, size, pose: c[0], mood: c[1] });
+        }
+      }
+      for (const b of BULLETS[k] || []) BWQ.push(b);
+    }
+    if (!pwTimer && (PWQ.length || BWQ.length)) pwTimer = setTimeout(pwPump, 0);
+  }
+  G.EnemyArt = { prewarm, pending: () => PWQ.length + BWQ.length };
 })();
 
 </script>
@@ -13459,6 +13615,33 @@ body.in-play #toasts { opacity: 0; }
     const flag = { done: false };
     yield* par((function* () { yield* body(); flag.done = true; })(), after(start, ambient(kinds, every, flag)));
   }
+  // Aquecimento dos sprites (enemies.js): chamar uns segundos antes de um tipo novo entrar.
+  // Repetir não custa nada (cada tipo é pintado uma vez por resolução).
+  function pre(...kinds) { G.call(G.EnemyArt, 'prewarm', kinds); } // sem enemies.js (mods=): nada
+  // Tipos das primeiras ondas: pintados já na apresentação da fase / diálogo de abertura
+  // (o roteiro só começa depois) e de novo no começo do roteiro (com skipui não há apresentação).
+  const OPENING = {
+    rodoviaria: ['cabo', 'fantasma'],
+    esplanada: ['deputado', 'cabo', 'fantasma', 'assessor'],
+    paranoa: ['sindicalista', 'assessor', 'deputado', 'cabo', 'bot'],
+    planalto: ['lobista', 'deputado', 'marqueteiro', 'cabo', 'ministro'],
+  };
+  let introWarm = null;
+  setInterval(function () {
+    const g = G.game;
+    if (!g || g.script || introWarm === g || !g.stage || (G.state !== 'intro' && G.state !== 'dialogue')) return;
+    introWarm = g;
+    pre(...(OPENING[g.stage.id] || []));
+  }, 250);
+  // Sinais para o cenário (bg.js): g.progress (0..1, sobe nos marcos do roteiro; 1 = chegada do chefão)
+  // e g.landmark (id do cartão-postal que deve passar agora: 'itamaraty' na Esplanada, 'jk' no Paranoá).
+  // Também chama G.BG.landmark(id, g) se o bg.js tiver.
+  function mark(p, landmark) {
+    const g = G.game; if (!g) return;
+    if (!(g.progress >= p)) g.progress = p;
+    if (landmark) { g.landmark = landmark; G.call(G.BG, 'landmark', landmark, g); }
+  }
+
   // chefe intermediário: entra e espera ele cair (ou fugir)
   function* midboss(kind, x, y, o) {
     const mb = sp(kind, x, y, o);
@@ -13478,6 +13661,7 @@ body.in-play #toasts { opacity: 0; }
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.rodoviaria);
       yield* withAmbient(function* () {
         yield 1.8;
         // --- cabos eleitorais: primeiro só desfilam, depois começam a jogar santinho ---
@@ -13496,6 +13680,7 @@ body.in-play #toasts { opacity: 0; }
         yield* par(side('cabo', 4, true, 96, 0.5, { fire: 0.6 }), after(1.3, side('cabo', 4, false, 136, 0.5, { fire: 0.6 })));
         yield S.clear(6);
         // --- VEREADOR FANTASMA (sozinho, para ler) ---
+        mark(0.15);
         yield 0.6;
         sp('fantasma', W() / 2, -30, { tx: W() / 2, ty: 140, delay: 0.6 });
         yield 4;
@@ -13503,6 +13688,7 @@ body.in-play #toasts { opacity: 0; }
           swarm('cabo', 5, 0.5, path('sL'), 7, { fire: 0.4 }),
           after(2.2, swarm('cabo', 5, 0.5, path('sL', true), 7, { fire: 0.4 })));
         yield T(36);
+        pre('deputado', 'carro_som');
         sp('fantasma', 70, -30, { tx: 80, ty: 120 });
         sp('fantasma', W() - 70, -30, { tx: W() - 80, ty: 170, delay: 1.4 });
         row('cabo', 6, -22, { vy: 70, amp: 18, freq: 2.5, fire: 0.6 });
@@ -13513,6 +13699,7 @@ body.in-play #toasts { opacity: 0; }
           after(1.6, swarm('cabo', 6, 0.38, path('crossL', true), 5.5, { fire: 0.6 })));
         yield S.clear(5);
         // --- DEPUTADO DO CENTRÃO ---
+        mark(0.3);
         yield 0.6;
         sp('deputado', W() / 2, -30, { ty: 140, hold: 5.5 });
         yield 1.5;
@@ -13534,22 +13721,26 @@ body.in-play #toasts { opacity: 0; }
           after(5, (function* () { sp('deputado', W() * 0.75, -30, { ty: 110 }); })()));
         yield S.clear(5);
         // --- CARRO DE SOM (ensina a brecha antes do trio) ---
+        mark(0.45);
         yield 0.8;
         sp('carro_som', W() / 2, -36, { vy: 26 });
         yield 3;
         yield* par(side('cabo', 3, true, 110, 0.6, { fire: 0.5 }), after(2.5, side('cabo', 3, false, 150, 0.6, { fire: 0.5 })));
         yield T(85);
+        pre('trio');
         yield* swarm('cabo', 6, 0.4, path('hookL'), 5.5, { fire: 0.5 });
         sp('deputado', W() * 0.7, -30, { ty: 120 });
         yield T(89);
         carrier('cabo', W() / 2, -22, 'power', { ty: 140, hold: 3.5, hp: 8, fire: 0 });
         yield S.clear(7);
         // --- CHEFE INTERMEDIÁRIO: TRIO ELÉTRICO DO CANDIDATO ---
+        mark(0.6);
         yield 0.5;
         yield* midboss('trio', W() / 2, -110);
         const R = now();
         const Rt = (s) => at(R + s);
         // --- reta final ---
+        mark(0.78);
         yield* par(side('cabo', 5, true, 90, 0.42, { fire: 0.7 }), side('cabo', 5, false, 130, 0.42, { fire: 0.7 }));
         sp('fantasma', W() / 2, -30, { ty: 150 });
         yield Rt(6);
@@ -13569,6 +13760,7 @@ body.in-play #toasts { opacity: 0; }
         sp('fantasma', 80, -30, { ty: 170 }); sp('fantasma', W() - 80, -30, { ty: 120, delay: 1.2 });
         vee('cabo', 7, W() / 2, { vy: 75, fire: 0.6 });
         yield Rt(25);
+        mark(0.92);
         yield* par(
           drizzle('cabo', 6, L2 ? 0.38 : 0.55, () => ({ vy: M.rand(75, 100), fire: 0.6 })),
           after(1, (function* () { sp('carro_som', W() - 90, -36, { vy: 28 }); })()));
@@ -13577,6 +13769,7 @@ body.in-play #toasts { opacity: 0; }
       carrier('cabo', W() / 2, -22, 'power', { ty: 150, hold: 3, hp: 8, fire: 0 });
       yield S.clear(6);
       yield 1;
+      mark(1);
       yield S.boss('centrao');
     },
   });
@@ -13592,6 +13785,7 @@ body.in-play #toasts { opacity: 0; }
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.esplanada);
       yield* withAmbient(function* () {
         yield 1.6;
         // aquecimento com velhos conhecidos
@@ -13603,6 +13797,7 @@ body.in-play #toasts { opacity: 0; }
         carrier('deputado', W() / 2, -30, 'power', { ty: 110, hp: 16 });
         yield S.clear(5);
         // --- ASSESSOR DA RACHADINHA ---
+        mark(0.08);
         yield 0.5;
         sp('assessor', W() / 2, -24, { vy: 55, amp: 30 });
         yield 4.5;
@@ -13610,11 +13805,13 @@ body.in-play #toasts { opacity: 0; }
           (function* () { for (let i = 0; i < 4; i++) { sp('assessor', 70, -24, { vy: 72, amp: 40, phase: 0 }); yield 0.7; } })(),
           after(1.4, (function* () { for (let i = 0; i < 4; i++) { sp('assessor', W() - 70, -24, { vy: 72, amp: 40, phase: Math.PI }); yield 0.7; } })()));
         yield T(27);
+        pre('sindicalista');
         row('assessor', 5, -24, { vy: 66, amp: 20, freq: 3 }, 50);
         if (L2) row('assessor', 4, -70, { vy: 66, amp: 20, freq: 3 }, 80);
         yield* swarm('cabo', 6, 0.38, path('crossL'), 5.5, { fire: 0.8 });
         yield S.clear(5);
         // --- SINDICALISTA ---
+        mark(0.18);
         yield 0.4;
         sp('sindicalista', W() / 2, -30, { ty: 135, hold: 7 });
         yield 2;
@@ -13625,12 +13822,14 @@ body.in-play #toasts { opacity: 0; }
         sp('sindicalista', 80, -30, { ty: 120 }); sp('sindicalista', W() - 80, -30, { ty: 160 });
         yield* swarm('cabo', 7, 0.36, path('uL'), 6, { fire: 0.8 });
         yield T(50);
+        pre('lobista');
         yield* par(
           (function* () { for (let i = 0; i < 6; i++) { sp('assessor', i % 2 ? W() * 0.3 : W() * 0.7, -24, { vy: 80, amp: 60, freq: 2 }); yield 0.6; } })(),
           after(1, (function* () { sp('fantasma', 80, -30, { ty: 160 }); sp('fantasma', W() - 80, -30, { ty: 120, delay: 1.5 }); })()));
         yield S.clear(5);
         carrier('assessor', W() / 2, -24, 'bomb', { vy: 60, hp: 10, amp: 40 });
         // --- LOBISTA ---
+        mark(0.3);
         yield 1.2;
         sp('lobista', W() / 2, -34, { ty: 125 });
         yield 2;
@@ -13638,12 +13837,14 @@ body.in-play #toasts { opacity: 0; }
         yield T(64);
         carrier('deputado', 70, -30, 'power', { ty: 150, hp: 16 });
         yield T(66);
+        pre('marqueteiro');
         sp('lobista', W() * 0.7, -34, { ty: 115 });
         sp('deputado', W() * 0.25, -30, { ty: 160 });
         yield* par(
           (function* () { for (let i = 0; i < 4; i++) { sp('assessor', M.rand(50, W() - 50), -24, { vy: 75, amp: 40 }); yield 0.8; } })());
         yield S.clear(6);
         // --- MARQUETEIRO (blinda o grupo: derrube ele primeiro) ---
+        mark(0.42);
         yield 0.4;
         row('deputado', 4, -30, (i) => ({ ty: 150 + (i % 2) * 22, hold: 7, inT: 1.6 }), 55);
         yield 1.4;
@@ -13653,6 +13854,7 @@ body.in-play #toasts { opacity: 0; }
         yield* par(swarm('assessor', 4, 0.6, path('sL'), 7), after(1.2, (function* () { sp('fantasma', W() * 0.25, -30, { ty: 160 }); })()));
         // corredor dos ministérios: emboscada dos dois lados
         yield T(90);
+        pre('lobista_mor');
         yield* par(
           side('cabo', 5, true, 92, 0.4, { fire: 0.9, spd: 130 }),
           after(0.8, side('cabo', 5, false, 128, 0.4, { fire: 0.9, spd: 130 })),
@@ -13662,10 +13864,12 @@ body.in-play #toasts { opacity: 0; }
         carrier('cabo', W() * 0.3, -22, 'power', { ty: 140, hold: 3.5, hp: 9 });
         yield S.clear(7);
         // --- CHEFE INTERMEDIÁRIO: LOBISTA-MOR ---
+        mark(0.55);
         yield 0.5;
         yield* midboss('lobista_mor', W() / 2, -100);
         const R = now();
         const Rt = (s) => at(R + s);
+        mark(0.78, 'itamaraty'); // reta final: o Itamaraty passa antes do Congresso (chegada da Dilmãe)
         yield* par(
           (function* () { for (let i = 0; i < 6; i++) { sp('assessor', i % 2 ? 60 : W() - 60, -24, { vy: 80, amp: 40 }); yield 0.55; } })(),
           after(1, (function* () { sp('sindicalista', W() / 2, -30, { ty: 130 }); })()));
@@ -13677,6 +13881,7 @@ body.in-play #toasts { opacity: 0; }
         yield Rt(13);
         carrier('deputado', W() / 2, -30, 'life', { ty: 120, hp: 20, hold: 6 });
         yield Rt(15);
+        pre('carro_som');
         row('assessor', 6, -24, { vy: 70, amp: 25, freq: 3 }, 40);
         sp('fantasma', 80, -30, { ty: 150 }); sp('fantasma', W() / 2, -30, { ty: 110, delay: 1 }); sp('fantasma', W() - 80, -30, { ty: 170, delay: 2 });
         yield Rt(21);
@@ -13685,6 +13890,7 @@ body.in-play #toasts { opacity: 0; }
         sp('carro_som', W() / 2, -36, { vy: 26 });
         sp('sindicalista', 70, -30, { ty: 150 }); sp('sindicalista', W() - 70, -30, { ty: 150 });
         yield Rt(30);
+        mark(0.92);
         yield* par(
           drizzle('assessor', 7, L2 ? 0.55 : 0.8, () => ({ vy: 85, amp: 30 })),
           drizzle('cabo', 7, 0.6, () => ({ vy: 90, fire: 0.9 })),
@@ -13694,6 +13900,7 @@ body.in-play #toasts { opacity: 0; }
       carrier('deputado', W() / 2, -30, 'power', { ty: 130, hp: 16, hold: 3.5 });
       yield S.clear(6);
       yield 1;
+      mark(1);
       yield S.boss('dilmae');
     },
   });
@@ -13710,6 +13917,7 @@ body.in-play #toasts { opacity: 0; }
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.paranoa);
       yield* withAmbient(function* () {
         yield 1.6;
         // aquecimento com a turma da Esplanada
@@ -13720,8 +13928,10 @@ body.in-play #toasts { opacity: 0; }
           after(3, swarm('cabo', 6, 0.36, path('uL'), 6, { fire: 1 })));
         yield T(10);
         // --- BOT DE FAKE NEWS ---
+        mark(0.08);
         yield* bots(8, true, 70);
         yield T(15);
+        pre('lobista', 'motoqueiro');
         carrier('deputado', W() / 2, -30, 'power', { ty: 110, hp: 18 });
         yield* par(bots(8, false, 90), after(1.5, bots(8, true, 130, { dive: 0.3 })), after(3, swarm('cabo', 6, 0.35, path('crossL'), 5.5, { fire: 1 })));
         yield T(23);
@@ -13729,10 +13939,12 @@ body.in-play #toasts { opacity: 0; }
         yield T(30);
         yield S.clear(4);
         // --- MOTOCIATA ---
+        mark(0.18);
         yield* moto(3, true, 120, 40, 0.45);
         yield 2.4;
         yield* moto(3, false, 140, 40, 0.45);
         yield T(39);
+        pre('fantasma', 'drone');
         carrier('cabo', W() / 2, -22, 'power', { ty: 150, hold: 3.5, hp: 10 });
         yield* par(moto(4, true, 100, 35, 0.4), after(1.5, bots(8, false, 70, { dive: 0.3 })), after(2, once(() => sp('sindicalista', W() / 2, -30, { ty: 120 }))));
         yield T(47);
@@ -13743,11 +13955,13 @@ body.in-play #toasts { opacity: 0; }
         yield S.clear(4);
         carrier('assessor', W() / 2, -24, 'shield', { vy: 60, amp: 40, hp: 12 });
         // --- DRONE DO GABINETE ---
+        mark(0.3);
         yield 0.8;
         sp('drone', W() / 2, -24, { ty: 150, hold: 7 });
         yield 3;
         sp('drone', 80, -24, { ty: 110 }); sp('drone', W() - 80, -24, { ty: 130 });
         yield T(64);
+        pre('carro_som', 'marqueteiro');
         carrier('deputado', W() * 0.3, -30, 'power', { ty: 140, hp: 18 });
         yield* par(
           once(() => { sp('drone', 70, -24, { ty: 100 }); sp('drone', W() / 2, -24, { ty: 160 }); sp('drone', W() - 70, -24, { ty: 120 }); }),
@@ -13762,6 +13976,10 @@ body.in-play #toasts { opacity: 0; }
         yield 1.2;
         sp('marqueteiro', W() / 2, -30, { ty: 95 });
         sp('drone', 60, -24, { ty: 150 });
+        // a Ponte JK entra na tela junto com o desfile da motociata (T 90)
+        yield T(84);
+        mark(0.42, 'jk');
+        pre('servidor');
         yield T(87);
         carrier('cabo', W() * 0.7, -22, 'power', { ty: 140, hold: 3.5, hp: 10 });
         // --- MOTOCIATA NO LAGO: o desfile ---
@@ -13780,10 +13998,12 @@ body.in-play #toasts { opacity: 0; }
         carrier('deputado', W() / 2, -30, 'power', { ty: 120, hp: 18, hold: 3.5 });
         yield S.clear(7);
         // --- CHEFE INTERMEDIÁRIO: SERVIDOR DO GABINETE ---
+        mark(0.55);
         yield 0.5;
         yield* midboss('servidor', W() / 2, -100);
         const R = now();
         const Rt = (s) => at(R + s);
+        mark(0.75);
         yield* par(moto(4, true, 100, 40, 0.4), after(1, moto(4, false, 130, 40, 0.4)), after(2, bots(10, true, 70, { dive: 0.3 })));
         yield Rt(8);
         sp('drone', 70, -24, { ty: 110 }); sp('drone', W() - 70, -24, { ty: 110 });
@@ -13806,6 +14026,7 @@ body.in-play #toasts { opacity: 0; }
         yield* par(bots(8, false, 80, { dive: 0.4 }), after(1.5, moto(4, false, 110, 35, 0.4)));
         if (L2) yield* bots(8, true, 120, { dive: 0.4 });
         yield Rt(38);
+        mark(0.92);
         // última leva: blindagem do marqueteiro em cima dos drones
         row('deputado', 3, -30, (i) => ({ ty: 160 + (i % 2) * 22, hold: 6 }), 70);
         sp('drone', W() * 0.3, -24, { ty: 120 }); sp('drone', W() * 0.7, -24, { ty: 120 });
@@ -13817,6 +14038,7 @@ body.in-play #toasts { opacity: 0; }
       carrier('cabo', W() / 2, -22, 'power', { ty: 150, hold: 3, hp: 10 });
       yield S.clear(6);
       yield 1;
+      mark(1);
       yield S.boss('bolsonario');
     },
   });
@@ -13832,6 +14054,7 @@ body.in-play #toasts { opacity: 0; }
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.planalto);
       yield* withAmbient(function* () {
         yield 1.6;
         // recepção oficial
@@ -13843,6 +14066,8 @@ body.in-play #toasts { opacity: 0; }
           after(7.5, swarm('cabo', 6, 0.34, path('uL', true), 6, { fire: 0.7 })));
         yield T(11);
         // --- MINISTROS em conga ---
+        mark(0.06);
+        pre('assessor', 'drone');
         yield* swarm('ministro', 8, 0.34, path('conga'), 10, (i) => ({ conga: true, v: i, fire: i % 2 ? 0.8 : 0.4 }));
         yield T(17);
         carrier('deputado', W() / 2, -30, 'power', { ty: 110, hp: 20 });
@@ -13851,6 +14076,7 @@ body.in-play #toasts { opacity: 0; }
           after(2, (function* () { for (let i = 0; i < 4; i++) { sp('assessor', i % 2 ? 70 : W() - 70, -24, { vy: 80, amp: 40 }); yield 0.7; } })()),
           after(4, once(() => { sp('drone', 70, -24, { ty: 130 }); sp('drone', W() - 70, -24, { ty: 130 }); })));
         yield T(27);
+        pre('sindicalista', 'leao', 'bot');
         vee('ministro', 7, W() / 2, (i) => ({ vy: 85, v: i }));
         yield* after(1.5, swarm('cabo', 6, 0.34, path('crossL'), 5.5, { fire: 1 }));
         yield T(32);
@@ -13861,17 +14087,20 @@ body.in-play #toasts { opacity: 0; }
         yield S.clear(4);
         carrier('cabo', W() * 0.3, -22, 'power', { ty: 150, hold: 3.5, hp: 12 });
         // --- LEÃO DA RECEITA ---
+        mark(0.2);
         yield 1.2;
         sp('leao', W() / 2, -30, { ty: H() * 0.2 });
         yield 4;
         yield* swarm('ministro', 6, 0.36, path('uL'), 6.5, (i) => ({ v: i }));
         yield T(49);
+        pre('motoqueiro', 'carro_som', 'fantasma');
         sp('leao', 70, -30, { ty: H() * 0.18 });
         yield* par(bots(8, false, 80, { dive: 0.35 }), after(1.5, once(() => { sp('drone', W() * 0.65, -24, { ty: 120 }); sp('drone', W() * 0.35, -24, { ty: 160 }); })));
         yield T(56);
         carrier('deputado', W() * 0.7, -30, 'power', { ty: 130, hp: 20 });
         yield* par(moto(4, true, 110, 35, 0.4), after(1.5, once(() => vee('ministro', 7, W() / 2, (i) => ({ vy: 90, v: i })))));
         yield T(63);
+        mark(0.33);
         carrier('deputado', W() / 2, -30, 'life', { ty: 115, hp: 24, hold: 6 });
         sp('carro_som', 80, -36, { vy: 26 });
         yield* par(
@@ -13894,6 +14123,8 @@ body.in-play #toasts { opacity: 0; }
           after(2, swarm('ministro', 8, 0.32, path('conga'), 10, (i) => ({ conga: true, v: i, fire: 0.6 }))));
         // --- RAMPA DO PLANALTO: corredor polonês ---
         yield T(96);
+        mark(0.5);
+        pre('comitiva');
         yield* par(
           drizzle('ministro', 7, L2 ? 0.55 : 0.75, (i) => ({ vy: M.rand(80, 100), v: i })),
           after(1, once(() => { sp('sindicalista', W() / 2, -30, { ty: 140 }); if (L2) sp('sindicalista', W() - 70, -30, { ty: 175 }); })),
@@ -13905,10 +14136,12 @@ body.in-play #toasts { opacity: 0; }
         yield* after(1.5, drizzle('assessor', 5, 0.8, () => ({ vy: 85, amp: 30 })));
         yield S.clear(8);
         // --- CHEFE INTERMEDIÁRIO: COMITIVA DOS 38 MINISTROS ---
+        mark(0.58);
         yield 0.6;
         yield* midboss('comitiva', -40, 90);
         const R = now();
         const Rt = (s) => at(R + s);
+        mark(0.78);
         sp('leao', W() / 2, -30, { ty: H() * 0.2 });
         yield* par(
           after(1, once(() => vee('ministro', 7, W() * 0.3, (i) => ({ vy: 90, v: i })))),
@@ -13936,6 +14169,7 @@ body.in-play #toasts { opacity: 0; }
         if (L2) yield* par(bots(10, false, 70, { dive: 0.5 }), after(1, once(() => vee('ministro', 9, W() / 2, (i) => ({ vy: 95, v: i })))));
         // --- ÚLTIMA BARREIRA antes do chefão ---
         yield Rt(34);
+        mark(0.92);
         yield* par(
           once(() => vee('ministro', 9, W() / 2, (i) => ({ vy: 90, v: i }), 32, 22)),
           after(1, drizzle('cabo', 7, L2 ? 0.55 : 0.7, () => ({ vy: 95, fire: 1 }))),
@@ -13948,6 +14182,7 @@ body.in-play #toasts { opacity: 0; }
       carrier('cabo', W() * 0.25, -22, 'bomb', { vy: 70, hp: 8, fire: 0 });
       yield S.clear(6);
       yield 1.2;
+      mark(1);
       yield S.boss('lule');
     },
   });
@@ -13972,8 +14207,9 @@ body.in-play #toasts { opacity: 0; }
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
   const L2 = () => !!(G.game && G.game.loop > 1);
   const clamp = M.clamp;
-  // qualidade 'low' (ENGINE §10): sem partículas puramente decorativas contínuas (fumacinha, respingos)
-  const deco = () => G.quality !== 'low';
+  // qualidade (ENGINE §10): partículas puramente decorativas contínuas (fumacinha, respingos)
+  // 'high' todas, 'mid' metade, 'low' nenhuma. Multiplica a taxa de emissão.
+  const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
 
   // Cores de tiro (saturadas, legíveis contra cenário e tiros do Zé)
   const COL = {
@@ -14027,6 +14263,23 @@ body.in-play #toasts { opacity: 0; }
   }
   // balão de fala sempre abaixo da barra de vida do chefão (HUD vai até y≈68)
   function bubbleAt(b, want) { b.bubbleY = Math.min(want, b.y - 104); }
+
+  // ---------- aquecimento (evita a travadinha no 1º quadro de cada desenho novo) ----------
+  // Personagens: G.Art.prewarm pinta os sprites em segundo plano (fatias entre os quadros), uma vez por chave.
+  // list = [{ spec, size, mood, pose }] com os MESMOS objetos de spec e tamanhos passados a G.Art.person.
+  function warmPeople(b, key, list) {
+    const d = b.data, w = d.warmed || (d.warmed = {});
+    if (w[key] || !G.Art || !G.Art.prewarm) return;
+    w[key] = 1;
+    G.call(G.Art, 'prewarm', list);
+  }
+  function poses(spec, size, list, mood) { return list.map((pose) => ({ spec, size, mood: mood || 'normal', pose })); }
+  // Tiros: um sprite de (estilo, cor) por passo durante a entrada do chefão (updateEnter); start() termina a fila.
+  function warmShots(b, pairs) { b.data.warmQ = pairs.slice(); }
+  function warmShotsStep(b, n) {
+    const q = b.data.warmQ; if (!q || !q.length) return;
+    for (let i = 0; i < n && q.length; i++) { const p = q.shift(); G.call(BS, 'sprite', p[0], p[1]); }
+  }
 
   // ---------- corrotinas ----------
   // slot 0 = sequência principal da fase; slot 1 = pressão de fundo (roda em paralelo)
@@ -14980,6 +15233,8 @@ body.in-play #toasts { opacity: 0; }
   }
 
   const CEN_HB = [[0, -6, 46], [-46, 16, 28], [46, 16, 28], [0, 38, 30]];
+  // todo (estilo, cor) que o Centrão atira (o reflexo usa violeta; as emendas estouram em laranja/violeta)
+  const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold], ['bs_cedula', COL.orange], ['bs_cedula', COL.violet]];
   G.Bosses.define('centrao', {
     // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
     name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3400, r: 46, homeY: 165, fatStart: 85,
@@ -15003,8 +15258,14 @@ body.in-play #toasts { opacity: 0; }
       d.S = {}; d.GS = {};
       b.bubbleY = 72;
       b.hitboxes = CEN_HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      // cabecinhas da 1ª fase (sorrisinho) e os tiros de todas as fases
+      warmPeople(b, 'heads', CEN_HEADS.map((spec) => ({ spec, size: 34, mood: 'smug' })));
+      warmShots(b, CEN_SHOTS);
     },
+    updateEnter(b) { warmShotsStep(b, 1); },
     start(b) {
+      warmShotsStep(b, 99);
+      cenBodySprite(0, true, 0, ''); // sprite do flash (1º acerto)
       co(b, cenP1(b)); co(b, cenBg(b, 1.5), 1);
       say(b, 'TOMA LÁ, DÁ CÁ!', 2);
     },
@@ -15033,11 +15294,17 @@ body.in-play #toasts { opacity: 0; }
         for (let i = 0; i < 8; i++) { const a = d.orbit.ang + (i * TAU) / 8, h = b.hitboxes[4 + i]; h.dx = Math.cos(a) * d.orbit.R; h.dy = Math.sin(a) * d.orbit.R; }
       }
       // fumacinha quando está apanhando muito
-      if (b.hp / b.maxHp < 0.25 && deco() && Math.random() < dt * 6) G.part({ x: b.x + M.rand(-40, 40), y: b.y - 30, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(80,80,90,0.45)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.25 && Math.random() < dt * 6 * decoK()) G.part({ x: b.x + M.rand(-40, 40), y: b.y - 30, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(80,80,90,0.45)', drag: 0.95 });
     },
     onPhase(b, idx) {
       const d = b.data;
       sprCache.clear(); // letreiro novo: os sprites da fase anterior não servem mais (memória do celular)
+      cenBodySprite(0, true, 0, ''); // flash de novo já (no quadro da troca, que tem hitstop)
+      // próximas fases: cabecinhas suadas (HP < 66%) e os deputadinhos do apoio (fase 3, de gravata vermelha ou verde)
+      if (idx === 1) {
+        warmPeople(b, 'headsSw', CEN_HEADS_SW.map((spec) => ({ spec, size: 34, mood: 'smug' })));
+        warmPeople(b, 'apoio', APOIO_SPECS.concat(APOIO_SPECS_G).map((spec) => ({ spec, size: 28, mood: 'laugh', pose: 'up' })));
+      }
       for (let i = 0; i < 8; i++) { d.warn[i] = 0; d.hold[i] = 0; }
       d.armLT = 0; d.armRT = 0; d.flipX = 1; d.swapWarn = 0;
       if (idx === 1) { co(b, cenP2(b)); co(b, cenBg(b, 1.9), 1); }
@@ -15641,6 +15908,9 @@ body.in-play #toasts { opacity: 0; }
   }
 
   const DIL_HB = [[0, -16, 30], [0, 24, 25]], DIL_HB_BIKE = [[0, -26, 26], [0, 10, 22], [-26, 38, 16], [26, 38, 16]];
+  const DIL_SHOTS = [['bs_semente', COL.hot], ['bs_semente', COL.orange], ['bs_mandioca', COL.orange], ['bs_mandiocao', COL.red],
+    ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
+    ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
     name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.06,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
@@ -15659,8 +15929,11 @@ body.in-play #toasts { opacity: 0; }
       d.board = null; d.bike = false; d.dir = 1;
       d.tx = b.homeX; d.ty = b.homeY; d.S = {};
       b.hitboxes = DIL_HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      warmPeople(b, 'p1', poses(DILMA, DIL_SIZE, ['idle', 'up', 'point', 'fist']));
+      warmShots(b, DIL_SHOTS);
     },
-    start(b) { co(b, dilP1(b)); co(b, dilBgJars(b, 1.7), 1); say(b, 'SAÚDO A MANDIOCA!', 1.8); },
+    updateEnter(b) { warmShotsStep(b, 1); },
+    start(b) { warmShotsStep(b, 99); co(b, dilP1(b)); co(b, dilBgJars(b, 1.7), 1); say(b, 'SAÚDO A MANDIOCA!', 1.8); },
     update(b, dt, g) {
       const d = b.data;
       updFx(b, dt);
@@ -15684,16 +15957,19 @@ body.in-play #toasts { opacity: 0; }
         }
         const acc = W.dir * W.str * 1.3 * dt;
         for (const q of g.eb) if (!q.dead && q.data && q.data.wnd) { q.vx = clamp(q.vx + acc, -170, 170); }
-        if (Math.random() < dt * (deco() ? 30 : 12)) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
+        if (Math.random() < dt * (12 + 18 * decoK())) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
       }
       // hitboxes por pose
       const hb = d.bike ? DIL_HB_BIKE : DIL_HB;
       if (b.hitboxes.length !== hb.length) b.hitboxes = hb.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
-      if (b.hp / b.maxHp < 0.2 && deco() && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-20, 20), y: b.y - 40, vx: M.rand(-10, 10), vy: -35, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.2 && Math.random() < dt * 5 * decoK()) G.part({ x: b.x + M.rand(-20, 20), y: b.y - 40, vx: M.rand(-10, 10), vy: -35, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
     },
     onPhase(b, idx) {
       const d = b.data;
       d.pose = 'idle'; d.glowT = 0;
+      // o que vem a seguir: suada (HP < 60%) e, na pedalada, de bicicleta
+      if (idx === 1) warmPeople(b, 'p2', poses(DILMA, DIL_SIZE, ['shrug']).concat(poses(DILMA_SW, DIL_SIZE, ['idle', 'up', 'point', 'shrug'])));
+      if (idx === 2) warmPeople(b, 'p4', poses(DILMA_SW, DIL_BIKE, ['drive']));
       if (idx >= 2) { d.wind.target = 0; d.windy = false; }
       d.jarT[0] = d.jarT[1] = 0;
       if (idx === 1) { co(b, dilP2(b)); co(b, null, 1); }
@@ -16076,7 +16352,7 @@ body.in-play #toasts { opacity: 0; }
     d.w = 0; d.smokeOn = false; d.wheelieT = 1; d.mood = 'laugh';
     say(b, M.pick(['VRUM VRUM, TALKEY?', 'É MOTOCIATA!', 'ACELERA!']), 1.4);
     sfx('motor');
-    for (let i = 0; i < 10; i++) G.part({ x: b.x - d.dir * 44, y: b.y + 22, vx: -d.dir * M.rand(40, 120), vy: M.rand(-60, 0), type: 'smoke', size: M.rand(5, 9), life: M.rand(0.6, 1.1), color: 'rgba(90,94,104,0.55)', drag: 0.94 });
+    for (let i = 0, n = 4 + 6 * decoK(); i < n; i++) G.part({ x: b.x - d.dir * 44, y: b.y + 22, vx: -d.dir * M.rand(40, 120), vy: M.rand(-60, 0), type: 'smoke', size: M.rand(5, 9), life: M.rand(0.6, 1.1), color: 'rgba(90,94,104,0.55)', drag: 0.94 });
     yield 0.85;
     d.wheelieT = 0; d.mood = 'angry';
     d.w = L2() ? 1.8 : 1.6; d.smokeOn = true; d.fast = true;
@@ -16201,7 +16477,7 @@ body.in-play #toasts { opacity: 0; }
   function* bolBoxOpen(b) {
     const d = b.data;
     G.explode(b.x, b.y, 2, { confetti: true });
-    for (let i = 0; i < 30; i++) G.part({ x: b.x + M.rand(-50, 50), y: b.y + M.rand(-40, 40), vx: M.rand(-260, 260), vy: M.rand(-300, 60), type: 'paper', size: M.rand(4, 7), life: M.rand(0.9, 1.5), color: M.pick(['#ffffff', '#f4f1e8', '#17191f']), drag: 0.95, grav: 160, rot: M.rand(0, TAU), vr: M.rand(-10, 10) });
+    for (let i = 0, n = 10 + 20 * decoK(); i < n; i++) G.part({ x: b.x + M.rand(-50, 50), y: b.y + M.rand(-40, 40), vx: M.rand(-260, 260), vy: M.rand(-300, 60), type: 'paper', size: M.rand(4, 7), life: M.rand(0.9, 1.5), color: M.pick(['#ffffff', '#f4f1e8', '#17191f']), drag: 0.95, grav: 160, rot: M.rand(0, TAU), vr: M.rand(-10, 10) });
     G.text(b.x, b.y + 70, 'SIGILO QUEBRADO!', { color: G.C.yellow, size: 15, life: 1.6, vy: -20 });
     G.clearBullets(true); // a papelada vira Pix
     sfx('explode_m');
@@ -16249,7 +16525,7 @@ body.in-play #toasts { opacity: 0; }
           shoot(b.x, b.y + 30, DOWN, 40, { style: 'bs_gota', color: COL.hot, ay: 115, data: { vmax: 165 }, update: smokeFall });
           shoot(b.x, b.y + 30, DOWN, 12, { style: 'bs_gota', color: COL.magenta, ay: 80, data: { vmax: 130 }, update: smokeFall });
         }
-        if (deco()) G.part({ x: b.x - dir * 30, y: b.y + 34, vx: -dir * M.rand(30, 90), vy: M.rand(-80, -20), type: 'dot', size: 3, life: 0.5, color: '#e8fbff', grav: 300 });
+        if (Math.random() < decoK()) G.part({ x: b.x - dir * 30, y: b.y + 34, vx: -dir * M.rand(30, 90), vy: M.rand(-80, -20), type: 'dot', size: 3, life: 0.5, color: '#e8fbff', grav: 300 });
       }
     });
     b.x = dir > 0 ? -64 : G.W + 64;
@@ -16325,6 +16601,9 @@ body.in-play #toasts { opacity: 0; }
     }
   }
 
+  const BOL_SHOTS = [['needle', COL.red], ['bs_leite', COL.hot], ['bs_leite', COL.pink], ['bs_talkey', COL.hot], ['bs_talkey', COL.magenta],
+    ['bs_sigilo', COL.red], ['bs_gota', COL.hot], ['bs_gota', COL.magenta], ['bs_fumaca', COL.ember],
+    ['rice', COL.orange]]; // 'rice' laranja: os motoqueiros da escolta (enemies.js)
   const BOL_HB_MOTO = [[-2, -23, 22], [0, 14, 30], [-30, 28, 16], [30, 28, 16]], BOL_HB_BOX = [[0, 0, 56]],
     BOL_HB_JET = [[-2, -23, 22], [0, 20, 32], [-36, 26, 18], [42, 22, 18]];
   G.Bosses.define('bolsonario', {
@@ -16344,9 +16623,11 @@ body.in-play #toasts { opacity: 0; }
       d.cans = []; d.puddles = []; d.box = null; d.smokeOn = false; d.smT = 0; d.smK = 0; d.canHand = false;
       d.tx = b.homeX; d.ty = b.homeY; d.S = {};
       b.hitboxes = BOL_HB_MOTO.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      warmPeople(b, 'p1', poses(bolSpec(true, false), BOL_SIZE, ['drive', 'point']));
+      warmShots(b, BOL_SHOTS);
     },
-    updateEnter(b) { if (b.t > 0.3 && !b.data.revved) { b.data.revved = true; sfx('motor'); } },
-    start(b) { co(b, bolP1(b)); say(b, 'É MOTOCIATA, TALKEY?', 2); sfx('motor'); },
+    updateEnter(b) { if (b.t > 0.3 && !b.data.revved) { b.data.revved = true; sfx('motor'); } warmShotsStep(b, 1); },
+    start(b) { warmShotsStep(b, 99); co(b, bolP1(b)); say(b, 'É MOTOCIATA, TALKEY?', 2); sfx('motor'); },
     update(b, dt, g) {
       const d = b.data;
       updFx(b, dt);
@@ -16369,8 +16650,8 @@ body.in-play #toasts { opacity: 0; }
           if (d.smK < 5) shoot(b.x - d.dir * 44, b.y + 22, DOWN - d.dir * 0.5, 28, { style: 'bs_fumaca', color: COL.ember, ay: 52, data: { vmax: d.fast ? 112 : 98 }, update: smokeFall, life: 9 });
         }
       }
-      if ((d.mode === 'moto' || d.mode === 'stun') && deco() && Math.random() < dt * (spd > 40 ? 14 : 4)) G.part({ x: b.x - d.dir * 46, y: b.y + 22, vx: -d.dir * M.rand(20, 60), vy: M.rand(-30, 0), type: 'smoke', size: M.rand(3, 6), life: 0.6, color: 'rgba(120,124,134,0.4)', drag: 0.94 });
-      if (d.mode === 'jet' && deco() && Math.random() < dt * 20) G.part({ x: b.x - d.dir * M.rand(30, 56), y: b.y + 34, vx: -d.dir * M.rand(10, 60), vy: M.rand(-60, -10), type: 'dot', size: M.rand(2, 3.5), life: 0.45, color: '#e8fbff', grav: 260 });
+      if ((d.mode === 'moto' || d.mode === 'stun') && Math.random() < dt * (spd > 40 ? 14 : 4) * decoK()) G.part({ x: b.x - d.dir * 46, y: b.y + 22, vx: -d.dir * M.rand(20, 60), vy: M.rand(-30, 0), type: 'smoke', size: M.rand(3, 6), life: 0.6, color: 'rgba(120,124,134,0.4)', drag: 0.94 });
+      if (d.mode === 'jet' && Math.random() < dt * 20 * decoK()) G.part({ x: b.x - d.dir * M.rand(30, 56), y: b.y + 34, vx: -d.dir * M.rand(10, 60), vy: M.rand(-60, -10), type: 'dot', size: M.rand(2, 3.5), life: 0.45, color: '#e8fbff', grav: 260 });
       // latas no ar
       for (let i = d.cans.length - 1; i >= 0; i--) {
         const cn = d.cans[i];
@@ -16381,7 +16662,7 @@ body.in-play #toasts { opacity: 0; }
       // hitboxes por modo
       const hb = d.mode === 'box' ? BOL_HB_BOX : d.mode === 'jet' ? BOL_HB_JET : BOL_HB_MOTO;
       if (d.hbSrc !== hb) { d.hbSrc = hb; b.hitboxes = hb.map((h) => ({ dx: h[0], dy: h[1], r: h[2] })); }
-      if (b.hp / b.maxHp < 0.3 && d.mode !== 'box' && deco() && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 10, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(60,60,70,0.45)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.3 && d.mode !== 'box' && Math.random() < dt * 5 * decoK()) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 10, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(60,60,70,0.45)', drag: 0.95 });
     },
     onPhase(b, idx, g) {
       const d = b.data;
@@ -16391,6 +16672,9 @@ body.in-play #toasts { opacity: 0; }
         for (const e of g.enemies) if (!e.dead && e.kind === 'bs_cadeado') G.killEnemy(e, { silent: true });
       }
       d.dmgBase = 1; d.wheelieT = 0; d.pose = 'drive'; d.mood = 'angry'; d.canHand = false; d.fast = false;
+      // o que vem a seguir: sem capacete (fase 2), suado (HP < 70%), tonto (sigilo quebrado) e no jet ski
+      if (idx === 1) warmPeople(b, 'p2', poses(bolSpec(false, false), BOL_SIZE, ['drive', 'up', 'point']).concat(poses(bolSpec(false, true), BOL_SIZE, ['drive', 'up', 'point'])));
+      if (idx === 2) warmPeople(b, 'p3', poses(bolSpec(false, true), BOL_SIZE, ['shrug', 'fist']));
       co(b, null, 1);
       if (idx === 1) { co(b, bolP2(b)); co(b, bolBgEscort(b, 8.5), 1); }
       else if (idx === 2) co(b, bolP3(b));
@@ -16499,15 +16783,17 @@ body.in-play #toasts { opacity: 0; }
   const INK = '#101418', WHITE = '#ffffff';
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
   const L2 = () => !!(G.game && G.game.loop > 1);
-  // qualidade 'low' (ENGINE §10): sem partículas puramente decorativas contínuas
-  const deco = () => G.quality !== 'low';
+  // qualidade (ENGINE §10): partículas puramente decorativas contínuas e brilhos extras
+  // 'high' tudo, 'mid' metade das partículas (sem o brilho dourado), 'low' nenhuma partícula decorativa
+  const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
 
-  // HP medido com o bot "humano" (tools/humanbot.js): jogador bom com VOTO nv.5 (≈ 56 dps) leva ~80 s na
-  // 1ª vida + ~55 s na 2ª — a luta mais longa do jogo, como deve ser. Quem chega fraco (nv.1–2) não fica
-  // preso para sempre: o Lule CANSA (veja FAT1/FAT2) e passa a levar até 2× de dano.
-  const HP1 = 4600, HP2 = 3000, HOME_Y = 178;
+  // HP medido com o bot "humano" (tools/humanbot.js --mode ttk, só mirando): VOTO/PANELAÇO/LAVA-JATO nv.5 levam
+  // ~64 s na 1ª vida + ~44 s na 2ª (≈ 110–120 s com a cena da volta) — a luta mais longa do jogo, como deve ser.
+  // Nv.3: 150–210 s. Quem chega fraco não fica preso para sempre: o Lule CANSA (FAT1/FAT2) e leva até 2× de dano.
+  const HP1 = 4400, HP2 = 2850, HOME_Y = 178;
   // Cansaço (anti-empate), contado por vida: começa aos FAT1 s na 1ª vida / FAT2 s na 2ª, chega a 2× em FAT_RAMP s.
-  const FAT1 = 115, FAT2 = 75, FAT_RAMP = 60;
+  // (nv.5 com arma de alvo único termina cada vida antes disso)
+  const FAT1 = 75, FAT2 = 50, FAT_RAMP = 35;
   // Lule (G.Art.person) é desenhado com este tamanho, centrado em (0, PY) relativo ao chefão
   const PS = 136, PY = -30, GY = 6; // GY: churrasqueira um pouco mais baixa
 
@@ -16578,6 +16864,24 @@ body.in-play #toasts { opacity: 0; }
     G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10 });
   }
   function pose(b, name, dur) { b.data.pose = name; b.data.poseT = dur || 0.8; }
+
+  // ---------- aquecimento (evita a travadinha no 1º quadro de cada desenho novo) ----------
+  // Lule: G.Art.prewarm pinta os sprites do corpo (pose × balanço × flash) em segundo plano, uma vez por chave.
+  function warmPoses(b, key, spec, list) {
+    const d = b.data, w = d.warmed || (d.warmed = {});
+    if (w[key] || !G.Art || !G.Art.prewarm) return;
+    w[key] = 1;
+    G.call(G.Art, 'prewarm', list.map((ps) => ({ spec, size: PS, mood: 'normal', pose: ps })));
+  }
+  // Tiros: um sprite de (estilo, cor) por passo durante a entrada (updateEnter); start() termina a fila.
+  const SHOTS = [['lule_picanha', COL.meat], ['lule_picanhao', COL.ember], ['lule_lata', COL.orange], ['lule_lata_f', COL.orange],
+    ['lule_espuma', COL.red], ['lule_pacote', COL.orange], ['lule_blusa', COL.hot], ['lule_blusa', COL.violet], ['lule_blusa', COL.magenta],
+    ['lule_estrela', COL.red], ['lule_neon', COL.pink], ['lule_neon', COL.magenta], ['rice', COL.magenta], ['orb', COL.red],
+    ['small', COL.pink], ['small', COL.orange]];
+  function warmShotsStep(b, n) {
+    const q = b.data.warmQ; if (!q || !q.length) return;
+    for (let i = 0; i < n && q.length; i++) { const p = q.shift(); G.call(G.BulletStyles, 'sprite', p[0], p[1]); }
+  }
 
   // ---------- corrotinas (várias em paralelo) ----------
   function co(b, gen) { b.data.cos.push({ gen, wait: 0, until: null, done: false }); }
@@ -17054,7 +17358,7 @@ body.in-play #toasts { opacity: 0; }
           bl.ang += M.clamp(M.wrapAngle(want - bl.ang), -1.35 * dt, 1.35 * dt);
         }
         bl.vx = Math.cos(bl.ang) * sp; bl.vy = Math.sin(bl.ang) * sp;
-        if (deco() && Math.random() < 0.25) G.part({ x: bl.x + M.rand(-14, 14), y: bl.y - 16, vx: M.rand(-10, 10), vy: -50, type: 'smoke', size: 4, life: 0.5, color: 'rgba(230,230,240,0.35)' });
+        if (Math.random() < 0.25 * decoK()) G.part({ x: bl.x + M.rand(-14, 14), y: bl.y - 16, vx: M.rand(-10, 10), vy: -50, type: 'smoke', size: 4, life: 0.5, color: 'rgba(230,230,240,0.35)' });
       },
     });
   }
@@ -17334,7 +17638,7 @@ body.in-play #toasts { opacity: 0; }
     if (d.revStep >= 3) {
       d.dim = Math.max(0, d.dim - dt * 0.6);
       b.hp = b.maxHp * M.clamp((t - d.refill0) / 2.2, 0, 1); // barra enchendo de novo
-      if (Math.random() < 0.25) G.part({ x: b.x + M.rand(-70, 70), y: b.y + M.rand(-80, 60), vx: 0, vy: -60, type: 'spark', size: 2.5, life: 0.5, color: '#ff5d6e' });
+      if (Math.random() < 0.25 * (0.4 + 0.6 * decoK())) G.part({ x: b.x + M.rand(-70, 70), y: b.y + M.rand(-80, 60), vx: 0, vy: -60, type: 'spark', size: 2.5, life: 0.5, color: '#ff5d6e' });
     }
     if (d.revStep === 3 && t > d.refill0 + 2.5) {
       d.revStep = 4;
@@ -17356,7 +17660,9 @@ body.in-play #toasts { opacity: 0; }
     G.setBossPhases(b, PH2, 1);
     b.invulnT = 1.2;
     G.call(G.Audio, 'music', 'boss_final');
-    G.banner('FASE 1', PH2[0].name, { color: G.C.yellow, dur: 1.8, small: true });
+    // "FASE" é o nome das etapas e o core anuncia as fases do chefão como "Nº TURNO". Mandato novo,
+    // contagem nova: depois deste vêm "2º TURNO — Picanha Infinita" e "3º TURNO — A Última Picanha".
+    G.banner('NOVO MANDATO', PH2[0].name, { color: G.C.yellow, dur: 1.8, small: true });
     startPhase(b, 0);
   }
 
@@ -17555,7 +17861,7 @@ body.in-play #toasts { opacity: 0; }
     d.smokeT -= dt;
     if (d.smokeT <= 0 && b.state !== 'warning') {
       d.smokeT = 0.16 - heat * 0.06;
-      if (d.smoke.length < 26) d.smoke.push({ x: b.x + M.rand(-60, 60), y: b.y + 10, vx: M.rand(-8, 8), r: M.rand(5, 9), t: 0, life: M.rand(1.6, 2.4), dark: heat > 0.5 || d.slump > 0.3 });
+      if (d.smoke.length < 10 + 16 * decoK()) d.smoke.push({ x: b.x + M.rand(-60, 60), y: b.y + 10, vx: M.rand(-8, 8), r: M.rand(5, 9), t: 0, life: M.rand(1.6, 2.4), dark: heat > 0.5 || d.slump > 0.3 });
     }
     for (let i = d.smoke.length - 1; i >= 0; i--) {
       const s = d.smoke[i];
@@ -17721,7 +18027,7 @@ body.in-play #toasts { opacity: 0; }
     if (d.life === 2 && !fl) {
       const pul = 0.85 + 0.15 * Math.sin(t * 5);
       glow(c, b.x, b.y - 14, 160 * pul, 'rgba(255,36,56,0.95)', 1);
-      glow(c, b.x, b.y - 50, 80, 'rgba(255,210,63,0.5)', pul);
+      if (G.quality === 'high') glow(c, b.x, b.y - 50, 80, 'rgba(255,210,63,0.5)', pul); // brilho extra
     }
 
     const bob = bobY(b);
@@ -17815,8 +18121,11 @@ body.in-play #toasts { opacity: 0; }
       d.hpMul = b.maxHp / HP1; // 2º mandato: o core já multiplicou o HP
       b.hitboxes = HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       b.phases = PH1.slice();
+      warmPoses(b, 'p1', SPEC, ['idle', 'wave', 'point']);
+      d.warmQ = SHOTS.slice();
     },
-    start(b) { startPhase(b, 0); },
+    updateEnter(b) { warmShotsStep(b, 1); },
+    start(b) { warmShotsStep(b, 99); startPhase(b, 0); },
     update(b, dt, g) {
       const d = b.data;
       d.poseT -= dt; if (d.poseT <= 0 && d.pose !== 'idle' && !d.lsign) d.pose = 'idle';
@@ -17842,7 +18151,7 @@ body.in-play #toasts { opacity: 0; }
       b.y += (d.ty - b.y) * f;
       d.compA += dt * (L2() ? 1.05 : 0.85);
       // 4º mandato: faíscas vermelhas e douradas subindo em volta dele
-      if (d.life === 2 && deco() && Math.random() < dt * 10) {
+      if (d.life === 2 && Math.random() < dt * 10 * decoK()) {
         const a = M.rand(0, TAU);
         G.part({ x: b.x + Math.cos(a) * 78, y: b.y - 10 + Math.sin(a) * 70, vx: 0, vy: M.rand(-70, -40), type: 'spark', size: 2.4, life: 0.55, color: Math.random() < 0.7 ? '#ff3b4e' : '#ffd23f', drag: 0.96 });
       }
@@ -17865,6 +18174,9 @@ body.in-play #toasts { opacity: 0; }
     onPhase(b, idx) {
       const d = b.data;
       if (d.reviving) return;
+      // o que vem a seguir: suado (HP < 50% e a 2ª vida inteira), a cena da volta e os espetinhos da 2ª vida
+      if (d.life === 1 && idx === 1) warmPoses(b, 'sw', SPEC_SWEAT, ['idle', 'point', 'up']);
+      if (d.life === 1 && idx === 3) warmPoses(b, 'sw2', SPEC_SWEAT, ['shrug', 'wave']);
       startPhase(b, idx);
     },
     onHit(b, dmg) {
@@ -17990,7 +18302,8 @@ body.in-play #toasts { opacity: 0; }
     'A sessão volta assim que alguém achar o quórum.',
   ];
   const RANKS = {
-    S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.' },
+    // S aceita até 1 Delação (G.rankFor): lineBomb é a frase quando houve uma
+    S: { label: 'ELEITO NO 1º TURNO', line: 'Ficha limpa e sem delação. O povo agradece.', lineBomb: 'Ficha limpa, só uma delaçãozinha. O povo agradece.' },
     A: { label: 'ELEITO', line: 'Nenhum arranhão. Quase um santo.' },
     B: { label: '2º TURNO', line: 'Uns arranhões, mas passou.' },
     C: { label: 'SUPLENTE', line: 'Passou raspando. Igual ao orçamento.' },
@@ -18131,15 +18444,19 @@ body.in-play #toasts { opacity: 0; }
   // mantém a classe 'short' da tela atual em dia quando o celular gira/redimensiona
   // (adiado um quadro: o core recalcula G.H e o tamanho do #ui no próprio listener de resize)
   window.addEventListener('resize', () => requestAnimationFrame(() => { if (cur) cur.root.classList.toggle('short', G.H < 700); }));
+  // fn roda no resize e também quando as fontes da web chegam (G.UI.fontsReady): o texto muda de
+  // tamanho e o que foi medido ou pintado uma vez (silhuetas com "?", altura da urna) fica velho
   function onResize(scr, fn) {
     const h = () => requestAnimationFrame(() => { if (scr.alive) G.safe(fn, 'ui.resize'); });
     window.addEventListener('resize', h);
     scr.cleanups.push(() => window.removeEventListener('resize', h));
+    (scr.refresh || (scr.refresh = [])).push(h);
   }
-  // Ajusta a resolução do canvas ao tamanho na tela; desenha em px CSS
-  function fitCanvas(cv) {
-    const w = cv.clientWidth || 1, h = cv.clientHeight || 1;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Ajusta a resolução do canvas ao tamanho na tela; desenha em px CSS.
+  // cw/ch: tamanho já medido (evita ler o layout a cada quadro); maxDpr: teto da densidade
+  function fitCanvas(cv, cw, ch, maxDpr) {
+    const w = cw || cv.clientWidth || 1, h = ch || cv.clientHeight || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, maxDpr || 2);
     const pw = Math.max(1, Math.round(w * dpr)), ph = Math.max(1, Math.round(h * dpr));
     if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
     const ctx = cv.getContext('2d');
@@ -18411,7 +18728,7 @@ body.in-play #toasts { opacity: 0; }
       '<button type="button" class="key key-num" data-go="conq"><i>3</i><span>CONQUISTAS<em>' + ac.got + '/' + ac.total + '</em></span></button>' +
       '<button type="button" class="key key-num" data-go="como"><i>4</i><span>COMO JOGAR</span></button>' +
       '<button type="button" class="key key-num" data-go="ajustes"><i>5</i><span>AJUSTES</span></button>' +
-      '<button type="button" class="key key-num" data-go="creditos"><i>6</i><span>CRÉDITOS</span></button>' +
+      '<button type="button" class="key key-num" data-go="creditos"><i>6</i><span>CRÉDITOS<em>+ HISTÓRIA</em></span></button>' +
       '</div>' +
       '<div class="keyrow">' +
       (S.cleared ? keyHTML('branco', '2º MANDATO', 'mais difícil · mais Pix', 'k-mandato', ' data-go="mandato"') : '') +
@@ -18454,12 +18771,36 @@ body.in-play #toasts { opacity: 0; }
     txt.addEventListener('animationend', nextNews);
     nextNews();
 
-    // arte animada (G.Art.titleArt) ocupando a área acima da urna
+    // arte animada (G.Art.titleArt) ocupando a área acima da urna.
+    // As medidas (tamanho do canvas, topo da urna) só são lidas no começo, no resize, quando as
+    // fontes chegam ou quando o ResizeObserver avisa; nunca a cada quadro.
     const cv = q(scr.root, '.t-art'), urna = q(scr.root, '.urna-title');
+    let L = null;
+    const measure = () => {
+      const w = cv.clientWidth || 1, h = cv.clientHeight || 1;
+      L = { w, h, ah: clamp(urna.offsetTop + 26, 160, h) };
+    };
+    onResize(scr, measure);
+    if (typeof ResizeObserver === 'function') {
+      try {
+        const ro = new ResizeObserver(() => { L = null; });
+        ro.observe(cv); ro.observe(urna);
+        scr.cleanups.push(() => ro.disconnect());
+      } catch (e) { /* sem ResizeObserver: o resize da janela basta */ }
+    }
+    // no máximo 60 quadros/s (telas de 90/120 Hz) e 30 na qualidade leve; a densidade do
+    // canvas segue a qualidade (leve = 1, média = 1,5), como o canvas do jogo
+    let acc = 1;
     loop(scr, (dt) => {
       artT += dt;
-      const f = fitCanvas(cv);
-      const ah = clamp(urna.offsetTop + 26, 160, f.h);
+      acc += dt;
+      const low = G.quality === 'low';
+      const step = low ? 1 / 30 : 1 / 60;
+      if (acc + 0.002 < step) return;
+      acc = Math.min(acc - step, step);
+      if (!L) measure();
+      const f = fitCanvas(cv, L.w, L.h, low ? 1 : G.quality === 'mid' ? 1.5 : 2);
+      const ah = L.ah;
       f.ctx.clearRect(0, 0, f.w, f.h);
       if (G.Art && typeof G.Art.titleArt === 'function') G.call(G.Art, 'titleArt', f.ctx, f.w, ah, artT);
       else fallbackTitleArt(f.ctx, f.w, ah, artT);
@@ -18586,9 +18927,11 @@ body.in-play #toasts { opacity: 0; }
     onResize(scr, layout);
     loop(scr, (dt) => {
       pt += dt;
+      // mede o canvas ANTES de a máquina de escrever mexer no texto (ler depois de escrever
+      // força um layout extra a cada quadro)
+      const f = fitCanvas(cv);
       typer.update(dt);
       if (typer.done) scr.root.classList.add('typed');
-      const f = fitCanvas(cv);
       if (G.Art && typeof G.Art.scene === 'function') G.call(G.Art, 'scene', f.ctx, panels[idx].scene || 'urna', f.w, f.h, pt);
     });
   }
@@ -18657,9 +19000,9 @@ body.in-play #toasts { opacity: 0; }
     show(0);
     loop(scr, (dt) => {
       lt += dt;
+      const f = fitCanvas(cv); // antes da máquina de escrever (sem layout forçado por quadro)
       typer.update(dt);
       if (typer.done) scr.root.classList.add('typed');
-      const f = fitCanvas(cv);
       const mouth = typer.done ? 0 : Math.round(Math.abs(Math.sin(lt * 13)) * 4) / 4;
       f.ctx.clearRect(0, 0, f.w, f.h);
       drawPhoto(f.ctx, f.w, f.h, who, lt + 0.3, { mouth, mood, size: f.w * 1.02, cy: f.h * 0.52, light: '#fff7d6' });
@@ -18718,6 +19061,23 @@ body.in-play #toasts { opacity: 0; }
     if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
   }
   function fmtTime(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
+  // Dica da próxima nota, tirada das regras do próprio core (G.rankFor), sem copiar números
+  function rankTip(rank, idx) {
+    if (typeof G.rankFor !== 'function' || rank === 'S') return '';
+    try {
+      const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+      if (rank === 'A') {
+        let b = -1;
+        for (let n = 0; n <= 9; n++) if (G.rankFor(0, n, idx) === 'S') b = n;
+        if (b < 0) return '';
+        return 'Nota S: sem perder vida e ' + (b === 0 ? 'sem Delação.' : 'no máximo ' + plural(b, 'Delação.', 'Delações.'));
+      }
+      if (rank === 'B') return G.rankFor(0, 99, idx) === 'A' ? 'Nota A: termine a fase sem perder vida.' : '';
+      let h = 0;
+      for (let n = 1; n <= 20; n++) if (G.rankFor(n, 0, idx) === 'B') h = n;
+      return h ? 'Nota B: perca no máximo ' + plural(h, 'vida', 'vidas') + ' nesta fase.' : '';
+    } catch (e) { return ''; }
+  }
   function showStageClear(stats, done) {
     stats = stats || {};
     const fin = once(done);
@@ -18729,6 +19089,7 @@ body.in-play #toasts { opacity: 0; }
     const rank = RANKS[stats.rank] ? stats.rank : 'C';
     // subiu a nota desta fase? (só quando já havia uma nota antes)
     const better = !!prevRank && (RANK_ORDER[rank] || 0) > (RANK_ORDER[prevRank] || 0);
+    const tip = rankTip(rank, stats.index | 0);
     const rows = [
       { k: 'VOTOS', v: stats.score, cls: 'big' },
       { k: 'POLÍTICOS CASSADOS', v: stats.kills },
@@ -18762,8 +19123,9 @@ body.in-play #toasts { opacity: 0; }
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p></div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
-      '<p class="rc-line">' + esc(RANKS[rank].line) + '</p>' +
-      (better ? '<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
+      '<p class="rc-line">' + esc((stats.bombsUsed > 0 && RANKS[rank].lineBomb) || RANKS[rank].line) + '</p>' +
+      (tip ? '<p class="rc-tip">' + esc(tip) + '</p>' : '') +
+      (better ?'<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
       '<div class="rc-foot"><i class="barcode"></i><span>CÓD. VERIFICAÇÃO 171-' + String(((stats.score || 0) % 9973) + 1000).slice(0, 4) + '-ZÉ</span><b>FIM</b></div>' +
       '</div></div></div>' +
       '<div class="cl-keys">' + keyHTML('confirma', 'CONTINUAR', 'CONFIRMA', 'k-next key-wide') + '</div>' +
@@ -18854,7 +19216,8 @@ body.in-play #toasts { opacity: 0; }
       kicker: fromRun ? 'PARADA NA ESTRADA' : 'MELHORIAS PERMANENTES',
       title: 'LOJINHA<br>DO ZÉ',
       right: '<div class="saldo">' + PIX_ICO + '<span><small>SALDO</small><b class="saldo-v">' + money(G.save.pix) + '</b></span></div>',
-      body: '<p class="quip"><b>Zé:</b> <span class="quip-t">' + esc(pick(SHOP_QUIPS)) + '</span></p><div class="up-list">' + rows + '</div>',
+      // na parada entre fases a compra já vale para a viagem em andamento (G.buyUpgrade aplica na hora)
+      body: '<p class="quip"><b>Zé:</b> <span class="quip-t">' + esc(fromRun ? 'Comprou aqui na parada? Já vale nesta viagem.' : pick(SHOP_QUIPS)) + '</span></p><div class="up-list">' + rows + '</div>',
       foot: fromRun
         ? lcdFoot('SEGUIR VIAGEM', '') + (nextInfo ? '<span class="foot-msg">Próxima parada: <b>' + esc(nextInfo.name) + '</b></span>' : '')
         : lcdFoot('COMPRAR', 'VOLTAR'),
@@ -19262,14 +19625,40 @@ body.in-play #toasts { opacity: 0; }
     scr.onKey = (e, k) => { if (k === 'Escape' || k === 'Backspace') { sfx('ui_back'); showTitle(true); } };
   }
 
-  // Cartões ilustrados do "Como jogar"
+  // Regras do item P lidas do core (G.POWER_CYCLE, G.powerNeed), com os valores de hoje de reserva
+  const powerCycle = () => (+G.POWER_CYCLE > 0 ? +G.POWER_CYCLE : 3);
+  const numPT = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
+  const listPT = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' e ' + a[a.length - 1]);
+  function powerNeeds() {
+    const out = [], max = G.MAX_LEVEL || 5;
+    for (let lv = 1; lv < max; lv++) {
+      let n = typeof G.powerNeed === 'function' ? +G.powerNeed(lv) : NaN;
+      if (!(n > 0)) n = [1, 2, 3, 3][lv - 1] || 3;
+      out.push(n);
+    }
+    return out;
+  }
+  function howtoPower() {
+    const c = powerCycle();
+    return 'Ele troca de arma a cada ' + numPT(c) + (c === 1 ? ' segundo' : ' segundos') + ': a <b>cor escolhe a arma</b>. ' +
+      '<b>Todo P deixa a arma mais forte</b> (' + listPT(powerNeeds()) + ' P por nível). ' +
+      'Perdeu uma vida? O nível perdido cai como um P "de volta".';
+  }
+  // Uma linha por arma no cartão do P (o que cada uma faz de verdade no core)
+  const WEAPON_TIP = {
+    voto: 'Tiro reto e rápido. Mais tiros a cada nível.',
+    boca: 'Rajada reta no meio e um leque largo dos lados.',
+    panela: 'Panelas teleguiadas caçam o alvo. Plém!',
+    jato: 'Jato contínuo que fura a fila: o 1º leva mais.',
+  };
+  // Cartões ilustrados do "Como jogar" (d pode ser função: texto montado com as regras do core)
   const HOWTO = [
     { t: 'ARRASTE EM QUALQUER LUGAR', d: 'O Fusca segue o <b>movimento</b> do dedo, sem ficar embaixo dele. Dá pra pilotar com o dedão lá embaixo.', draw: 'drag' },
     { t: 'TIRO AUTOMÁTICO', d: 'O Fusca atira sozinho. Sua única preocupação é desviar.', draw: 'fire' },
     { t: 'SÓ O PONTO BRANCO CONTA', d: 'O <b>ponto branco</b> no meio do Fusca é o único ponto vulnerável. O resto é lataria: o tiro passa.', draw: 'hitbox' },
     { t: 'RASPÃO DÁ VOTO', d: 'Passar <b>raspando</b> nos tiros dá pontos e carrega a Delação Premiada. Cheio = delação de graça.', draw: 'graze' },
-    { t: 'O ITEM P MUDA DE COR', d: 'Ele troca de arma a cada 3 segundos. Pegue na <b>cor da arma que você quer</b>. Mesma cor: sobe o nível.', draw: 'power', weapons: true },
-    { t: 'DELAÇÃO PREMIADA', d: 'O botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Use quando apertar.', draw: 'bomb' },
+    { t: 'O ITEM P MUDA DE COR', d: howtoPower, draw: 'power', weapons: true },
+    { t: 'DELAÇÃO PREMIADA', d: 'Um <b>toque rápido</b> no botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Arrastar a partir dele só pilota, não gasta.', draw: 'bomb' },
     { t: 'APROVAÇÃO', d: 'Derrube políticos sem parar e a aprovação sobe, <b>multiplicando os votos</b> (até ×5). Levar tiro derruba ela.', draw: 'approval' },
     { t: 'PIX E LOJINHA', d: 'Político derrubado solta <b>Pix</b>. Junte e gaste em melhorias permanentes na Lojinha do Zé.', draw: 'pix' },
     { t: 'O LEÃO DA RECEITA', d: 'Ele dá o bote no Fusca e <b>morde parte do seu Pix</b>. Fique de olho na linha laranja e derrube-o antes.', draw: 'leao' },
@@ -19329,8 +19718,8 @@ body.in-play #toasts { opacity: 0; }
     power(c, w, h, t) {
       tileBG(c, w, h);
       const order = G.WEAPON_ORDER || ['voto', 'boca', 'panela', 'jato'];
-      // mesmo ritmo do jogo: troca de arma a cada 3 s (anel mostra quanto falta)
-      const PER = 3, k = (t % PER) / PER;
+      // mesmo ritmo do jogo: troca de arma a cada G.POWER_CYCLE s (anel mostra quanto falta)
+      const PER = powerCycle(), k = (t % PER) / PER;
       const wt = order[Math.floor(t / PER) % order.length];
       const cx = w / 2, cy = h * 0.44;
       c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = 2.5;
@@ -19393,8 +19782,12 @@ body.in-play #toasts { opacity: 0; }
     let cards = '';
     HOWTO.forEach((it, i) => {
       cards += '<div class="how' + (i % 2 ? ' alt' : '') + '"><span class="how-cv"><canvas data-draw="' + it.draw + '" aria-hidden="true"></canvas></span>' +
-        '<span class="how-txt"><b><i>' + (i + 1) + '</i>' + it.t + '</b><small>' + it.d + '</small></span>' +
-        (it.weapons ? '<span class="how-weap">' + (G.WEAPON_ORDER || []).map((w) => '<span><canvas data-weapon="' + w + '"></canvas><em style="color:' + (G.WEAPONS[w] || {}).color + '">' + esc((G.WEAPONS[w] || {}).name || w) + '</em></span>').join('') + '</span>' : '') +
+        '<span class="how-txt"><b><i>' + (i + 1) + '</i>' + it.t + '</b><small>' + (typeof it.d === 'function' ? it.d() : it.d) + '</small></span>' +
+        (it.weapons ? '<span class="how-weap">' + (G.WEAPON_ORDER || []).map((w) => {
+          const wd = G.WEAPONS[w] || {};
+          return '<span><canvas data-weapon="' + w + '"></canvas><span class="hw-t"><em style="color:' + wd.color + '">' + esc(wd.name || w) + '</em>' +
+            '<small>' + esc(WEAPON_TIP[w] || wd.desc || '') + '</small></span></span>';
+        }).join('') + '</span>' : '') +
         '</div>';
     });
     const scr = pageShell('howto', {
@@ -19430,15 +19823,32 @@ body.in-play #toasts { opacity: 0; }
     });
   }
 
+  // Rever a abertura: o core só a passa na primeira partida (G.save.seenIntro)
+  const hasIntro = () => !!(G.STORY && G.STORY.intro && G.STORY.intro.length);
+  function rewatchStory() {
+    if (!hasIntro()) { showTitle(true); return; }
+    G.call(G.Audio, 'music', 'story');
+    UI.story(G.STORY.intro, () => {
+      if (G.state !== 'menu') return; // (algo já tirou o jogo do menu)
+      G.call(G.Audio, 'music', 'menu');
+      showTitle(true);
+    });
+  }
   function showCredits() {
+    const story = hasIntro();
     const scr = pageShell('credits', {
       kicker: 'FICHA TÉCNICA', title: 'CRÉDITOS',
       body: '<div class="cr-page">' + creditsHTML(false) + '</div>',
-      foot: lcdFoot('', 'VOLTAR'),
-      keys: backKey(),
+      foot: lcdFoot(story ? 'REVER A HISTÓRIA' : '', 'VOLTAR'),
+      keys: backKey() + (story ? keyHTML('confirma', 'HISTÓRIA', 'CONFIRMA', 'k-story') : ''),
     });
     onTap(q(scr.root, '.k-back'), () => showTitle(true));
-    scr.onKey = (e, k) => { if (k === 'Escape' || k === 'Backspace') { sfx('ui_back'); showTitle(true); } };
+    onTap(q(scr.root, '.k-story'), rewatchStory);
+    scr.onKey = (e, k) => {
+      if (k === 'Escape' || k === 'Backspace') { sfx('ui_back'); showTitle(true); }
+      else if (story && k === 'Enter') { e.preventDefault(); sfx('ui_confirm'); rewatchStory(); }
+    };
+    focusEl(q(scr.root, '.k-story'));
   }
 
   // ==================================================================
@@ -19497,7 +19907,9 @@ body.in-play #toasts { opacity: 0; }
     // extras (debug/integração)
     close() { close(); },
     current() { return cur ? cur.kind : null; },
-    show(name) { const f = { stages: showStages, settings: showSettings, achievements: showAchievements, howto: showHowTo, credits: showCredits }[name]; if (f) f(); },
+    show(name) { const f = { stages: showStages, settings: showSettings, achievements: showAchievements, howto: showHowTo, credits: showCredits, story: rewatchStory }[name]; if (f) f(); },
+    // o core chama quando as fontes da web chegam depois do boot: remede e repinta a tela atual
+    fontsReady() { const s = cur; if (s && s.alive && s.refresh) for (const h of s.refresh) h(); },
   };
   G.UI = UI;
 })();

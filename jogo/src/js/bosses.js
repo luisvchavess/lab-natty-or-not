@@ -15,8 +15,9 @@
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
   const L2 = () => !!(G.game && G.game.loop > 1);
   const clamp = M.clamp;
-  // qualidade 'low' (ENGINE §10): sem partículas puramente decorativas contínuas (fumacinha, respingos)
-  const deco = () => G.quality !== 'low';
+  // qualidade (ENGINE §10): partículas puramente decorativas contínuas (fumacinha, respingos)
+  // 'high' todas, 'mid' metade, 'low' nenhuma. Multiplica a taxa de emissão.
+  const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
 
   // Cores de tiro (saturadas, legíveis contra cenário e tiros do Zé)
   const COL = {
@@ -70,6 +71,23 @@
   }
   // balão de fala sempre abaixo da barra de vida do chefão (HUD vai até y≈68)
   function bubbleAt(b, want) { b.bubbleY = Math.min(want, b.y - 104); }
+
+  // ---------- aquecimento (evita a travadinha no 1º quadro de cada desenho novo) ----------
+  // Personagens: G.Art.prewarm pinta os sprites em segundo plano (fatias entre os quadros), uma vez por chave.
+  // list = [{ spec, size, mood, pose }] com os MESMOS objetos de spec e tamanhos passados a G.Art.person.
+  function warmPeople(b, key, list) {
+    const d = b.data, w = d.warmed || (d.warmed = {});
+    if (w[key] || !G.Art || !G.Art.prewarm) return;
+    w[key] = 1;
+    G.call(G.Art, 'prewarm', list);
+  }
+  function poses(spec, size, list, mood) { return list.map((pose) => ({ spec, size, mood: mood || 'normal', pose })); }
+  // Tiros: um sprite de (estilo, cor) por passo durante a entrada do chefão (updateEnter); start() termina a fila.
+  function warmShots(b, pairs) { b.data.warmQ = pairs.slice(); }
+  function warmShotsStep(b, n) {
+    const q = b.data.warmQ; if (!q || !q.length) return;
+    for (let i = 0; i < n && q.length; i++) { const p = q.shift(); G.call(BS, 'sprite', p[0], p[1]); }
+  }
 
   // ---------- corrotinas ----------
   // slot 0 = sequência principal da fase; slot 1 = pressão de fundo (roda em paralelo)
@@ -1023,6 +1041,8 @@
   }
 
   const CEN_HB = [[0, -6, 46], [-46, 16, 28], [46, 16, 28], [0, 38, 30]];
+  // todo (estilo, cor) que o Centrão atira (o reflexo usa violeta; as emendas estouram em laranja/violeta)
+  const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold], ['bs_cedula', COL.orange], ['bs_cedula', COL.violet]];
   G.Bosses.define('centrao', {
     // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
     name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3400, r: 46, homeY: 165, fatStart: 85,
@@ -1046,8 +1066,14 @@
       d.S = {}; d.GS = {};
       b.bubbleY = 72;
       b.hitboxes = CEN_HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      // cabecinhas da 1ª fase (sorrisinho) e os tiros de todas as fases
+      warmPeople(b, 'heads', CEN_HEADS.map((spec) => ({ spec, size: 34, mood: 'smug' })));
+      warmShots(b, CEN_SHOTS);
     },
+    updateEnter(b) { warmShotsStep(b, 1); },
     start(b) {
+      warmShotsStep(b, 99);
+      cenBodySprite(0, true, 0, ''); // sprite do flash (1º acerto)
       co(b, cenP1(b)); co(b, cenBg(b, 1.5), 1);
       say(b, 'TOMA LÁ, DÁ CÁ!', 2);
     },
@@ -1076,11 +1102,17 @@
         for (let i = 0; i < 8; i++) { const a = d.orbit.ang + (i * TAU) / 8, h = b.hitboxes[4 + i]; h.dx = Math.cos(a) * d.orbit.R; h.dy = Math.sin(a) * d.orbit.R; }
       }
       // fumacinha quando está apanhando muito
-      if (b.hp / b.maxHp < 0.25 && deco() && Math.random() < dt * 6) G.part({ x: b.x + M.rand(-40, 40), y: b.y - 30, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(80,80,90,0.45)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.25 && Math.random() < dt * 6 * decoK()) G.part({ x: b.x + M.rand(-40, 40), y: b.y - 30, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(80,80,90,0.45)', drag: 0.95 });
     },
     onPhase(b, idx) {
       const d = b.data;
       sprCache.clear(); // letreiro novo: os sprites da fase anterior não servem mais (memória do celular)
+      cenBodySprite(0, true, 0, ''); // flash de novo já (no quadro da troca, que tem hitstop)
+      // próximas fases: cabecinhas suadas (HP < 66%) e os deputadinhos do apoio (fase 3, de gravata vermelha ou verde)
+      if (idx === 1) {
+        warmPeople(b, 'headsSw', CEN_HEADS_SW.map((spec) => ({ spec, size: 34, mood: 'smug' })));
+        warmPeople(b, 'apoio', APOIO_SPECS.concat(APOIO_SPECS_G).map((spec) => ({ spec, size: 28, mood: 'laugh', pose: 'up' })));
+      }
       for (let i = 0; i < 8; i++) { d.warn[i] = 0; d.hold[i] = 0; }
       d.armLT = 0; d.armRT = 0; d.flipX = 1; d.swapWarn = 0;
       if (idx === 1) { co(b, cenP2(b)); co(b, cenBg(b, 1.9), 1); }
@@ -1684,6 +1716,9 @@
   }
 
   const DIL_HB = [[0, -16, 30], [0, 24, 25]], DIL_HB_BIKE = [[0, -26, 26], [0, 10, 22], [-26, 38, 16], [26, 38, 16]];
+  const DIL_SHOTS = [['bs_semente', COL.hot], ['bs_semente', COL.orange], ['bs_mandioca', COL.orange], ['bs_mandiocao', COL.red],
+    ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
+    ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
     name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3600, r: 40, homeY: 168, spdK: 1.06,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
@@ -1702,8 +1737,11 @@
       d.board = null; d.bike = false; d.dir = 1;
       d.tx = b.homeX; d.ty = b.homeY; d.S = {};
       b.hitboxes = DIL_HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      warmPeople(b, 'p1', poses(DILMA, DIL_SIZE, ['idle', 'up', 'point', 'fist']));
+      warmShots(b, DIL_SHOTS);
     },
-    start(b) { co(b, dilP1(b)); co(b, dilBgJars(b, 1.7), 1); say(b, 'SAÚDO A MANDIOCA!', 1.8); },
+    updateEnter(b) { warmShotsStep(b, 1); },
+    start(b) { warmShotsStep(b, 99); co(b, dilP1(b)); co(b, dilBgJars(b, 1.7), 1); say(b, 'SAÚDO A MANDIOCA!', 1.8); },
     update(b, dt, g) {
       const d = b.data;
       updFx(b, dt);
@@ -1727,16 +1765,19 @@
         }
         const acc = W.dir * W.str * 1.3 * dt;
         for (const q of g.eb) if (!q.dead && q.data && q.data.wnd) { q.vx = clamp(q.vx + acc, -170, 170); }
-        if (Math.random() < dt * (deco() ? 30 : 12)) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
+        if (Math.random() < dt * (12 + 18 * decoK())) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
       }
       // hitboxes por pose
       const hb = d.bike ? DIL_HB_BIKE : DIL_HB;
       if (b.hitboxes.length !== hb.length) b.hitboxes = hb.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
-      if (b.hp / b.maxHp < 0.2 && deco() && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-20, 20), y: b.y - 40, vx: M.rand(-10, 10), vy: -35, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.2 && Math.random() < dt * 5 * decoK()) G.part({ x: b.x + M.rand(-20, 20), y: b.y - 40, vx: M.rand(-10, 10), vy: -35, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
     },
     onPhase(b, idx) {
       const d = b.data;
       d.pose = 'idle'; d.glowT = 0;
+      // o que vem a seguir: suada (HP < 60%) e, na pedalada, de bicicleta
+      if (idx === 1) warmPeople(b, 'p2', poses(DILMA, DIL_SIZE, ['shrug']).concat(poses(DILMA_SW, DIL_SIZE, ['idle', 'up', 'point', 'shrug'])));
+      if (idx === 2) warmPeople(b, 'p4', poses(DILMA_SW, DIL_BIKE, ['drive']));
       if (idx >= 2) { d.wind.target = 0; d.windy = false; }
       d.jarT[0] = d.jarT[1] = 0;
       if (idx === 1) { co(b, dilP2(b)); co(b, null, 1); }
@@ -2119,7 +2160,7 @@
     d.w = 0; d.smokeOn = false; d.wheelieT = 1; d.mood = 'laugh';
     say(b, M.pick(['VRUM VRUM, TALKEY?', 'É MOTOCIATA!', 'ACELERA!']), 1.4);
     sfx('motor');
-    for (let i = 0; i < 10; i++) G.part({ x: b.x - d.dir * 44, y: b.y + 22, vx: -d.dir * M.rand(40, 120), vy: M.rand(-60, 0), type: 'smoke', size: M.rand(5, 9), life: M.rand(0.6, 1.1), color: 'rgba(90,94,104,0.55)', drag: 0.94 });
+    for (let i = 0, n = 4 + 6 * decoK(); i < n; i++) G.part({ x: b.x - d.dir * 44, y: b.y + 22, vx: -d.dir * M.rand(40, 120), vy: M.rand(-60, 0), type: 'smoke', size: M.rand(5, 9), life: M.rand(0.6, 1.1), color: 'rgba(90,94,104,0.55)', drag: 0.94 });
     yield 0.85;
     d.wheelieT = 0; d.mood = 'angry';
     d.w = L2() ? 1.8 : 1.6; d.smokeOn = true; d.fast = true;
@@ -2244,7 +2285,7 @@
   function* bolBoxOpen(b) {
     const d = b.data;
     G.explode(b.x, b.y, 2, { confetti: true });
-    for (let i = 0; i < 30; i++) G.part({ x: b.x + M.rand(-50, 50), y: b.y + M.rand(-40, 40), vx: M.rand(-260, 260), vy: M.rand(-300, 60), type: 'paper', size: M.rand(4, 7), life: M.rand(0.9, 1.5), color: M.pick(['#ffffff', '#f4f1e8', '#17191f']), drag: 0.95, grav: 160, rot: M.rand(0, TAU), vr: M.rand(-10, 10) });
+    for (let i = 0, n = 10 + 20 * decoK(); i < n; i++) G.part({ x: b.x + M.rand(-50, 50), y: b.y + M.rand(-40, 40), vx: M.rand(-260, 260), vy: M.rand(-300, 60), type: 'paper', size: M.rand(4, 7), life: M.rand(0.9, 1.5), color: M.pick(['#ffffff', '#f4f1e8', '#17191f']), drag: 0.95, grav: 160, rot: M.rand(0, TAU), vr: M.rand(-10, 10) });
     G.text(b.x, b.y + 70, 'SIGILO QUEBRADO!', { color: G.C.yellow, size: 15, life: 1.6, vy: -20 });
     G.clearBullets(true); // a papelada vira Pix
     sfx('explode_m');
@@ -2292,7 +2333,7 @@
           shoot(b.x, b.y + 30, DOWN, 40, { style: 'bs_gota', color: COL.hot, ay: 115, data: { vmax: 165 }, update: smokeFall });
           shoot(b.x, b.y + 30, DOWN, 12, { style: 'bs_gota', color: COL.magenta, ay: 80, data: { vmax: 130 }, update: smokeFall });
         }
-        if (deco()) G.part({ x: b.x - dir * 30, y: b.y + 34, vx: -dir * M.rand(30, 90), vy: M.rand(-80, -20), type: 'dot', size: 3, life: 0.5, color: '#e8fbff', grav: 300 });
+        if (Math.random() < decoK()) G.part({ x: b.x - dir * 30, y: b.y + 34, vx: -dir * M.rand(30, 90), vy: M.rand(-80, -20), type: 'dot', size: 3, life: 0.5, color: '#e8fbff', grav: 300 });
       }
     });
     b.x = dir > 0 ? -64 : G.W + 64;
@@ -2368,6 +2409,9 @@
     }
   }
 
+  const BOL_SHOTS = [['needle', COL.red], ['bs_leite', COL.hot], ['bs_leite', COL.pink], ['bs_talkey', COL.hot], ['bs_talkey', COL.magenta],
+    ['bs_sigilo', COL.red], ['bs_gota', COL.hot], ['bs_gota', COL.magenta], ['bs_fumaca', COL.ember],
+    ['rice', COL.orange]]; // 'rice' laranja: os motoqueiros da escolta (enemies.js)
   const BOL_HB_MOTO = [[-2, -23, 22], [0, 14, 30], [-30, 28, 16], [30, 28, 16]], BOL_HB_BOX = [[0, 0, 56]],
     BOL_HB_JET = [[-2, -23, 22], [0, 20, 32], [-36, 26, 18], [42, 22, 18]];
   G.Bosses.define('bolsonario', {
@@ -2387,9 +2431,11 @@
       d.cans = []; d.puddles = []; d.box = null; d.smokeOn = false; d.smT = 0; d.smK = 0; d.canHand = false;
       d.tx = b.homeX; d.ty = b.homeY; d.S = {};
       b.hitboxes = BOL_HB_MOTO.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
+      warmPeople(b, 'p1', poses(bolSpec(true, false), BOL_SIZE, ['drive', 'point']));
+      warmShots(b, BOL_SHOTS);
     },
-    updateEnter(b) { if (b.t > 0.3 && !b.data.revved) { b.data.revved = true; sfx('motor'); } },
-    start(b) { co(b, bolP1(b)); say(b, 'É MOTOCIATA, TALKEY?', 2); sfx('motor'); },
+    updateEnter(b) { if (b.t > 0.3 && !b.data.revved) { b.data.revved = true; sfx('motor'); } warmShotsStep(b, 1); },
+    start(b) { warmShotsStep(b, 99); co(b, bolP1(b)); say(b, 'É MOTOCIATA, TALKEY?', 2); sfx('motor'); },
     update(b, dt, g) {
       const d = b.data;
       updFx(b, dt);
@@ -2412,8 +2458,8 @@
           if (d.smK < 5) shoot(b.x - d.dir * 44, b.y + 22, DOWN - d.dir * 0.5, 28, { style: 'bs_fumaca', color: COL.ember, ay: 52, data: { vmax: d.fast ? 112 : 98 }, update: smokeFall, life: 9 });
         }
       }
-      if ((d.mode === 'moto' || d.mode === 'stun') && deco() && Math.random() < dt * (spd > 40 ? 14 : 4)) G.part({ x: b.x - d.dir * 46, y: b.y + 22, vx: -d.dir * M.rand(20, 60), vy: M.rand(-30, 0), type: 'smoke', size: M.rand(3, 6), life: 0.6, color: 'rgba(120,124,134,0.4)', drag: 0.94 });
-      if (d.mode === 'jet' && deco() && Math.random() < dt * 20) G.part({ x: b.x - d.dir * M.rand(30, 56), y: b.y + 34, vx: -d.dir * M.rand(10, 60), vy: M.rand(-60, -10), type: 'dot', size: M.rand(2, 3.5), life: 0.45, color: '#e8fbff', grav: 260 });
+      if ((d.mode === 'moto' || d.mode === 'stun') && Math.random() < dt * (spd > 40 ? 14 : 4) * decoK()) G.part({ x: b.x - d.dir * 46, y: b.y + 22, vx: -d.dir * M.rand(20, 60), vy: M.rand(-30, 0), type: 'smoke', size: M.rand(3, 6), life: 0.6, color: 'rgba(120,124,134,0.4)', drag: 0.94 });
+      if (d.mode === 'jet' && Math.random() < dt * 20 * decoK()) G.part({ x: b.x - d.dir * M.rand(30, 56), y: b.y + 34, vx: -d.dir * M.rand(10, 60), vy: M.rand(-60, -10), type: 'dot', size: M.rand(2, 3.5), life: 0.45, color: '#e8fbff', grav: 260 });
       // latas no ar
       for (let i = d.cans.length - 1; i >= 0; i--) {
         const cn = d.cans[i];
@@ -2424,7 +2470,7 @@
       // hitboxes por modo
       const hb = d.mode === 'box' ? BOL_HB_BOX : d.mode === 'jet' ? BOL_HB_JET : BOL_HB_MOTO;
       if (d.hbSrc !== hb) { d.hbSrc = hb; b.hitboxes = hb.map((h) => ({ dx: h[0], dy: h[1], r: h[2] })); }
-      if (b.hp / b.maxHp < 0.3 && d.mode !== 'box' && deco() && Math.random() < dt * 5) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 10, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(60,60,70,0.45)', drag: 0.95 });
+      if (b.hp / b.maxHp < 0.3 && d.mode !== 'box' && Math.random() < dt * 5 * decoK()) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 10, vx: M.rand(-10, 10), vy: -40, type: 'smoke', size: 5, life: 0.8, color: 'rgba(60,60,70,0.45)', drag: 0.95 });
     },
     onPhase(b, idx, g) {
       const d = b.data;
@@ -2434,6 +2480,9 @@
         for (const e of g.enemies) if (!e.dead && e.kind === 'bs_cadeado') G.killEnemy(e, { silent: true });
       }
       d.dmgBase = 1; d.wheelieT = 0; d.pose = 'drive'; d.mood = 'angry'; d.canHand = false; d.fast = false;
+      // o que vem a seguir: sem capacete (fase 2), suado (HP < 70%), tonto (sigilo quebrado) e no jet ski
+      if (idx === 1) warmPeople(b, 'p2', poses(bolSpec(false, false), BOL_SIZE, ['drive', 'up', 'point']).concat(poses(bolSpec(false, true), BOL_SIZE, ['drive', 'up', 'point'])));
+      if (idx === 2) warmPeople(b, 'p3', poses(bolSpec(false, true), BOL_SIZE, ['shrug', 'fist']));
       co(b, null, 1);
       if (idx === 1) { co(b, bolP2(b)); co(b, bolBgEscort(b, 8.5), 1); }
       else if (idx === 2) co(b, bolP3(b));

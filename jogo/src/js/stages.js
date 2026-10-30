@@ -165,6 +165,33 @@
     const flag = { done: false };
     yield* par((function* () { yield* body(); flag.done = true; })(), after(start, ambient(kinds, every, flag)));
   }
+  // Aquecimento dos sprites (enemies.js): chamar uns segundos antes de um tipo novo entrar.
+  // Repetir não custa nada (cada tipo é pintado uma vez por resolução).
+  function pre(...kinds) { G.call(G.EnemyArt, 'prewarm', kinds); } // sem enemies.js (mods=): nada
+  // Tipos das primeiras ondas: pintados já na apresentação da fase / diálogo de abertura
+  // (o roteiro só começa depois) e de novo no começo do roteiro (com skipui não há apresentação).
+  const OPENING = {
+    rodoviaria: ['cabo', 'fantasma'],
+    esplanada: ['deputado', 'cabo', 'fantasma', 'assessor'],
+    paranoa: ['sindicalista', 'assessor', 'deputado', 'cabo', 'bot'],
+    planalto: ['lobista', 'deputado', 'marqueteiro', 'cabo', 'ministro'],
+  };
+  let introWarm = null;
+  setInterval(function () {
+    const g = G.game;
+    if (!g || g.script || introWarm === g || !g.stage || (G.state !== 'intro' && G.state !== 'dialogue')) return;
+    introWarm = g;
+    pre(...(OPENING[g.stage.id] || []));
+  }, 250);
+  // Sinais para o cenário (bg.js): g.progress (0..1, sobe nos marcos do roteiro; 1 = chegada do chefão)
+  // e g.landmark (id do cartão-postal que deve passar agora: 'itamaraty' na Esplanada, 'jk' no Paranoá).
+  // Também chama G.BG.landmark(id, g) se o bg.js tiver.
+  function mark(p, landmark) {
+    const g = G.game; if (!g) return;
+    if (!(g.progress >= p)) g.progress = p;
+    if (landmark) { g.landmark = landmark; G.call(G.BG, 'landmark', landmark, g); }
+  }
+
   // chefe intermediário: entra e espera ele cair (ou fugir)
   function* midboss(kind, x, y, o) {
     const mb = sp(kind, x, y, o);
@@ -184,6 +211,7 @@
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.rodoviaria);
       yield* withAmbient(function* () {
         yield 1.8;
         // --- cabos eleitorais: primeiro só desfilam, depois começam a jogar santinho ---
@@ -202,6 +230,7 @@
         yield* par(side('cabo', 4, true, 96, 0.5, { fire: 0.6 }), after(1.3, side('cabo', 4, false, 136, 0.5, { fire: 0.6 })));
         yield S.clear(6);
         // --- VEREADOR FANTASMA (sozinho, para ler) ---
+        mark(0.15);
         yield 0.6;
         sp('fantasma', W() / 2, -30, { tx: W() / 2, ty: 140, delay: 0.6 });
         yield 4;
@@ -209,6 +238,7 @@
           swarm('cabo', 5, 0.5, path('sL'), 7, { fire: 0.4 }),
           after(2.2, swarm('cabo', 5, 0.5, path('sL', true), 7, { fire: 0.4 })));
         yield T(36);
+        pre('deputado', 'carro_som');
         sp('fantasma', 70, -30, { tx: 80, ty: 120 });
         sp('fantasma', W() - 70, -30, { tx: W() - 80, ty: 170, delay: 1.4 });
         row('cabo', 6, -22, { vy: 70, amp: 18, freq: 2.5, fire: 0.6 });
@@ -219,6 +249,7 @@
           after(1.6, swarm('cabo', 6, 0.38, path('crossL', true), 5.5, { fire: 0.6 })));
         yield S.clear(5);
         // --- DEPUTADO DO CENTRÃO ---
+        mark(0.3);
         yield 0.6;
         sp('deputado', W() / 2, -30, { ty: 140, hold: 5.5 });
         yield 1.5;
@@ -240,22 +271,26 @@
           after(5, (function* () { sp('deputado', W() * 0.75, -30, { ty: 110 }); })()));
         yield S.clear(5);
         // --- CARRO DE SOM (ensina a brecha antes do trio) ---
+        mark(0.45);
         yield 0.8;
         sp('carro_som', W() / 2, -36, { vy: 26 });
         yield 3;
         yield* par(side('cabo', 3, true, 110, 0.6, { fire: 0.5 }), after(2.5, side('cabo', 3, false, 150, 0.6, { fire: 0.5 })));
         yield T(85);
+        pre('trio');
         yield* swarm('cabo', 6, 0.4, path('hookL'), 5.5, { fire: 0.5 });
         sp('deputado', W() * 0.7, -30, { ty: 120 });
         yield T(89);
         carrier('cabo', W() / 2, -22, 'power', { ty: 140, hold: 3.5, hp: 8, fire: 0 });
         yield S.clear(7);
         // --- CHEFE INTERMEDIÁRIO: TRIO ELÉTRICO DO CANDIDATO ---
+        mark(0.6);
         yield 0.5;
         yield* midboss('trio', W() / 2, -110);
         const R = now();
         const Rt = (s) => at(R + s);
         // --- reta final ---
+        mark(0.78);
         yield* par(side('cabo', 5, true, 90, 0.42, { fire: 0.7 }), side('cabo', 5, false, 130, 0.42, { fire: 0.7 }));
         sp('fantasma', W() / 2, -30, { ty: 150 });
         yield Rt(6);
@@ -275,6 +310,7 @@
         sp('fantasma', 80, -30, { ty: 170 }); sp('fantasma', W() - 80, -30, { ty: 120, delay: 1.2 });
         vee('cabo', 7, W() / 2, { vy: 75, fire: 0.6 });
         yield Rt(25);
+        mark(0.92);
         yield* par(
           drizzle('cabo', 6, L2 ? 0.38 : 0.55, () => ({ vy: M.rand(75, 100), fire: 0.6 })),
           after(1, (function* () { sp('carro_som', W() - 90, -36, { vy: 28 }); })()));
@@ -283,6 +319,7 @@
       carrier('cabo', W() / 2, -22, 'power', { ty: 150, hold: 3, hp: 8, fire: 0 });
       yield S.clear(6);
       yield 1;
+      mark(1);
       yield S.boss('centrao');
     },
   });
@@ -298,6 +335,7 @@
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.esplanada);
       yield* withAmbient(function* () {
         yield 1.6;
         // aquecimento com velhos conhecidos
@@ -309,6 +347,7 @@
         carrier('deputado', W() / 2, -30, 'power', { ty: 110, hp: 16 });
         yield S.clear(5);
         // --- ASSESSOR DA RACHADINHA ---
+        mark(0.08);
         yield 0.5;
         sp('assessor', W() / 2, -24, { vy: 55, amp: 30 });
         yield 4.5;
@@ -316,11 +355,13 @@
           (function* () { for (let i = 0; i < 4; i++) { sp('assessor', 70, -24, { vy: 72, amp: 40, phase: 0 }); yield 0.7; } })(),
           after(1.4, (function* () { for (let i = 0; i < 4; i++) { sp('assessor', W() - 70, -24, { vy: 72, amp: 40, phase: Math.PI }); yield 0.7; } })()));
         yield T(27);
+        pre('sindicalista');
         row('assessor', 5, -24, { vy: 66, amp: 20, freq: 3 }, 50);
         if (L2) row('assessor', 4, -70, { vy: 66, amp: 20, freq: 3 }, 80);
         yield* swarm('cabo', 6, 0.38, path('crossL'), 5.5, { fire: 0.8 });
         yield S.clear(5);
         // --- SINDICALISTA ---
+        mark(0.18);
         yield 0.4;
         sp('sindicalista', W() / 2, -30, { ty: 135, hold: 7 });
         yield 2;
@@ -331,12 +372,14 @@
         sp('sindicalista', 80, -30, { ty: 120 }); sp('sindicalista', W() - 80, -30, { ty: 160 });
         yield* swarm('cabo', 7, 0.36, path('uL'), 6, { fire: 0.8 });
         yield T(50);
+        pre('lobista');
         yield* par(
           (function* () { for (let i = 0; i < 6; i++) { sp('assessor', i % 2 ? W() * 0.3 : W() * 0.7, -24, { vy: 80, amp: 60, freq: 2 }); yield 0.6; } })(),
           after(1, (function* () { sp('fantasma', 80, -30, { ty: 160 }); sp('fantasma', W() - 80, -30, { ty: 120, delay: 1.5 }); })()));
         yield S.clear(5);
         carrier('assessor', W() / 2, -24, 'bomb', { vy: 60, hp: 10, amp: 40 });
         // --- LOBISTA ---
+        mark(0.3);
         yield 1.2;
         sp('lobista', W() / 2, -34, { ty: 125 });
         yield 2;
@@ -344,12 +387,14 @@
         yield T(64);
         carrier('deputado', 70, -30, 'power', { ty: 150, hp: 16 });
         yield T(66);
+        pre('marqueteiro');
         sp('lobista', W() * 0.7, -34, { ty: 115 });
         sp('deputado', W() * 0.25, -30, { ty: 160 });
         yield* par(
           (function* () { for (let i = 0; i < 4; i++) { sp('assessor', M.rand(50, W() - 50), -24, { vy: 75, amp: 40 }); yield 0.8; } })());
         yield S.clear(6);
         // --- MARQUETEIRO (blinda o grupo: derrube ele primeiro) ---
+        mark(0.42);
         yield 0.4;
         row('deputado', 4, -30, (i) => ({ ty: 150 + (i % 2) * 22, hold: 7, inT: 1.6 }), 55);
         yield 1.4;
@@ -359,6 +404,7 @@
         yield* par(swarm('assessor', 4, 0.6, path('sL'), 7), after(1.2, (function* () { sp('fantasma', W() * 0.25, -30, { ty: 160 }); })()));
         // corredor dos ministérios: emboscada dos dois lados
         yield T(90);
+        pre('lobista_mor');
         yield* par(
           side('cabo', 5, true, 92, 0.4, { fire: 0.9, spd: 130 }),
           after(0.8, side('cabo', 5, false, 128, 0.4, { fire: 0.9, spd: 130 })),
@@ -368,10 +414,12 @@
         carrier('cabo', W() * 0.3, -22, 'power', { ty: 140, hold: 3.5, hp: 9 });
         yield S.clear(7);
         // --- CHEFE INTERMEDIÁRIO: LOBISTA-MOR ---
+        mark(0.55);
         yield 0.5;
         yield* midboss('lobista_mor', W() / 2, -100);
         const R = now();
         const Rt = (s) => at(R + s);
+        mark(0.78, 'itamaraty'); // reta final: o Itamaraty passa antes do Congresso (chegada da Dilmãe)
         yield* par(
           (function* () { for (let i = 0; i < 6; i++) { sp('assessor', i % 2 ? 60 : W() - 60, -24, { vy: 80, amp: 40 }); yield 0.55; } })(),
           after(1, (function* () { sp('sindicalista', W() / 2, -30, { ty: 130 }); })()));
@@ -383,6 +431,7 @@
         yield Rt(13);
         carrier('deputado', W() / 2, -30, 'life', { ty: 120, hp: 20, hold: 6 });
         yield Rt(15);
+        pre('carro_som');
         row('assessor', 6, -24, { vy: 70, amp: 25, freq: 3 }, 40);
         sp('fantasma', 80, -30, { ty: 150 }); sp('fantasma', W() / 2, -30, { ty: 110, delay: 1 }); sp('fantasma', W() - 80, -30, { ty: 170, delay: 2 });
         yield Rt(21);
@@ -391,6 +440,7 @@
         sp('carro_som', W() / 2, -36, { vy: 26 });
         sp('sindicalista', 70, -30, { ty: 150 }); sp('sindicalista', W() - 70, -30, { ty: 150 });
         yield Rt(30);
+        mark(0.92);
         yield* par(
           drizzle('assessor', 7, L2 ? 0.55 : 0.8, () => ({ vy: 85, amp: 30 })),
           drizzle('cabo', 7, 0.6, () => ({ vy: 90, fire: 0.9 })),
@@ -400,6 +450,7 @@
       carrier('deputado', W() / 2, -30, 'power', { ty: 130, hp: 16, hold: 3.5 });
       yield S.clear(6);
       yield 1;
+      mark(1);
       yield S.boss('dilmae');
     },
   });
@@ -416,6 +467,7 @@
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.paranoa);
       yield* withAmbient(function* () {
         yield 1.6;
         // aquecimento com a turma da Esplanada
@@ -426,8 +478,10 @@
           after(3, swarm('cabo', 6, 0.36, path('uL'), 6, { fire: 1 })));
         yield T(10);
         // --- BOT DE FAKE NEWS ---
+        mark(0.08);
         yield* bots(8, true, 70);
         yield T(15);
+        pre('lobista', 'motoqueiro');
         carrier('deputado', W() / 2, -30, 'power', { ty: 110, hp: 18 });
         yield* par(bots(8, false, 90), after(1.5, bots(8, true, 130, { dive: 0.3 })), after(3, swarm('cabo', 6, 0.35, path('crossL'), 5.5, { fire: 1 })));
         yield T(23);
@@ -435,10 +489,12 @@
         yield T(30);
         yield S.clear(4);
         // --- MOTOCIATA ---
+        mark(0.18);
         yield* moto(3, true, 120, 40, 0.45);
         yield 2.4;
         yield* moto(3, false, 140, 40, 0.45);
         yield T(39);
+        pre('fantasma', 'drone');
         carrier('cabo', W() / 2, -22, 'power', { ty: 150, hold: 3.5, hp: 10 });
         yield* par(moto(4, true, 100, 35, 0.4), after(1.5, bots(8, false, 70, { dive: 0.3 })), after(2, once(() => sp('sindicalista', W() / 2, -30, { ty: 120 }))));
         yield T(47);
@@ -449,11 +505,13 @@
         yield S.clear(4);
         carrier('assessor', W() / 2, -24, 'shield', { vy: 60, amp: 40, hp: 12 });
         // --- DRONE DO GABINETE ---
+        mark(0.3);
         yield 0.8;
         sp('drone', W() / 2, -24, { ty: 150, hold: 7 });
         yield 3;
         sp('drone', 80, -24, { ty: 110 }); sp('drone', W() - 80, -24, { ty: 130 });
         yield T(64);
+        pre('carro_som', 'marqueteiro');
         carrier('deputado', W() * 0.3, -30, 'power', { ty: 140, hp: 18 });
         yield* par(
           once(() => { sp('drone', 70, -24, { ty: 100 }); sp('drone', W() / 2, -24, { ty: 160 }); sp('drone', W() - 70, -24, { ty: 120 }); }),
@@ -468,6 +526,10 @@
         yield 1.2;
         sp('marqueteiro', W() / 2, -30, { ty: 95 });
         sp('drone', 60, -24, { ty: 150 });
+        // a Ponte JK entra na tela junto com o desfile da motociata (T 90)
+        yield T(84);
+        mark(0.42, 'jk');
+        pre('servidor');
         yield T(87);
         carrier('cabo', W() * 0.7, -22, 'power', { ty: 140, hold: 3.5, hp: 10 });
         // --- MOTOCIATA NO LAGO: o desfile ---
@@ -486,10 +548,12 @@
         carrier('deputado', W() / 2, -30, 'power', { ty: 120, hp: 18, hold: 3.5 });
         yield S.clear(7);
         // --- CHEFE INTERMEDIÁRIO: SERVIDOR DO GABINETE ---
+        mark(0.55);
         yield 0.5;
         yield* midboss('servidor', W() / 2, -100);
         const R = now();
         const Rt = (s) => at(R + s);
+        mark(0.75);
         yield* par(moto(4, true, 100, 40, 0.4), after(1, moto(4, false, 130, 40, 0.4)), after(2, bots(10, true, 70, { dive: 0.3 })));
         yield Rt(8);
         sp('drone', 70, -24, { ty: 110 }); sp('drone', W() - 70, -24, { ty: 110 });
@@ -512,6 +576,7 @@
         yield* par(bots(8, false, 80, { dive: 0.4 }), after(1.5, moto(4, false, 110, 35, 0.4)));
         if (L2) yield* bots(8, true, 120, { dive: 0.4 });
         yield Rt(38);
+        mark(0.92);
         // última leva: blindagem do marqueteiro em cima dos drones
         row('deputado', 3, -30, (i) => ({ ty: 160 + (i % 2) * 22, hold: 6 }), 70);
         sp('drone', W() * 0.3, -24, { ty: 120 }); sp('drone', W() * 0.7, -24, { ty: 120 });
@@ -523,6 +588,7 @@
       carrier('cabo', W() / 2, -22, 'power', { ty: 150, hold: 3, hp: 10 });
       yield S.clear(6);
       yield 1;
+      mark(1);
       yield S.boss('bolsonario');
     },
   });
@@ -538,6 +604,7 @@
       const L2 = S.g.loop > 1;
       const T0 = now();
       const T = (s) => at(T0 + s);
+      mark(0); pre(...OPENING.planalto);
       yield* withAmbient(function* () {
         yield 1.6;
         // recepção oficial
@@ -549,6 +616,8 @@
           after(7.5, swarm('cabo', 6, 0.34, path('uL', true), 6, { fire: 0.7 })));
         yield T(11);
         // --- MINISTROS em conga ---
+        mark(0.06);
+        pre('assessor', 'drone');
         yield* swarm('ministro', 8, 0.34, path('conga'), 10, (i) => ({ conga: true, v: i, fire: i % 2 ? 0.8 : 0.4 }));
         yield T(17);
         carrier('deputado', W() / 2, -30, 'power', { ty: 110, hp: 20 });
@@ -557,6 +626,7 @@
           after(2, (function* () { for (let i = 0; i < 4; i++) { sp('assessor', i % 2 ? 70 : W() - 70, -24, { vy: 80, amp: 40 }); yield 0.7; } })()),
           after(4, once(() => { sp('drone', 70, -24, { ty: 130 }); sp('drone', W() - 70, -24, { ty: 130 }); })));
         yield T(27);
+        pre('sindicalista', 'leao', 'bot');
         vee('ministro', 7, W() / 2, (i) => ({ vy: 85, v: i }));
         yield* after(1.5, swarm('cabo', 6, 0.34, path('crossL'), 5.5, { fire: 1 }));
         yield T(32);
@@ -567,17 +637,20 @@
         yield S.clear(4);
         carrier('cabo', W() * 0.3, -22, 'power', { ty: 150, hold: 3.5, hp: 12 });
         // --- LEÃO DA RECEITA ---
+        mark(0.2);
         yield 1.2;
         sp('leao', W() / 2, -30, { ty: H() * 0.2 });
         yield 4;
         yield* swarm('ministro', 6, 0.36, path('uL'), 6.5, (i) => ({ v: i }));
         yield T(49);
+        pre('motoqueiro', 'carro_som', 'fantasma');
         sp('leao', 70, -30, { ty: H() * 0.18 });
         yield* par(bots(8, false, 80, { dive: 0.35 }), after(1.5, once(() => { sp('drone', W() * 0.65, -24, { ty: 120 }); sp('drone', W() * 0.35, -24, { ty: 160 }); })));
         yield T(56);
         carrier('deputado', W() * 0.7, -30, 'power', { ty: 130, hp: 20 });
         yield* par(moto(4, true, 110, 35, 0.4), after(1.5, once(() => vee('ministro', 7, W() / 2, (i) => ({ vy: 90, v: i })))));
         yield T(63);
+        mark(0.33);
         carrier('deputado', W() / 2, -30, 'life', { ty: 115, hp: 24, hold: 6 });
         sp('carro_som', 80, -36, { vy: 26 });
         yield* par(
@@ -600,6 +673,8 @@
           after(2, swarm('ministro', 8, 0.32, path('conga'), 10, (i) => ({ conga: true, v: i, fire: 0.6 }))));
         // --- RAMPA DO PLANALTO: corredor polonês ---
         yield T(96);
+        mark(0.5);
+        pre('comitiva');
         yield* par(
           drizzle('ministro', 7, L2 ? 0.55 : 0.75, (i) => ({ vy: M.rand(80, 100), v: i })),
           after(1, once(() => { sp('sindicalista', W() / 2, -30, { ty: 140 }); if (L2) sp('sindicalista', W() - 70, -30, { ty: 175 }); })),
@@ -611,10 +686,12 @@
         yield* after(1.5, drizzle('assessor', 5, 0.8, () => ({ vy: 85, amp: 30 })));
         yield S.clear(8);
         // --- CHEFE INTERMEDIÁRIO: COMITIVA DOS 38 MINISTROS ---
+        mark(0.58);
         yield 0.6;
         yield* midboss('comitiva', -40, 90);
         const R = now();
         const Rt = (s) => at(R + s);
+        mark(0.78);
         sp('leao', W() / 2, -30, { ty: H() * 0.2 });
         yield* par(
           after(1, once(() => vee('ministro', 7, W() * 0.3, (i) => ({ vy: 90, v: i })))),
@@ -642,6 +719,7 @@
         if (L2) yield* par(bots(10, false, 70, { dive: 0.5 }), after(1, once(() => vee('ministro', 9, W() / 2, (i) => ({ vy: 95, v: i })))));
         // --- ÚLTIMA BARREIRA antes do chefão ---
         yield Rt(34);
+        mark(0.92);
         yield* par(
           once(() => vee('ministro', 9, W() / 2, (i) => ({ vy: 90, v: i }), 32, 22)),
           after(1, drizzle('cabo', 7, L2 ? 0.55 : 0.7, () => ({ vy: 95, fire: 1 }))),
@@ -654,6 +732,7 @@
       carrier('cabo', W() * 0.25, -22, 'bomb', { vy: 70, hp: 8, fire: 0 });
       yield S.clear(6);
       yield 1.2;
+      mark(1);
       yield S.boss('lule');
     },
   });

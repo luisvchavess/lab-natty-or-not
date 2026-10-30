@@ -362,6 +362,26 @@
     S.lastLoop = k;
     return k;
   }
+  // Cartão-postal do meio da fase (def.landmark = { kind, prog, dist }: Itamaraty, Ponte JK).
+  // Entra quando o roteiro pede (g.landmark ou G.BG.landmark(id, g)), quando g.progress passa de prog,
+  // ou — se a fase não manda sinal nenhum — depois de `dist` px de mundo rolado.
+  let LMREQ = null; // pedido de G.BG.landmark(id, g)
+  function landmarkDue(S, g) {
+    const L = S.def.landmark, f = S.flags;
+    if (!L || f.lm || f.boss || !g) return false;
+    if (g.landmark === L.kind || (LMREQ && LMREQ.g === g && LMREQ.id === L.kind)) return true;
+    if (typeof g.progress === 'number') return g.progress >= L.prog;
+    return S.pos >= L.dist;
+  }
+  // Garantia: o chefão chegou antes do marco (fase curta, ?boss=1, roteiro sem sinal). O marco passa
+  // durante o aviso/entrada, logo antes do bloco do chefão; o mundo corre um pouco mais (ver advance)
+  // para o palco do chefão estacionar quase no mesmo tempo de antes.
+  function lateLandmark(S, g) {
+    const L = S.def.landmark, f = S.flags, b = g && g.boss;
+    if (!L || f.lm || !b || (b.state !== 'warning' && b.state !== 'enter')) return null;
+    f.lm = true; f.lmLate = true;
+    return L.kind;
+  }
 
   // =================================================================
   // FASE 1 — RODOVIÁRIA DO PLANO (hora azul)
@@ -800,6 +820,7 @@
 
   STAGES.esplanada = {
     pal: PAL.esplanada, first: 'catedral', firstAt: 0, bossKind: 'congresso',
+    landmark: { kind: 'itamaraty', prog: 0.75, dist: 4600 },
     kinds: {
       catedral: {
         h: 640,
@@ -909,9 +930,9 @@
     },
     next(S, g, n) {
       const f = S.flags;
-      if (g && g.boss && !f.boss) { f.boss = true; f.after = false; return 'congresso'; }
+      if (g && g.boss && !f.boss) { const lm = lateLandmark(S, g); if (lm) return lm; f.boss = true; f.after = false; return 'congresso'; }
       if (f.boss && !f.after) { f.after = true; return 'after'; }
-      if (g && g.t > 110 && !f.ita && !f.boss) { f.ita = true; return 'itamaraty'; }
+      if (landmarkDue(S, g)) { f.lm = true; return 'itamaraty'; }
       return loopPick(S, ['a', 'b', 'a', 'c'], n);
     },
     traffic: [
@@ -1050,6 +1071,7 @@
 
   STAGES.paranoa = {
     pal: PAL.paranoa, first: 'shore', firstAt: 0, bossKind: 'alvorada',
+    landmark: { kind: 'jk', prog: 0.45, dist: 3600 },
     kinds: {
       // partida: a orla da cidade (Pontão) e o lago se abrindo à frente
       shore: {
@@ -1214,9 +1236,9 @@
     },
     next(S, g, n) {
       const f = S.flags;
-      if (g && g.boss && !f.boss) { f.boss = true; f.after = false; return 'alvorada'; }
+      if (g && g.boss && !f.boss) { const lm = lateLandmark(S, g); if (lm) return lm; f.boss = true; f.after = false; return 'alvorada'; }
       if (f.boss) return 'land';
-      if (g && g.t > 75 && !f.jk) { f.jk = true; return 'jk'; }
+      if (landmarkDue(S, g)) { f.lm = true; return 'jk'; }
       return loopPick(S, ['a', 'b', 'a', 'c'], n);
     },
     anim: animLake,
@@ -1767,8 +1789,11 @@
     st.bossK = approach(st.bossK, boss && boss.state !== 'leaving' ? 1 : 0, dt * 0.7);
     const vb = (g && g.scrollSpeed) || 42;
     let target = st.def.speed || 1;
+    // cartão-postal enfiado na chegada do chefão (lateLandmark): +1 bloco até o palco, então o mundo
+    // corre e freia mais forte, para estacionar quase no mesmo tempo (o mundo para no diálogo)
+    const late = !!st.flags.lmLate;
     // chefão chegou e o marco ainda não entrou na fila: acelera até ele aparecer
-    if (boss && st.def.bossKind && !st.flags.boss && boss.state !== 'leaving') target = 4.2;
+    if (boss && st.def.bossKind && !st.flags.boss && boss.state !== 'leaving') target = late ? 6.5 : 4.2;
     // fase vencida (diálogo final, resultado, loja): o mundo para, como num diálogo
     if (G.state === 'clear' && st.g) target = 0;
     const pk = st.park;
@@ -1778,7 +1803,7 @@
       if (pk.state === 'go') {
         if (!boss) pk.state = 'free';
         else if (D <= 0.5) pk.state = 'hold';
-        else target = Math.min(5.2, Math.max(0.22, Math.sqrt(2 * 80 * D) / vb));
+        else target = Math.min(late ? 7.5 : 5.2, Math.max(0.22, Math.sqrt(2 * (late ? 130 : 80) * D) / vb));
       }
       if (pk.state === 'hold') { target = 0; if (!boss || boss.state === 'leaving') pk.state = 'free'; }
       if (pk.state === 'free') st.park = null;
@@ -2418,9 +2443,11 @@
       for (const id in caches) if (!S || id !== S.cacheId) freeCache(id);
       PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {};
     },
+    // o roteiro da fase avisa que o cartão-postal deve passar agora ('itamaraty', 'jk'); ver landmarkDue
+    landmark(id, g) { LMREQ = { id: String(id), g: g || G.game || null }; },
     // para testes: estado atual (posição do mundo, blocos visíveis, estacionamento no chefão)
     _state() { return S; },
-    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
+    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
     builds() { return BUILDS.slice(); },
     cacheStats,
   });
