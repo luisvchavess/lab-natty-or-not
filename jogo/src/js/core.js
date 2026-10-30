@@ -133,7 +133,8 @@
   }
   G.save = loadSave();
   G.saveGame = function () { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.save)); } catch (e) { /* nada */ } };
-  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); };
+  // APAGAR PROGRESSO: a qualidade volta para 'auto' (começando do 'high') e o medidor recomeça
+  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); };
   G.upg = (id) => G.save.upgrades[id] || 0;
   G.upgradeCost = function (id) {
     const u = G.UPGRADES.find((x) => x.id === id);
@@ -181,6 +182,7 @@
     if (q === 'auto') G.save.qualityTier = 'high';
     G.debug.qualityForced = false;
     G.saveGame();
+    resetQualityMeter();
     applyQuality();
   };
   function applyQuality() {
@@ -536,8 +538,8 @@
     document.body.classList.toggle('rotate-hint', land);
     // celular (tela baixa) acabou de deitar: pausa uma vez. Tablet deitado continua jogável (base.css só avisa).
     const phoneLand = land && vh < 560;
-    if (phoneLand && !wasPhoneLand && G.state === 'play') G.pause();
-    wasPhoneLand = phoneLand;
+    wasPhoneLand = phoneLand; // frame() pausa enquanto estiver assim (vale também para a 'play' que começa deitada)
+    if (phoneLand && G.state === 'play') G.pause();
     G.H = Math.round(M.clamp((G.W * vh) / vw, 600, 780));
     scale = Math.min(vw / G.W, vh / G.H);
     dpr = Math.min(window.devicePixelRatio || 1, Q_DPR[G.quality] || 2);
@@ -829,7 +831,19 @@
     const g = G.game; if (!g) return;
     o = o || {};
     if (g.texts.length > 40) g.texts.shift();
-    g.texts.push({ x, y, str, color: o.color || '#fff', size: o.size || 12, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font: o.font || G.FONT_DISPLAY, stroke: o.stroke !== false && (G.quality !== 'low' || (o.size || 12) >= 16) });
+    const size = o.size || 12, font = o.font || G.FONT_DISPLAY;
+    str = String(str);
+    // Não deixa o texto sair pela lateral (carro encostado na borda). Só mede quando pode passar:
+    // a estimativa (0,45 em por letra, acima até da Bungee) já cabe na maioria das vezes.
+    const W = G.W;
+    if (ctx && (x - str.length * size * 0.45 < 4 || x + str.length * size * 0.45 > W - 4)) {
+      const f0 = ctx.font;
+      ctx.font = size + 'px ' + font;
+      const hw = ctx.measureText(str).width / 2 + 4;
+      ctx.font = f0;
+      x = hw * 2 >= W ? W / 2 : M.clamp(x, hw, W - hw);
+    }
+    g.texts.push({ x, y, str, color: o.color || '#fff', size, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font, stroke: o.stroke !== false && (G.quality !== 'low' || size >= 16) });
   };
   G.shake = function (m) { const g = G.game; if (g && G.save.settings.shake) g.shake = Math.min(14, Math.max(g.shake, m)); };
   G.flash = function (a, c) { const g = G.game; if (g) { g.flashA = Math.max(g.flashA, a); g.flashC = c || '#fff'; } };
@@ -884,12 +898,15 @@
   G.addApproval = function (v) { const g = G.game; if (!g) return; g.approval = M.clamp(g.approval + v, 0, 100); if (v > 0) g.approvalIdle = 0; };
 
   // ===================== Dano =====================
+  const FLASH_BIG = 0.034, FLASH_BIG_CD = 0.35; // 2-3 quadros brancos, no máximo 3 por segundo
   G.hitEnemy = function (e, dmg) {
     const g = G.game;
     if (e.dead || e.invuln) return false;
     if (e.shieldT > 0) dmg *= 0.25;
     e.hp -= dmg;
-    if (!(e.flashCd > 0)) { e.flash = 0.05; e.flashCd = 0.13; }
+    // flash do acerto: inimigo pequeno pisca a cada 0,13 s; os grandes (chefes intermediários) piscam
+    // mais curto e no máximo ~3 vezes por segundo (tela branca piscando rápido cansa e esconde a caricatura)
+    if (!(e.flashCd > 0)) { if (e.big) { e.flash = FLASH_BIG; e.flashCd = FLASH_BIG_CD; } else { e.flash = 0.05; e.flashCd = 0.13; } }
     if (e.def.onHit) call(e.def, 'onHit', e, dmg, g);
     if (e.hp <= 0 && !e.dead) G.killEnemy(e);
     return true;
@@ -927,7 +944,7 @@
     }
     dmg *= b.dmgMul != null ? b.dmgMul : 1;
     b.hp -= dmg;
-    if (!(b.flashCd > 0)) { b.flash = 0.045; b.flashCd = 0.2; }
+    if (!(b.flashCd > 0)) { b.flash = FLASH_BIG; b.flashCd = FLASH_BIG_CD; }
     G.game.approvalIdle = 0; // acertar o chefão segura a aprovação
     if (b.def.onHit) call(b.def, 'onHit', b, dmg, g);
     if (b.hp <= 0) {
@@ -1149,17 +1166,19 @@
     return b;
   }
   const UP = -Math.PI / 2, DEG = Math.PI / 180;
-  // VOTO: pares [deslocamento x, ângulo em graus] por nível
+  // VOTO: pares [deslocamento x, ângulo em graus] por nível. Todo nível põe mais um tiro reto
+  // (alvo único: 22 / 33 / 44 / 56 / 67 dps); o par aberto do nível 4-5 é para as ondas.
   const VOTO_SETS = [
     [-5, 0, 5, 0],
     [-8, 0, 0, 0, 8, 0],
     [-10, 0, -3.5, 0, 3.5, 0, 10, 0],
-    [-10, 0, -3.5, 0, 3.5, 0, 10, 0, -14, -7, 14, 7],
-    [-12, 0, -6, 0, 0, 0, 6, 0, 12, 0, -15, -8, 15, 8],
+    [-12, 0, -6, 0, 0, 0, 6, 0, 12, 0, -15, -7, 15, 7],
+    [-13, 0, -8, 0, -3, 0, 3, 0, 8, 0, 13, 0, -16, -8, 16, 8],
   ];
   // BOCA DE URNA: leque (n, abertura em graus) + um feixe central reto (ns tiros) em todo nível,
   // para não virar arma-armadilha contra chefão (o leque sozinho só acertava com o tiro do meio).
-  const BOCA_N = [3, 5, 5, 7, 9], BOCA_SPREAD = [28, 46, 52, 66, 84], BOCA_CORE = [2, 3, 3, 4, 4];
+  // Todo nível sobe o feixe central (alvo único 25 / 34 / 43 / 52 / 61 dps) e o leque nunca abre à toa.
+  const BOCA_N = [3, 5, 5, 7, 9], BOCA_SPREAD = [28, 46, 46, 66, 84], BOCA_CORE = [2, 3, 4, 5, 6];
   function fireWeapon(p) {
     const run = G.run, lv = run.level, w = run.weapon;
     const x = p.x, y = p.y - 14;
@@ -1194,7 +1213,8 @@
   }
   function fireInterval() {
     const base = { voto: 0.09, boca: 0.11, panela: 0.1, jato: 0.16 }[G.run.weapon] || 0.1;
-    let k = 1 - 0.1 * G.upg('turbo');
+    // Gatilho Turbinado: +10% de cadência por nível (intervalo / 1,1, / 1,2, / 1,3), igual ao jato
+    let k = 1 / (1 + 0.1 * G.upg('turbo'));
     if (G.game.player.cafe > 0) k *= 0.66;
     return base * k;
   }
@@ -1221,7 +1241,7 @@
     if (run.weapon !== 'jato' || !p.alive || !g.canFire) { g.beam = null; return; }
     const lv = run.level;
     const w = 7 + lv * 2.6;
-    let dps = 20 + lv * 11;
+    let dps = 14 + lv * 12; // 26 / 38 / 50 / 62 / 74: sem tempo de voo, então um pouco abaixo dos outros no nível 1-3
     dps *= 1 + 0.1 * G.upg('turbo');
     if (p.cafe > 0) dps *= 1.35;
     const x0 = p.x, y0 = p.y - 16;
@@ -1299,7 +1319,7 @@
       if (p.fireT <= 0) { fireWeapon(p); p.fireT += fireInterval(); if (p.fireT < 0) p.fireT = 0; }
       if (run.weapon === 'panela') {
         p.panT -= dt;
-        if (p.panT <= 0) { firePans(p); p.panT = (run.level >= 3 ? 0.22 : 0.27) * (1 - 0.1 * G.upg('turbo')) * (p.cafe > 0 ? 0.66 : 1); }
+        if (p.panT <= 0) { firePans(p); p.panT = (run.level >= 3 ? 0.22 : 0.27) / (1 + 0.1 * G.upg('turbo')) * (p.cafe > 0 ? 0.66 : 1); }
       }
     }
   }
@@ -2089,6 +2109,8 @@
     ctx.textAlign = 'left'; ctx.font = '11px ' + G.FONT_DISPLAY; ctx.fillStyle = wdef.color;
     ctx.fillText(wdef.name, 10, wy - 8);
     const need = powerNeed(run.level);
+    // tarja escura atrás das 5 casas: as vazias somem em fundo claro (prédios da Esplanada)
+    ctx.fillStyle = 'rgba(8,12,22,0.55)'; ctx.fillRect(8, wy - 5, 12 * G.MAX_LEVEL + 1, 9);
     for (let i = 0; i < G.MAX_LEVEL; i++) {
       ctx.fillStyle = i < run.level ? wdef.color : 'rgba(255,255,255,0.18)';
       ctx.fillRect(10 + i * 12, wy - 3, 9, 5);
@@ -2198,12 +2220,14 @@
   G.commitPix = commitPix;
   // Grava o que já foi ganho (app indo para o fundo / aba fechando)
   function saveProgress() { if (G.game && G.run) commitPix(); else G.saveGame(); }
-  // Nota da fase. S: sem morrer e no máximo 1 Delação (bomba não é pecado). A: sem morrer.
-  // B: até 1 / 2 / 4 / 6 mortes nas fases 1..4 (a régua acompanha a dificuldade; medido com o bot
-  // "humano": nas fases 3 e 4 um jogador bom morre 4 a 8 vezes). C: o resto.
+  // Nota da fase. S: sem morrer e no máximo 1 Delação (bomba não é pecado). A: sem morrer (Delações
+  // à vontade) OU uma morte só com no máximo 1 Delação. B: até 1 / 2 / 4 / 6 mortes nas fases 1..4
+  // (a régua acompanha a dificuldade; medido com o bot "humano": nas fases 3 e 4 um jogador bom morre
+  // 4 a 8 vezes). C: o resto.
   const RANK_B = [1, 2, 4, 6];
   G.rankFor = function (hits, bombs, stageIdx) {
     if (hits === 0) return bombs <= 1 ? 'S' : 'A';
+    if (hits === 1 && bombs <= 1) return 'A';
     return hits <= RANK_B[M.clamp(stageIdx | 0, 0, RANK_B.length - 1)] ? 'B' : 'C';
   };
   G.stageClear = function () {
@@ -2320,26 +2344,38 @@
   let last = 0, acc = 0;
   let frozenState = null; // pausa / fim de jogo parado: desenha uma vez e deixa a imagem quieta
   // Medidor do modo de qualidade automático (intervalo real do rAF, que inclui rasterizar e compor)
-  const QM = { ema: 16.7, slowT: 0, stageMax: 0, stageN: 0 };
+  // failed: níveis que já caíram por lentidão nesta sessão (não sobe de volta para eles: sem pingue-pongue)
+  const QM = { ema: 16.7, slowT: 0, verySlowT: 0, stageMax: 0, stageN: 0, failed: {} };
+  function resetQualityMeter() { QM.ema = 16.7; QM.slowT = 0; QM.verySlowT = 0; QM.stageMax = 0; QM.stageN = 0; QM.failed = {}; }
+  function setAutoTier(q) { G.save.qualityTier = q; G.saveGame(); applyQuality(); }
   function qualityMeter(dtMs) {
-    if (G.state !== 'play' || !G.game || G.game.t <= 3 || dtMs >= 120 || dtMs <= 0 || document.hidden) return;
-    QM.ema += (dtMs - QM.ema) * 0.05;
+    // > 500 ms = aba escondida, troca de app, depurador: não é o desempenho do jogo
+    if (G.state !== 'play' || !G.game || G.game.t <= 3 || dtMs > 500 || dtMs <= 0 || document.hidden) return;
+    // quadro longo conta (limitado a 120 ms para um soluço isolado não pesar demais na média)
+    QM.ema += ((dtMs < 120 ? dtMs : 120) - QM.ema) * 0.05;
     QM.slowT = QM.ema > 22 ? QM.slowT + dtMs : 0;
+    QM.verySlowT = QM.ema > 36 ? QM.verySlowT + dtMs : 0;
     QM.stageN++;
     if (QM.stageN > 120 && QM.ema > QM.stageMax) QM.stageMax = QM.ema;
-    if (QM.slowT > 2500 && G.qualityAuto()) {
-      QM.slowT = 0; QM.ema = 16.7;
-      const i = Q_ORDER.indexOf(G.quality);
-      if (i > 0) { G.save.qualityTier = Q_ORDER[i - 1]; G.saveGame(); applyQuality(); }
-    }
+    if (!G.qualityAuto()) return;
+    const i = Q_ORDER.indexOf(G.quality);
+    if (i <= 0) return;
+    // Muito lento (< 28 fps) por 1,5 s: desce dois níveis de uma vez (high -> low). O 'mid' só tira
+    // ~25% da rasterização, não salvaria; assim o celular fraco paga UMA reconstrução de caches, não duas.
+    const drop = QM.verySlowT > 1500 ? 2 : QM.slowT > 2500 ? 1 : 0;
+    if (!drop) return;
+    QM.slowT = 0; QM.verySlowT = 0; QM.ema = 16.7;
+    for (let j = Math.max(0, i - drop); j < i; j++) QM.failed[Q_ORDER[j + 1]] = true;
+    setAutoTier(Q_ORDER[Math.max(0, i - drop)]);
   }
-  // Começo de fase: sobe um nível se a fase anterior inteira rodou com folga (tela de 90/120 Hz)
+  // Começo de fase: sobe um nível se a fase anterior inteira rodou liso (média nunca acima de 18 ms:
+  // 60 Hz cravado, ou folga numa tela de 90/120 Hz) e esse nível ainda não falhou nesta sessão.
   function qualityStageStart() {
-    if (G.qualityAuto() && QM.stageN > 600 && QM.stageMax > 0 && QM.stageMax < 12) {
+    if (G.qualityAuto() && QM.stageN > 1200 && QM.stageMax > 0 && QM.stageMax < 18) {
       const i = Q_ORDER.indexOf(G.quality);
-      if (i >= 0 && i < Q_ORDER.length - 1) { G.save.qualityTier = Q_ORDER[i + 1]; G.saveGame(); applyQuality(); }
+      if (i >= 0 && i < Q_ORDER.length - 1 && !QM.failed[Q_ORDER[i + 1]]) setAutoTier(Q_ORDER[i + 1]);
     }
-    QM.stageMax = 0; QM.stageN = 0; QM.slowT = 0; QM.ema = 16.7;
+    QM.stageMax = 0; QM.stageN = 0; QM.slowT = 0; QM.verySlowT = 0; QM.ema = 16.7;
   }
   function frame(ts) {
     requestAnimationFrame(frame);
@@ -2349,6 +2385,8 @@
     last = ts;
     if (dt > 0.1) dt = 0.1;
     if (dt < 0) dt = 0;
+    // celular deitado: nunca joga por baixo do "GIRE O CELULAR" (cartão da fase que avança sozinho, begin()...)
+    if (wasPhoneLand && G.state === 'play') G.pause();
     qualityMeter(dtMs);
     const ts2 = G.debug.timeScale || 1;
     acc += dt * ts2;
