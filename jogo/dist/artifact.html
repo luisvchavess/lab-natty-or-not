@@ -767,7 +767,8 @@ html { font-size: calc(10px * var(--gs, 1)); }
   box-shadow: .25rem .25rem 0 #121519;
 }
 #ui .dlg-box.right .dlg-name { left: auto; right: 1rem; transform: rotate(2deg); }
-#ui .dlg-text { flex: 1; min-width: 0; margin: .5rem 0 0; font: 700 1.72rem/1.3 var(--font-body); }
+/* margem de baixo: a setinha ▼ (.nxt, até 1,7rem do fundo) não encosta na última linha de falas de 4+ linhas */
+#ui .dlg-text { flex: 1; min-width: 0; margin: .5rem 0 1.2rem; font: 700 1.72rem/1.3 var(--font-body); }
 #ui .dlg-box .nxt { bottom: .8rem; right: 1.2rem; }
 #ui .dlg-box.right .nxt { right: auto; left: 1.2rem; }
 #ui .dlg-skip { position: absolute; right: 0; top: -6.6rem; opacity: .92; }
@@ -1383,7 +1384,7 @@ body.in-play #toasts { opacity: 0; }
     { id: 'primeiro_voto', name: 'Primeiro Voto',    desc: 'Derrube seu primeiro político',               counter: 'kills', goal: 1 },
     { id: 'ficha_limpa',   name: 'Ficha Limpa',      desc: 'Termine uma fase sem perder vida' },
     { id: 'bico_calado',   name: 'Bico Calado',      desc: 'Vença um chefão sem usar Delação' },
-    { id: 'rachou',        name: 'Rachou!',          desc: 'Divida 30 Assessores da Rachadinha',            counter: 'rachadinha', goal: 30 },
+    { id: 'rachou',        name: 'Rachou!',          desc: 'Divida 30 Assessores do Loteamento',            counter: 'rachadinha', goal: 30 },
     { id: 'por_um_fio',    name: 'Por um Fio',       desc: 'Faça 300 raspões numa partida' },
     { id: 'arsenal',       name: 'Arsenal Completo', desc: 'Chegue ao nível máximo de uma arma' },
     { id: 'centrao',       name: 'Fora, Centrão',    desc: 'Derrote O Centrão' },
@@ -1424,7 +1425,7 @@ body.in-play #toasts { opacity: 0; }
     ],
     ending: [
       { scene: 'planalto', text: 'Fatura entregue em mãos, com juros e correção monetária. Nunca antes na história deste país um governo leu a conta até o fim.' },
-      { scene: 'brasilia', text: 'No dia seguinte criaram o Ministério do Compromisso Histórico. O Centrão já pediu três cargos e a deputada abriu um fio sobre ele.' },
+      { scene: 'brasilia', text: 'No dia seguinte criaram o 40º ministério: o da Fatura. O Centrão já pediu três cargos e a deputada abriu um fio sobre ele.' },
       { scene: 'fusca',    text: 'Zé devolveu o Fusca para a Vó Dirce e foi dormir. Segunda-feira tem corrida às seis da manhã. Escala 7x0, como sempre.' },
       { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em quinto mandato." Zé: "Liga o motor, vó."' },
     ],
@@ -1444,7 +1445,7 @@ body.in-play #toasts { opacity: 0; }
         intro: [
           { who: 'vo', text: 'Esplanada dos Ministérios. Dizem que são 38 ministérios, Zezinho.' },
           { who: 'ze', text: 'E pelo jeito cada um tem uns mil assessores atirando em mim.' },
-          { who: 'vo', text: 'Cuidado com o Assessor da Rachadinha. Quando você acerta, ele se divide!' },
+          { who: 'vo', text: 'Cuidado com o Assessor do Loteamento. Quando você acerta, ele se divide!' },
           { who: 'vo', text: 'A Dilmãe tá lá no fim. Diz que vai dobrar a meta. Ninguém sabe qual.' },
         ],
       },
@@ -1484,7 +1485,7 @@ body.in-play #toasts { opacity: 0; }
           { who: 'dilmae', text: 'Não vamos colocar meta. Vamos deixar a meta aberta. Quando atingir a meta, nós dobramos a meta.' },
           { who: 'ze', text: 'Hã?' },
           { who: 'dilmae', text: 'E eu estoquei o vento, querido. Agora ele é todo seu!' },
-          { who: 'vo', text: 'Zezinho, para o Fusca dentro do círculo da META até encher. Ela não sabe o que fazer quando alguém bate a meta!' },
+          { who: 'vo', text: 'Zezinho, estaciona o Fusca dentro do círculo da META até encher. Ela não sabe o que fazer quando alguém bate a meta!' },
         ],
         post: [
           { who: 'dilmae', text: 'Eu não perdi. Eu só ganhei de uma forma diferente, entende?' },
@@ -1493,8 +1494,8 @@ body.in-play #toasts { opacity: 0; }
       },
       erika: {
         pre: [
-          { who: 'erika', text: 'Oi, gente! Tô AO VIVO do Lago Paranoá. E olha quem apareceu: um Fusca a jato atrapalhando a minha live!' },
-          { who: 'ze', text: 'Deputada, eu só quero passar. Tenho corrida às seis da manhã.' },
+          { who: 'erika', mood: 'laugh', text: 'Oi, gente! Tô AO VIVO do Lago Paranoá. E olha quem apareceu: um Fusca a jato atrapalhando a minha live!' },
+          { who: 'ze', text: 'Deputada, eu só quero passar. Amanhã é sábado e tenho corrida às seis da manhã.' },
           { who: 'erika', text: 'Às seis? Num sábado?! Isso é escala 6x1! Vou protocolar o fim dela agora, ao vivo!' },
           { who: 'ze', text: 'Sou motorista de aplicativo, deputada. Minha escala é 7x0. Quem paga a minha folga?' },
           { who: 'erika', text: 'Que fala problemática! Vou abrir um fio sobre você. SEGUE O FIO, gente!' },
@@ -1531,7 +1532,7 @@ body.in-play #toasts { opacity: 0; }
     'Todos os personagens são caricaturas. Qualquer semelhança com políticos reais é pura sátira.',
     'Nenhum político foi ferido na produção deste jogo. Só a reputação.',
     'Vote consciente. E guarde a nota fiscal.',
-    'Nenhuma live foi interrompida na produção deste jogo. Só o sinal.',
+    'Nenhum fio foi cortado na produção deste jogo. Só os da live.',
   ];
 })();
 
@@ -7767,7 +7768,7 @@ body.in-play #toasts { opacity: 0; }
   // Alturas dos blocos múltiplas de 64 (faixas do gramado alternam a cada 32).
   // =================================================================
   const MINIS = ['MIN. DO TOMA LÁ DÁ CÁ', 'MIN. DA PICANHA', 'MIN. DO VENTO ESTOCADO', 'MIN. DA META DOBRADA', 'MIN. DAS EMENDAS',
-    'MIN. DA TAXAÇÃO', 'MIN. DO CAFEZINHO', 'MIN. DA RACHADINHA', 'MIN. DO PIX', 'MIN. DAS BLUSINHAS', 'MIN. DO JATINHO DA FAB',
+    'MIN. DA TAXAÇÃO', 'MIN. DO CAFEZINHO', 'MIN. DO LOTEAMENTO', 'MIN. DO PIX', 'MIN. DAS BLUSINHAS', 'MIN. DO JATINHO DA FAB',
     'MIN. DO ARCABOUÇO FURADO', 'MIN. DO PIX VIGIADO', 'MIN. DA MANDIOCA', 'MIN. DO 171', 'MIN. Nº 39 (EM BREVE)', 'MIN. DA REUNIÃO INÚTIL',
     'MIN. DO FERIADÃO', 'MIN. DOS MINISTÉRIOS', 'MIN. DA CERVEJINHA', 'MIN. DO CARGO VAGO', 'MIN. DA FILA', 'MIN. DO ASSESSOR DO ASSESSOR',
     'MIN. DO PUXADINHO', 'MIN. DA PAUTA-BOMBA', 'MIN. DO RECESSO', 'MIN. DA SAUDADE', 'MIN. DO CARIMBO'];
@@ -12340,7 +12341,7 @@ body.in-play #toasts { opacity: 0; }
     cabo: ['CABO ELEITORAL', 'distribui santinho do 171'],
     fantasma: ['VEREADOR FANTASMA', 'só aparece pra receber'],
     deputado: ['DEPUTADO DO CENTRÃO', 'apoia quem pagar mais'],
-    assessor: ['ASSESSOR DA RACHADINHA', 'derrube e ele racha em dois!'],
+    assessor: ['ASSESSOR DO LOTEAMENTO', 'derrube e ele se divide!'],
     lobista: ['LOBISTA', 'derrube e a mala é sua'],
     marqueteiro: ['MARQUETEIRO', 'blinda os aliados: mire nele!'],
     bot: ['BOT DE ENGAJAMENTO', 'curte em bando e mergulha'],
@@ -12726,7 +12727,7 @@ body.in-play #toasts { opacity: 0; }
   });
 
   // ======================================================================
-  // ASSESSOR DA RACHADINHA — ao cair, racha em duas metades (literalmente)
+  // ASSESSOR DO LOTEAMENTO — ao cair, racha em duas metades (literalmente)
   // ======================================================================
   const ASS = [
     { skin: '#f0c49c', hair: 'side', hairColor: '#3a2a20', body: 'shirt', shirt: '#dfe8ff', tie: '#1b3fa0', glasses: 'square', face: 'long', seed: 9 },
@@ -12893,7 +12894,7 @@ body.in-play #toasts { opacity: 0; }
   // MARQUETEIRO — blinda (shieldT) quem está perto; alvo prioritário; foge
   // ======================================================================
   const MKT = { skin: '#f0c49c', hair: 'pompadour', hairColor: '#2a2a2a', body: 'shirt', shirt: '#ff5d8f', glasses: 'square', beard: 'goatee', beardColor: '#2a2a2a', seed: 12 };
-  const MKT_LINES = ['É tudo narrativa!', 'Engajamento, gente!', 'Bora lacrar!', 'Isso aí é fake!', 'A culpa é do algoritmo!', 'Ângulo bom, sorri!', 'Faz o L, gente!', 'A culpa é da herança!'];
+  const MKT_LINES = ['É tudo narrativa!', 'Engajamento, gente!', 'Bora mudar a narrativa!', 'Isso aí é fake!', 'A culpa é do algoritmo!', 'Ângulo bom, sorri!', 'Faz o L, gente!', 'A culpa é da herança!'];
   define('marqueteiro', {
     hp: 14, r: 14, score: 800, pix: 6,
     init(e, o) {
@@ -21176,7 +21177,7 @@ body.in-play #toasts { opacity: 0; }
     'O Leão da Receita mandou lembranças.',
     'Não foi derrota. Foi "vitória adiada".',
     'Calma: em Brasília ninguém perde de verdade.',
-    'Recontagem liberada. Só não vale pedalada.',
+    'Recurso aceito. Só não vale pedalada.',
     'Faz o L de Lamentável.',
   ];
   const PAUSE_JOKES = [
@@ -21210,13 +21211,15 @@ body.in-play #toasts { opacity: 0; }
   };
   const BOSS_FALLBACK_NAME = { centrao: 'O Centrão', dilmae: 'Dilmãe', erika: 'Erika Viralton', lule: 'Lule' };
   const BOSS_SLOGAN = {
-    centrao: 'Apoio quem estiver ganhando',
+    centrao: 'Apoio quem estiver pagando',
     dilmae: 'Atingiu a meta? Dobra a meta',
     erika: 'Segue o fio!',
     lule: 'A picanha tá chegando',
   };
-  // abertura de fase: "CHEFONA" para elas, "CHEFÃO" para o resto
+  // abertura de fase: "CHEFONA" para elas, "CHEFÃO" para o resto. Vale o def.fem do chefão;
+  // BOSS_FEM é a reserva (módulos isolados ou def ainda sem a marca)
   const BOSS_FEM = { dilmae: 1, erika: 1 };
+  function bossFem(id) { const d = G.Bosses && G.Bosses.defs && G.Bosses.defs[id]; return !!((d && d.fem) || BOSS_FEM[id]); }
   // a manha de cada chefão (abertura de fase, linha "MANHA:")
   const BOSS_MECH = { centrao: 'pegue a emenda', dilmae: 'fique na META', erika: 'corte os fios da live', lule: 'olé no Leão' };
   // cartão "CADA CHEFÃO TEM UMA MANHA" do Como Jogar (chefão ainda não visto = '???')
@@ -21529,7 +21532,7 @@ body.in-play #toasts { opacity: 0; }
   // ------------------------------------------------------------------
   // Pedaços de HTML reaproveitados
   // ------------------------------------------------------------------
-  const BRAND = '<div class="urna-head"><span class="brand"><i class="flag"></i>JUSTIÇA ELEITORAL DO POVO</span><span class="model">URNA MOD. 171</span></div>';
+  const BRAND = '<div class="urna-head"><span class="brand"><i class="flag"></i>JUSTIÇA ELEITORAL DO POVO</span><span class="model">URNA MOD. 78</span></div>';
   function keyHTML(kind, label, small, cls, attrs) {
     return '<button type="button" class="key key-' + kind + (cls ? ' ' + cls : '') + '"' + (attrs || '') + '><span class="kl">' + label + '</span>' + (small ? '<small class="ks">' + small + '</small>' : '') + '</button>';
   }
@@ -21993,7 +21996,7 @@ body.in-play #toasts { opacity: 0; }
       '<div class="in-photo"><canvas aria-hidden="true"></canvas><div class="in-num"><small>Nº</small>171</div></div>' +
       '<h2 class="in-name">' + esc(s.name) + '</h2>' +
       '<p class="in-sub">' + esc(s.subtitle) + '</p>' +
-      '<div class="in-boss"><small>' + (BOSS_FEM[s.boss] ? 'CHEFONA' : 'CHEFÃO') + '</small><b>' + esc(castName(s.boss)) + '</b><em>“' + esc(bossTitle(s.boss)) + '”</em>' +
+      '<div class="in-boss"><small>' + (bossFem(s.boss) ? 'CHEFONA' : 'CHEFÃO') + '</small><b>' + esc(castName(s.boss)) + '</b><em>“' + esc(bossTitle(s.boss)) + '”</em>' +
       (BOSS_MECH[s.boss] ? '<span class="in-manha">' + esc('MANHA: ' + BOSS_MECH[s.boss]) + '</span>' : '') + '</div>' +
       '<p class="in-gag">' + esc(STAGE_GAG[s.id] || 'Todo político aqui é o nº 171.') + '</p>' +
       '</div>' +
@@ -22318,7 +22321,7 @@ body.in-play #toasts { opacity: 0; }
       (buy ? 'Já dá pra comprar <b>' + esc(buy.name) + '</b> na Lojinha!' : 'Seu Pix fica guardado para a Lojinha do Zé.');
     scr.root.innerHTML =
       '<div class="go-wrap">' +
-      '<div class="go-title" aria-label="Derrotado nas urnas"><span>DERROTADO</span><span>NAS URNAS</span></div>' +
+      '<div class="go-title" aria-label="Você foi derrotado"><span>VOCÊ FOI</span><span>DERROTADO</span></div>' +
       '<p class="go-joke">' + esc(pick(OVER_JOKES)) + '</p>' + near +
       '<div class="urna urna-compact">' + BRAND +
       '<div class="bezel"><div class="lcd lcd-stats">' +
@@ -22329,9 +22332,9 @@ body.in-play #toasts { opacity: 0; }
       '</div></div>' +
       '<div class="go-keys">' +
       (left > 0
-        ? '<button type="button" class="key key-confirma key-wide k-cont"><span class="kl">PEDIR RECONTAGEM</span><b class="kbadge">' + left + '</b><small class="ks">CONFIRMA</small></button>' +
+        ? '<button type="button" class="key key-confirma key-wide k-cont"><span class="kl">ENTRAR COM RECURSO</span><b class="kbadge">' + left + '</b><small class="ks">CONFIRMA</small></button>' +
           '<p class="go-explain">Continua daqui, com vidas e delações cheias. <b>O placar volta a zero.</b></p>'
-        : '<p class="go-explain">Acabaram os pedidos de recontagem. A urna é soberana.</p>') +
+        : '<p class="go-explain">Acabaram os recursos. Transitou em julgado.</p>') +
       '<div class="row go-quit">' + keyHTML('corrige', 'MENU', 'CORRIGE', 'k-quit') +
       keyHTML('branco', 'LOJINHA', buy ? 'tem melhoria!' : 'melhorias', 'k-shop' + (buy ? ' has-buy' : '')) + '</div>' +
       '</div></div></div>';
@@ -22560,7 +22563,7 @@ body.in-play #toasts { opacity: 0; }
         qualityHTML() +
         '<div class="set-danger">' +
         '<button type="button" class="key key-danger k-wipe"><span class="kl">APAGAR PROGRESSO</span></button>' +
-        '<div class="wipe-confirm" hidden><p><b>Tem certeza?</b> Some tudo: Pix, melhorias, fases liberadas, recorde e conquistas. Não tem recontagem.</p>' +
+        '<div class="wipe-confirm" hidden><p><b>Tem certeza?</b> Some tudo: Pix, melhorias, fases liberadas, recorde e conquistas. Não cabe recurso.</p>' +
         '<div class="row">' + keyHTML('branco', 'NÃO', '', 'k-no') + '<button type="button" class="key key-danger k-yes"><span class="kl">SIM, APAGAR</span></button></div></div>' +
         '</div></div>',
       foot: lcdFoot('', 'VOLTAR') + '<span class="foot-msg">Tudo é salvo na hora.</span>',
