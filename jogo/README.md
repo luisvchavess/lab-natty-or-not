@@ -8,16 +8,16 @@ Shoot'em up vertical para celular, de paródia política. A eleição acabou, ni
 - **O tiro é automático.** O pontinho branco no meio do Fusca é o único lugar onde você leva dano.
 - **Raspão:** passar bem perto dos tiros dá pontos, sobe a aprovação e carrega uma Delação extra.
 - **Item P:** todo P deixa a arma mais forte (1, 2, 3 e 3 P para subir do nível 1 ao 5). Ele muda de cor a cada 3 segundos: a cor escolhe a arma. Morreu? A arma perde um nível, que cai na tela como um P "de volta": pegou, recuperou.
-  - **VOTO** (verde): tiro reto e forte.
-  - **BOCA DE URNA** (amarelo): leque largo.
+  - **VOTO** (verde): tiro reto e forte; cada nível põe mais um tiro.
+  - **BOCA DE URNA** (amarelo): leque largo com um feixe reto no meio que engrossa a cada nível.
   - **PANELAÇO** (prata): panelas teleguiadas.
-  - **LAVA-JATO** (azul): jato d'água que atravessa tudo.
+  - **LAVA-JATO** (azul): jato d'água que atravessa tudo e acerta na hora.
 - **Delação Premiada** (botão redondo): um toque limpa os tiros da tela, transforma em Pix e acerta todo mundo. Se o dedão cair em cima do botão e arrastar, ele só volta a pilotar (não gasta a Delação).
 - **Aprovação:** derrubar políticos em sequência sobe o multiplicador de votos (placar). Levar tiro derruba.
-- **Pix:** o dinheiro que cai dos políticos fica com você entre partidas (é gravado também quando o app vai para o fundo). Gaste na **Lojinha do Zé** em melhorias permanentes. O que você compra na parada entre fases já vale na partida em andamento.
-- **Nota da fase:** S (sem morrer, no máximo 1 Delação), A (sem morrer), B (poucas mortes; a régua sobe a cada fase) ou C. Nota boa paga mais Pix, e as fases finais pagam mais.
+- **Pix:** o dinheiro que cai dos políticos fica com você entre partidas (é gravado também quando o app vai para o fundo). Gaste na **Lojinha do Zé** em melhorias permanentes (o Gatilho Turbinado, por exemplo, dá +10% de cadência por nível em todas as armas). O que você compra na parada entre fases já vale na partida em andamento.
+- **Nota da fase:** S (sem morrer, no máximo 1 Delação), A (sem morrer, ou só 1 vida perdida com no máximo 1 Delação), B (poucas mortes; a régua sobe a cada fase) ou C. Nota boa paga mais Pix, e as fases finais pagam mais.
 - **Recontagem:** perdeu todas as vidas? Peça recontagem e continue de onde parou (o placar zera e as vidas extras por pontos não se repetem).
-- **Pausa:** ao voltar, o jogo espera um segundo ("PRONTO? VAI!") para você pôr o dedo na tela. Com o celular deitado, o jogo pausa e pede para girar.
+- **Pausa:** ao voltar, o jogo espera um segundo ("PRONTO? VAI!") para você pôr o dedo na tela. Com o celular deitado, o jogo fica pausado e pede para girar.
 
 No computador: setas/WASD movem, Shift deixa lento, X ou espaço solta a Delação, P ou Esc pausa.
 
@@ -32,7 +32,7 @@ Venceu? Libera o **2º Mandato**, uma volta mais difícil que paga mais Pix.
 
 ## Rodando
 
-O jogo é um único arquivo: abra `index.html` no navegador do celular ou do computador. Não precisa de servidor nem de internet (só as fontes vêm do Google Fonts, sem travar a abertura; sem elas o jogo usa fontes do sistema). Em celular mais fraco o jogo baixa a qualidade gráfica sozinho para não travar.
+O jogo é um único arquivo: abra `index.html` no navegador do celular ou do computador. Não precisa de servidor nem de internet (só as fontes vêm do Google Fonts, sem travar a abertura; sem elas o jogo usa fontes do sistema). Em celular mais fraco o jogo baixa a qualidade gráfica sozinho para não travar (e sobe de novo no começo de uma fase se a anterior rodou lisa).
 
 Para desenvolver:
 

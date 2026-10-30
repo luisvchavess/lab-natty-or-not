@@ -1552,18 +1552,30 @@
   // resultado/loja/título/história, um item por vez. Durante o jogo, o que faltar entra
   // numa fila e sai no máximo um item a cada 250 ms — nada é construído de surpresa
   // no meio da luta (a vinheta do chefão ficava para o 1º quadro do chefão: 146 ms a 4x).
-  const caches = {};      // cacheId -> { kinds: {nome: {c,h,feats,over}}, ov: {chave: {c,W,H,res}}, spr, up }
+  // Troca de resolução (qualidade automática, girar a tela, barra do navegador): o conjunto
+  // antigo vira RESERVA (st.fb) e continua sendo desenhado em escala enquanto o novo sai da
+  // fila aos poucos; quando o novo fica completo, a reserva é liberada. Nenhum quadro do jogo
+  // reconstrói o cenário inteiro (eram 125–186 ms num quadro e 3–5 s de engasgos a 4–6x).
+  const caches = {};      // cacheId -> { id, res, kinds: {nome: {c,h,feats,over,res}}, ov: {chave: {c,W,H,res}}, spr, up }
   let S = null;           // estado corrente
   let EDGE = null;        // faixas vermelhas da borda (iguais em todas as fases)
   const MAP = ['rodoviaria', 'esplanada', 'paranoa', 'planalto'];
   const Q_DPR = { high: 2, mid: 1.5, low: 1 }; // mesma regra do core (resize)
-  const PLAY_GAP = 250;   // ms entre construções durante o jogo
+  const PLAY_GAP = 250;   // ms entre construções durante o jogo (no mínimo)
+  const PLAY_DUTY = 8;    // jogando: depois de uma construção de N ms, espera N×8 ms (≤ 12% do tempo)
+  const PLAY_GAP_MAX = 1200;
   const PRE_GAP = 140;    // ms entre construções nas telas (resultado, loja, título)
+  const TITLE_WAIT = 1200; // o título acabou de aparecer: a animação e o toque em JOGAR vêm antes
+  const TAP_QUIET = 400;  // fora do jogo, nada é construído logo depois de um toque
+  let lastTap = -1e9;
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    try { document.addEventListener('pointerdown', () => { lastTap = nowMs(); }, { capture: true, passive: true }); } catch (e) { /* nada */ }
+  }
   const nowMs = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const quality = () => G.quality || 'high';
   // para os testes: últimas construções (nome, ms, estado do jogo)
   const BUILDS = [];
-  function logBuild(id, item, ms) { BUILDS.push({ id, item, ms: Math.round(ms * 10) / 10, state: G.state, t: G.game ? Math.round(G.game.t * 10) / 10 : -1 }); if (BUILDS.length > 120) BUILDS.shift(); }
+  function logBuild(id, item, ms) { BUILDS.push({ id, item, ms: Math.round(ms * 10) / 10, state: G.state, t: G.game ? Math.round(G.game.t * 10) / 10 : -1, at: Math.round(nowMs() - ms) }); if (BUILDS.length > 120) BUILDS.shift(); }
 
   // resolução dos caches = escala real da tela (para desenhar 1:1, sem filtro: no
   // Canvas sem GPU, ampliar uma imagem com filtro custa ~13x mais que copiar 1:1).
@@ -1571,7 +1583,7 @@
   function quantRes(k) { return k <= 2.6 ? Math.max(0.5, Math.round(k * 1000) / 1000) : 2.5; }
   function getCache(cacheId) {
     let c = caches[cacheId];
-    if (!c) c = caches[cacheId] = { kinds: {}, ov: {}, spr: null, up: null, puffs: null };
+    if (!c) c = caches[cacheId] = { id: cacheId, res: +cacheId.slice(cacheId.lastIndexOf('@') + 1) || 1, kinds: {}, ov: {}, spr: null, up: null, puffs: null };
     return c;
   }
   function freeKind(k) { if (k) { freeCanvas(k.c); if (k.over) freeCanvas(k.over.c); } }
@@ -1585,15 +1597,16 @@
     freeSprites(c.spr); freeUpper(c.up);
     if (c.puffs) for (const k in c.puffs) freeCanvas(c.puffs[k]);
     delete caches[cacheId];
+    if (S && S.fb === c) S.fb = null;
   }
-  // Fica na memória só o conjunto em uso, o do menu e o que está sendo pré-construído
+  // Fica na memória só o conjunto em uso (e a reserva dele), o do menu e o que está sendo pré-construído
   // (a fase anterior inteira ficava viva: ~25 MB de canvas a mais; o iOS limita a memória de canvas).
   function pruneCaches() {
     const keep = {};
-    if (S) keep[S.cacheId] = 1;
+    if (S) { keep[S.cacheId] = 1; if (S.fb) keep[S.fb.id] = 1; }
     for (const id in PRE.keep) keep[id] = 1;
     for (const id in caches) if (!keep[id]) freeCache(id);
-    if (EDGE && S && (EDGE.res !== S.res || quality() !== 'high')) { freeCanvas(EDGE.c); freeCanvas(EDGE.r); EDGE = null; }
+    if (EDGE && S && ((EDGE.res !== S.res && !(S.fb && EDGE.res === S.fb.res)) || quality() !== 'high')) { freeCanvas(EDGE.c); freeCanvas(EDGE.r); EDGE = null; }
   }
   // contexto mínimo para pintar um item de uma fase (não precisa do estado de rolagem)
   function paintCtx(id, res) { const def = STAGES[id]; return { id, def, P: def.pal, res }; }
@@ -1637,11 +1650,14 @@
     logBuild(pc.id, item, nowMs() - t0);
     return true;
   }
-  // ordem de construção: o que aparece primeiro vem antes; o marco e a vinheta do chefão por último
+  // ordem de construção: o que aparece primeiro vem antes; o marco e a vinheta do chefão por último.
+  // Os 2 blocos da abertura antes do trânsito e da tinta: bloco faltando na tela é construído na hora,
+  // trânsito e tinta faltando têm substituto barato (sem carros / faixas sólidas).
   function itemsFor(def) {
-    const L = ['spr', def.first, 'ov0'];
     const ks = Object.keys(def.kinds);
+    const L = [def.first];
     if (ks.indexOf('a') >= 0 && L.indexOf('a') < 0) L.push('a');
+    L.push('spr', 'ov0');
     if (def.upper && quality() !== 'low') L.push('up'); // sem nuvens na qualidade baixa
     if (def.puffs) L.push('puff');
     for (const k of ks) if (L.indexOf(k) < 0 && k !== def.bossKind) L.push(k);
@@ -1660,16 +1676,42 @@
     }
   }
   function queueItem(st, item) { if (st.queue.indexOf(item) < 0) st.queue.push(item); }
-  function queueMissing(st, H) { st.queue = itemsFor(st.def).filter((it) => !isBuilt(st, it, H)); }
-  // fila da fase em andamento: 1 item a cada 4 quadros; jogando, no máximo 1 a cada 250 ms
+  // pula a fila: o bloco vai aparecer na tela em instantes
+  function queueFront(st, item) { const i = st.queue.indexOf(item); if (i === 0) return; if (i > 0) st.queue.splice(i, 1); st.queue.unshift(item); }
+  // o que falta do conjunto; com reserva, os blocos que estão na tela vêm primeiro
+  function queueMissing(st, H) {
+    let L = itemsFor(st.def).filter((it) => !isBuilt(st, it, H));
+    // fase vencida (resultado/loja/final, ver trimForClear): o mundo está parado, só o que está na tela
+    if (st.trimmed) L = L.filter((it) => (st.def.kinds[it] ? st.seq.some((ch) => ch.kind === it) : it !== 'edge' && (it !== 'ov1' || st.bossK >= 0.004)));
+    if (st.fb) {
+      // na tela agora: blocos, depois a camada de tela cheia em uso (a mais cara para desenhar em escala)
+      const vis = [];
+      for (const ch of st.seq) if (L.indexOf(ch.kind) >= 0 && vis.indexOf(ch.kind) < 0) vis.push(ch.kind);
+      const ov = st.bossK > 0.5 ? 'ov1' : 'ov0';
+      if (L.indexOf(ov) >= 0) vis.push(ov);
+      st.queue = vis.concat(L.filter((it) => vis.indexOf(it) < 0));
+    } else st.queue = L;
+  }
+  // Reserva (conjunto de outra resolução) ainda viva: quando o conjunto novo tem tudo o que
+  // está na tela e a fila acabou, a reserva sai da memória (pelo FREEQ, aos poucos).
+  function settleFallback(st) {
+    for (const ch of st.seq) if (!st.cache.kinds[ch.kind]) queueItem(st, ch.kind);
+    if (st.queue.length) return;
+    const old = st.fb; st.fb = null;
+    if (old && old !== st.cache && !PRE.keep[old.id]) freeCache(old.id);
+  }
+  // fila da fase em andamento: 1 item a cada 4 quadros; jogando, no máximo 1 a cada 250 ms e
+  // nunca mais que ~12% do tempo (uma construção de 100 ms espera 800 ms pela próxima)
   function processQueue(st, W, H) {
-    if (!st.queue.length) return;
+    if (st.syncBuilt) { st.syncBuilt = false; return; } // um bloco já foi construído na hora neste quadro
+    if (!st.queue.length) { if (st.fb) settleFallback(st); if (!st.queue.length) return; }
     if (st.delay > 0) { st.delay--; return; }
     const t0 = nowMs();
-    if (G.state === 'play' && t0 - st.lastBuild < PLAY_GAP) return;
+    if (G.state === 'play') { if (t0 - st.lastBuild < Math.min(PLAY_GAP_MAX, Math.max(PLAY_GAP, st.lastCost * PLAY_DUTY))) return; }
+    else if (t0 - lastTap < TAP_QUIET) return;
     while (st.queue.length) {
       const it = st.queue.shift();
-      if (buildItem(st.pc, st.cache, it, W, H)) { st.lastBuild = nowMs(); st.delay = 3; return; }
+      if (buildItem(st.pc, st.cache, it, W, H)) { st.lastBuild = nowMs(); st.lastCost = st.lastBuild - t0; st.delay = 3; return; }
     }
   }
 
@@ -1691,7 +1733,7 @@
       sealRow(o.c, oh * res);
       over = { c: bake(o.c), y0: oy0, h: oh };
     }
-    return { c: s.c, h, feats: F, over };
+    return { c: s.c, h, feats: F, over, res };
   }
   // a última linha do canvas fica "meio pintada" quando h*res não é inteiro: copia a de cima
   function sealRow(c, hr) {
@@ -1705,24 +1747,39 @@
   }
   // Desenha uma faixa [topo, topo+h) (em px lógicos) de um cache, com as bordas
   // presas a linhas inteiras do aparelho: blocos vizinhos se encostam sem fresta e o blit fica 1:1.
-  function blitBand(ctx, st, img, top, h, W, H) {
-    const q = st.k, res = st.res;
+  // res = resolução da imagem (a da reserva, durante uma troca de resolução).
+  function blitBand(ctx, st, img, top, h, W, H, res) {
+    const q = st.k;
+    res = res || st.res;
     const mD = st.shaking ? Math.ceil(30 * q) : 0; // margem extra durante o tremor
     const tD = Math.round(top * q), bD = Math.round((top + h) * q), HD = Math.ceil(H * q - 0.001) + mD;
     const y0 = Math.max(-mD, tD), y1 = Math.min(HD, bD);
     if (y1 <= y0) return;
     const f = res / q;
     let sy = (y0 - tD) * f, sh = (y1 - y0) * f;
-    if (st.crisp) { sy = Math.round(sy); sh = Math.min(Math.round(sh), img.height - sy); }
+    if (st.crisp && res === st.res) { sy = Math.round(sy); sh = Math.min(Math.round(sh), img.height - sy); }
     if (sh <= 0) return;
     ctx.drawImage(img, 0, sy, img.width, sh, 0, y0 / q, (img.width / res) * (W / WW), (y1 - y0) / q);
   }
-  // bloco pronto (ou construído agora: só acontece se a fila não deu conta a tempo)
+  // bloco já pronto: do conjunto atual ou, numa troca de resolução, da reserva (null = nenhum dos dois)
+  function kindAt(st, name) { return st.cache.kinds[name] || (st.fb && st.fb.kinds[name]) || null; }
+  // bloco para desenhar agora. Da reserva: o novo entra na fila. Construído na hora só se
+  // nenhum dos dois conjuntos tem o bloco (a fila não deu conta a tempo); conta como a construção da vez.
   function kindOf(st, name) {
     let k = st.cache.kinds[name];
-    if (!k) { const t0 = nowMs(); k = st.cache.kinds[name] = buildKind(st, name); logBuild(st.id, name + '!', nowMs() - t0); }
+    if (k) return k;
+    if (st.fb && st.fb.kinds[name]) { queueItem(st, name); return st.fb.kinds[name]; }
+    const t0 = nowMs();
+    k = st.cache.kinds[name] = buildKind(st, name);
+    st.lastBuild = nowMs(); st.lastCost = st.lastBuild - t0; st.syncBuilt = true;
+    logBuild(st.id, name + '!', st.lastCost);
     return k;
   }
+  // suavização ao desenhar uma imagem de resolução res: 1:1 sem filtro. Fora de escala só por
+  // alguns segundos (reserva, ou a tela acabou de mudar e espera estabilizar): também sem filtro —
+  // sem GPU, a 4x, reduzir/ampliar a tela cheia sem filtro custa ~1,6x o blit 1:1; com filtro, 4–7x.
+  // Só a tela grande demais (tablet, cache preso em 2,5) usa filtro o tempo todo.
+  function smoothFor(st, res) { return res === st.res && !st.crisp && !st.pendRes; }
   function resolveId(id) {
     if (STAGES[id]) return id;
     const g = G.game;
@@ -1742,10 +1799,21 @@
       id, def, P: def.pal, g, res, cacheId, cache: getCache(cacheId), pc: paintCtx(id, res),
       pos: 0, lastScroll: scrollY, lastT: t, dt: 0, seq: [], n: 1, mul: def.speed || 1,
       bossK: 0, boss: null, park: null, flags: {}, lastLoop: null, cloudPos: 0, ranges: [],
-      queue: [], delay: 3, lastBuild: 0, traffic: null, flagImg: null, k: res, crisp: true,
+      queue: [], delay: 3, lastBuild: 0, lastCost: 0, traffic: null, flagImg: null, k: res, crisp: true, fb: null,
     };
-    const fk = kindOf(st, def.first);
-    st.seq.push({ kind: def.first, y0: -(def.firstAt || 0), h: fk.h, n: 0 });
+    // conjunto desta fase pré-construído em outra resolução (a qualidade subiu no começo da fase,
+    // a tela girou): vira reserva em vez de tudo ser construído no 1º quadro
+    if (!st.cache.kinds[def.first]) {
+      let best = null, bn = 0;
+      for (const cid in caches) {
+        const c = caches[cid];
+        if (c === st.cache || cid.indexOf(id + '@') !== 0 || !c.kinds[def.first]) continue;
+        const n = Object.keys(c.kinds).length;
+        if (n > bn) { best = c; bn = n; }
+      }
+      st.fb = best;
+    }
+    st.seq.push({ kind: def.first, y0: -(def.firstAt || 0), h: def.kinds[def.first].h, n: 0 });
     queueMissing(st, H);
     buildTraffic(st);
     S = st;
@@ -1766,17 +1834,30 @@
       // a tela mudou de tamanho: espera estabilizar e refaz só os caches (o mundo continua)
       if (S.pendRes === res) S.pendN++; else { S.pendRes = res; S.pendN = 0; }
       if (S.pendN > 12) rescale(S, res, H);
-    }
+    } else S.pendRes = null;
     S.k = k; S.tx = tx; S.ty = ty;
     S.crisp = Math.abs(S.res - k) < 0.002;
     return S;
   }
+  // quantos blocos da tela (e do conjunto) um cache já tem: decide quem fica de reserva
+  function setScore(st, c) {
+    if (!c) return -1;
+    let n = 0;
+    for (const ch of st.seq) if (c.kinds[ch.kind]) n += 100;
+    return n + Object.keys(c.kinds).length;
+  }
+  // Nova resolução: o conjunto atual (ou a reserva, se ela estiver mais completa) fica de reserva
+  // e continua na tela, em escala; o novo sai da fila aos poucos (ver processQueue/settleFallback).
   function rescale(st, res, H) {
     disposeState(st);
-    st.res = res; st.cacheId = st.id + '@' + res; st.cache = getCache(st.cacheId); st.pc = paintCtx(st.id, res);
+    const cid = st.id + '@' + res, old = st.cache;
+    if (st.fb && st.fb.id === cid) st.fb = null; // voltou para a resolução da reserva: ela é o conjunto
+    else if (setScore(st, old) >= setScore(st, st.fb)) st.fb = old;
+    st.res = res; st.cacheId = cid; st.cache = getCache(cid); st.pc = paintCtx(st.id, res);
+    if (st.fb === st.cache) st.fb = null;
     st.pendRes = null;
     queueMissing(st, H);
-    pruneCaches();
+    pruneCaches(); // o conjunto parcial que sobrou (nem atual nem reserva) sai aos poucos
   }
   // rolagem própria: acompanha scrollY, mas acelera/estaciona no marco do chefão
   function advance(st, scrollY, t, H) {
@@ -1817,8 +1898,9 @@
     let last = st.seq[st.seq.length - 1], guard = 0;
     while (last.y0 + last.h < st.pos + H + 34 && guard++ < 8) { // +34: margem do tremor de tela
       const name = st.def.next(st, st.g, st.n);
-      const kd = kindOf(st, name);
-      const ch = { kind: name, y0: last.y0 + last.h, h: kd.h, n: st.n++ };
+      // ainda fora da tela: se não estiver pronto, pula a fila (construído na hora só se aparecer antes)
+      if (!kindAt(st, name)) queueFront(st, name);
+      const ch = { kind: name, y0: last.y0 + last.h, h: st.def.kinds[name].h, n: st.n++ };
       st.seq.push(ch);
       const park = st.def.kinds[name].park;
       if (park && st.g && st.g.boss) st.park = { chunk: ch, local: park.local, screen: park.screen, state: 'go' };
@@ -1831,12 +1913,16 @@
 
   // =================================================================
   // Pré-construção (fora do jogo): a próxima fase enquanto o resultado e a
-  // Lojinha estão na tela; no título/história, o fundo do menu e a 1ª fase.
+  // Lojinha estão na tela; no título/história, a 1ª fase e o fundo do menu.
   // Um item por vez, com folga de 140 ms entre eles (a tela de resultado parada
-  // esconde o engasgo). Roda pelo draw() e por um relógio próprio, porque o
-  // título e a história não desenham o fundo.
+  // esconde o engasgo), nada logo depois de um toque e nada no 1,2 s inicial do
+  // título (animação de entrada + toque em JOGAR). Roda pelo draw() e por um
+  // relógio próprio, porque o título e a história não desenham o fundo.
   // =================================================================
-  const PRE = { key: '', jobs: [], i: 0, next: 0, keep: {} };
+  const PRE = { key: '', jobs: [], i: 0, next: 0, keep: {}, titleT: 0, prune: false };
+  function uiKind() { try { return G.UI && G.UI.current ? G.UI.current() : null; } catch (e) { return null; } }
+  // telas do menu que o core desenha sem fundo (ver render no core)
+  const NO_BG_UI = /^(title|story|roll)$/;
   function preTargets() {
     const st = G.state, g = G.game;
     if (st === 'clear' && g) { const nx = MAP[(g.stageIdx | 0) + 1]; return nx ? [nx] : null; }
@@ -1844,9 +1930,19 @@
       const sv = G.save || {}, un = sv.unlocked || 1;
       // provável próxima escolha: a 1ª fase (ou o 2º Mandato) ou a fase mais nova liberada
       const stage = st === 'intro' || sv.cleared || un <= 1 ? 'rodoviaria' : MAP[Math.min(3, un - 1)];
-      return st === 'intro' ? [stage] : ['menu', stage];
+      if (st === 'intro') return [stage];
+      // a fase antes do menu (o título não desenha fundo e JOGAR é o toque provável),
+      // a não ser que uma tela com o fundo do menu já esteja aberta (fases, lojinha...)
+      const ui = st === 'menu' ? uiKind() : null;
+      return ui && !NO_BG_UI.test(ui) ? ['menu', stage] : [stage, 'menu'];
     }
     return null;
+  }
+  // título recém-aberto (o jogo acabou de carregar ou voltou de uma partida): espera TITLE_WAIT
+  function titleWait(now) {
+    if (G.state !== 'menu' || uiKind() !== 'title') return false;
+    if (!PRE.titleT) PRE.titleT = now;
+    return now - PRE.titleT < TITLE_WAIT;
   }
   // Resultado/loja com a próxima fase a caminho: o mundo parado só mostra os blocos visíveis.
   // O resto do conjunto da fase vencida sai já (pico de memória: ~13 Mpx em vez de ~19).
@@ -1855,10 +1951,12 @@
     st.trimmed = true;
     const vis = {};
     for (const ch of st.seq) vis[ch.kind] = 1;
-    const c = st.cache;
-    for (const k in c.kinds) if (!vis[k]) { freeKind(c.kinds[k]); delete c.kinds[k]; }
-    if (st.bossK < 0.004) for (const k in c.ov) if (k.indexOf('ov1|') === 0) { freeCanvas(c.ov[k].c); delete c.ov[k]; }
-    st.queue.length = 0;
+    for (const c of [st.cache, st.fb]) {
+      if (!c) continue;
+      for (const k in c.kinds) if (!vis[k]) { freeKind(c.kinds[k]); delete c.kinds[k]; }
+      if (st.bossK < 0.004) for (const k in c.ov) if (k.indexOf('ov1|') === 0) { freeCanvas(c.ov[k].c); delete c.ov[k]; }
+    }
+    st.queue.length = 0; // com reserva, settleFallback volta a pedir só os blocos da tela
   }
   function predictRes() {
     const v = G.view, q = quality();
@@ -1868,13 +1966,16 @@
     return quantRes(v.scale * dpr);
   }
   function prebuildPump() {
+    if (G.state !== 'menu') PRE.titleT = 0; // a próxima vez que o título abrir, espera de novo
     if (!G.canvas || (typeof document !== 'undefined' && document.hidden)) return;
     const ids = preTargets();
     if (!ids) return;
-    // telas do menu: um estado de fase antiga (o título não desenha fundo) não segura mais a memória dela
-    if (S && S.id !== 'menu' && G.state !== 'clear' && (!G.game || S.g !== G.game)) { disposeState(S); S = null; }
+    // telas do menu: um estado de fase antiga (o título não desenha fundo) não segura mais a memória
+    // dela: o conjunto da fase terminada sai (a não ser que seja o alvo da pré-construção)
+    if (S && S.id !== 'menu' && G.state !== 'clear' && (!G.game || S.g !== G.game)) { disposeState(S); S = null; PRE.prune = true; }
+    // final/créditos: da última fase só ficam os blocos parados na tela
+    if (G.state === 'ending' && S && S.id !== 'menu' && !S.trimmed) { trimForClear(S); PRE.prune = true; }
     const t0 = nowMs();
-    if (t0 < PRE.next) return;
     const res = predictRes();
     if (!res) return;
     const W = G.W || 360, H = G.H || 640;
@@ -1888,8 +1989,10 @@
         PRE.keep[cid] = 1;
         for (const it of itemsFor(pc.def)) PRE.jobs.push({ cid, pc, it });
       }
-      pruneCaches();
+      PRE.prune = true;
     }
+    if (PRE.prune) { PRE.prune = false; pruneCaches(); } // libera pelo FREEQ: poucos ms por vez
+    if (titleWait(t0) || t0 < PRE.next || t0 - lastTap < TAP_QUIET) return;
     while (PRE.i < PRE.jobs.length) {
       const j = PRE.jobs[PRE.i++];
       let did = false;
@@ -1913,7 +2016,7 @@
     const P = pc.P, res = pc.res;
     const mk = (w, h, fn) => { const s = surface(w, h, res); fn(s.x); s.c.lw = w; s.c.lh = h; return bake(s.c); };
     const cols = P.cars, bcols = P.bus || ['#376a8a'];
-    const spr = { up: { car: [], bus: [] }, down: { car: [], bus: [] } };
+    const spr = { up: { car: [], bus: [] }, down: { car: [], bus: [] }, res };
     for (const c of cols) {
       spr.up.car.push(mk(12, 34, (x) => { beam(x, P, 6, 11.5, -1, 11); car(x, 6, 17, c, 0); }));
       spr.down.car.push(mk(12, 34, (x) => { beam(x, P, 6, 22.5, 1, 11); car(x, 6, 17, c, Math.PI); }));
@@ -1954,12 +2057,13 @@
     return r;
   }
   function drawTraffic(ctx, st, H, t) {
-    const T = st.traffic, spr = st.cache.spr;
+    const T = st.traffic;
     if (!T) return;
-    if (!spr) { queueItem(st, 'spr'); return; } // ainda na fila: o trânsito aparece em instantes
+    let spr = st.cache.spr;
+    if (!spr) { queueItem(st, 'spr'); spr = st.fb && st.fb.spr; if (!spr) return; } // ainda na fila: o trânsito aparece em instantes
     const r = laneRanges(st, H);
-    const L = 900;
-    ctx.imageSmoothingEnabled = !st.crisp;
+    const L = 900, sr = spr.res || st.res;
+    ctx.imageSmoothingEnabled = smoothFor(st, sr);
     for (const ln of T) {
       const set = ln.dir > 0 ? spr.up : spr.down;
       const list = ln.bus ? set.bus : set.car;
@@ -1968,7 +2072,7 @@
         y = ((y % L) + L) % L - 50;
         if (y > H + 30 || !inRanges(r, y)) continue;
         const img = list[ln.col[i] < 0 ? st.blackIdx : ln.col[i]] || list[0];
-        ctx.drawImage(img, snap(st, ln.x - img.lw / 2), snap(st, y - img.lh / 2), img.width / st.res, img.height / st.res);
+        ctx.drawImage(img, snap(st, ln.x - img.lw / 2), snap(st, y - img.lh / 2), img.width / sr, img.height / sr);
       }
     }
     ctx.imageSmoothingEnabled = true;
@@ -1989,7 +2093,9 @@
     for (const ch of st.seq) {
       const top = chunkTop(st, ch, H);
       if (top > H + 60 || top + ch.h < -60) continue;
-      const F = st.cache.kinds[ch.kind].feats;
+      const K = kindAt(st, ch.kind);
+      if (!K) continue; // bloco ainda na fila (logo acima/abaixo da tela): os enfeites vêm quando ele chegar
+      const F = K.feats;
       // brilhos do sol na água: tracinhos horizontais (nunca bolinhas)
       if (F.glints.length) {
         ctx.fillStyle = st.id === 'paranoa' ? '#ffcf9a' : '#cfe4f0';
@@ -2056,11 +2162,12 @@
   }
   function drawOvers(ctx, st, W, H) {
     for (const ch of st.seq) {
-      const k = st.cache.kinds[ch.kind]; if (!k || !k.over) continue;
+      const k = kindAt(st, ch.kind); if (!k || !k.over) continue;
       const top = H + st.pos - (ch.y0 + ch.h) + k.over.y0;
       if (top + k.over.h <= 0 || top >= H) continue;
-      ctx.imageSmoothingEnabled = !st.crisp;
-      blitBand(ctx, st, k.over.c, top, k.over.h, W, H);
+      const res = k.res || st.res;
+      ctx.imageSmoothingEnabled = smoothFor(st, res);
+      blitBand(ctx, st, k.over.c, top, k.over.h, W, H, res);
       ctx.imageSmoothingEnabled = true;
     }
   }
@@ -2084,17 +2191,19 @@
     const g = x.createRadialGradient(rb, rb, 0, rb, rb, rb);
     g.addColorStop(0, 'rgba(' + PUFF_RGB + ',1)'); g.addColorStop(0.45, 'rgba(' + PUFF_RGB + ',0.55)'); g.addColorStop(1, 'rgba(' + PUFF_RGB + ',0)');
     x.fillStyle = g; x.fillRect(0, 0, rb * 2, rb * 2);
-    const c = bake(s.c); c.rb = rb;
+    const c = bake(s.c); c.rb = rb; c.res = res;
     return c;
   }
   function puffAt(st, r) {
     const rb = Math.max(2, Math.round(r / 2) * 2);
     const P = st.cache.puffs || (st.cache.puffs = {}); // normalmente já veio da pré-construção
-    return P[rb] || (P[rb] = buildPuff(st.res, rb));
+    if (P[rb]) return P[rb];
+    const F = st.fb && st.fb.puffs; // troca de resolução: a baforada da reserva serve, em escala
+    return (F && F[rb]) || (P[rb] = buildPuff(st.res, rb));
   }
   function drawPuff(ctx, st, x, y, r) {
-    const c = puffAt(st, r), rb = c.rb;
-    ctx.drawImage(c, snap(st, x - rb), snap(st, y - rb), c.width / st.res, c.height / st.res);
+    const c = puffAt(st, r), rb = c.rb, res = c.res || st.res;
+    ctx.drawImage(c, snap(st, x - rb), snap(st, y - rb), c.width / res, c.height / res);
   }
   // Camada de cima: nuvens/névoa/fumaça como SPRITES soltos (pintados na resolução
   // da tela e desenhados 1:1) — só custa a área que ocupam, ao contrário de um
@@ -2155,10 +2264,10 @@
     const def = st.def, U = UPPER[def.upper], q = quality();
     // qualidade baixa: sem nuvens/névoa (a fumaça da churrasqueira e das barracas fica)
     if (U && q !== 'low' && !(G.BG.skip && G.BG.skip.clouds)) {
-      const set = st.cache.up;
-      if (!set) queueItem(st, 'up');
-      else {
-        ctx.imageSmoothingEnabled = !st.crisp;
+      let set = st.cache.up;
+      if (!set) { queueItem(st, 'up'); set = st.fb && st.fb.up; }
+      if (set) {
+        ctx.imageSmoothingEnabled = set === st.cache.up ? smoothFor(st, st.res) : false; // reserva: nuvem macia, sem filtro
         // sombras das nuvens no chão (só de dia): andam com o chão, um pouco mais devagar que as nuvens
         if (U.shadow && q === 'high') drawCloudSet(ctx, st, set, set.dark, set.inst, st.cloudPos * 0.75 + 120, 1, W, H, t);
         drawCloudSet(ctx, st, set, set.shapes, set.inst, st.cloudPos, 1, W, H, t);
@@ -2171,10 +2280,10 @@
     // fumaça da churrasqueira do Lule (sai do marco e vem descendo) e das barraquinhas
     let smoked = false;
     for (const ch of st.seq) {
-      const F = st.cache.kinds[ch.kind] && st.cache.kinds[ch.kind].feats;
+      const K = kindAt(st, ch.kind), F = K && K.feats;
       if (!F || (!F.grill && !F.smoke.length)) continue;
       const top = chunkTop(st, ch, H);
-      if (!smoked) { smoked = true; ctx.imageSmoothingEnabled = !st.crisp; }
+      if (!smoked) { smoked = true; ctx.imageSmoothingEnabled = smoothFor(st, st.res); }
       if (F.grill) {
         const gx = F.grill.x, gy = top + F.grill.y;
         if (gy > -160 && gy < H + 40) {
@@ -2339,23 +2448,26 @@
     drawBands(ctx, st, st.tintB, W, H);
     if (boss) { ctx.fillStyle = 'rgba(5,3,12,0.22)'; ctx.fillRect(0, 0, W, H); }
   }
+  // camada de tela cheia (key = 'ov0' | 'ov1'). Ainda na fila: a da reserva (outra resolução,
+  // mesma tela) serve, sem filtro (é lisa); sem reserva, faixas sólidas baratas.
+  function drawLayer(ctx, st, key, a, boss, W, H) {
+    const o = st.cache.ov[key + '|' + H];
+    if (o && o.W === W && o.res === st.res) { ctx.imageSmoothingEnabled = smoothFor(st, st.res); blitFull(ctx, st, o, a); return; }
+    queueItem(st, key);
+    const f = st.fb && st.fb.ov[key + '|' + H];
+    if (f && f.W === W) { ctx.imageSmoothingEnabled = false; blitFull(ctx, st, f, a); }
+    else fallbackTint(ctx, st, W, H, a, boss);
+  }
   function drawOverlay(ctx, st, W, H, t) {
     const k = (G.BG.skip && G.BG.skip.boss) ? 0 : st.bossK, q = quality();
-    const ok = (o) => o && o.W === W && o.res === st.res;
-    ctx.imageSmoothingEnabled = !st.crisp;
-    if (k < 0.995) {
-      const o = st.cache.ov['ov0|' + H];
-      if (ok(o)) blitFull(ctx, st, o, 1 - k); else { queueItem(st, 'ov0'); fallbackTint(ctx, st, W, H, 1 - k, false); }
-    }
-    if (k > 0.005) {
-      const o = st.cache.ov['ov1|' + H];
-      if (ok(o)) blitFull(ctx, st, o, k); else { queueItem(st, 'ov1'); fallbackTint(ctx, st, W, H, k, true); }
-    }
+    if (k < 0.995) drawLayer(ctx, st, 'ov0', 1 - k, false, W, H);
+    if (k > 0.005) drawLayer(ctx, st, 'ov1', k, true, W, H);
+    ctx.imageSmoothingEnabled = smoothFor(st, st.res);
     // borda de perigo pulsando (enfeite: só na qualidade alta)
     if (k > 0.01 && q === 'high') {
       const e = EDGE;
       if (!e || e.H !== H || e.res !== st.res) queueItem(st, 'edge');
-      else {
+      if (e && e.H === H) { // de outra resolução durante a troca: desenha em escala até a nova sair
         const p = 0.5 + 0.5 * Math.sin(t * 3.2);
         if (p > 0.05) {
           const ew = e.c.width / e.res, eh = e.c.height / e.res;
@@ -2385,9 +2497,15 @@
     const st = ensure(ctx, id, scrollY, t, H);
     advance(st, scrollY, t, H);
     fill(st, H);
-    // o que faltar do conjunto da fase sai da fila aos poucos
-    processQueue(st, W, H);
     ctx.save();
+    try { paintAll(ctx, st, W, H, t); } finally { ctx.restore(); } // um erro no meio nunca deixa a pilha save/restore do jogo torta
+    // o que faltar do conjunto da fase sai da fila aos poucos (depois do desenho: se um bloco
+    // precisou ser construído na hora neste quadro, a fila espera a vez dela)
+    processQueue(st, W, H);
+    // fora do jogo (resultado, loja, diálogo do fim): adianta a próxima fase
+    if (G.state !== 'play') prebuildPump();
+  }
+  function paintAll(ctx, st, W, H, t) {
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     // tremor de tela (o core translada o canvas): cancela a fração de pixel para manter
     // o blit 1:1 rápido, e pinta uma margem para não sobrar borda sem fundo
@@ -2396,11 +2514,12 @@
     st.shaking = Math.abs(st.tx) > 0.5 || Math.abs(st.ty) > 0.5;
     if (st.shaking) { ctx.fillStyle = st.P.edgeFill || st.P.grass; ctx.fillRect(-30, -30, W + 60, H + 60); }
     // chão: blocos desenhados 1:1 (sem filtro) quando a resolução bate com a tela
-    ctx.imageSmoothingEnabled = !st.crisp;
     for (const ch of st.seq) {
       const top = H + st.pos - (ch.y0 + ch.h);
       if (top + ch.h <= 0 || top >= H) continue;
-      blitBand(ctx, st, kindOf(st, ch.kind).c, top, ch.h, W, H);
+      const k = kindOf(st, ch.kind), res = k.res || st.res;
+      ctx.imageSmoothingEnabled = smoothFor(st, res);
+      blitBand(ctx, st, k.c, top, ch.h, W, H, res);
     }
     ctx.imageSmoothingEnabled = true;
     const sk = G.BG.skip; // só para medir custo nos testes
@@ -2409,9 +2528,6 @@
     if (!sk || !sk.overs) drawOvers(ctx, st, W, H);
     if (!sk || !sk.upper) drawUpper(ctx, st, W, H, t);
     if (!sk || !sk.overlay) drawOverlay(ctx, st, W, H, t);
-    ctx.restore();
-    // fora do jogo (resultado, loja, diálogo do fim): adianta a próxima fase
-    if (G.state !== 'play') prebuildPump();
   }
   // memória de canvas (testes): conjuntos vivos e megapixels
   function cacheStats() {
@@ -2440,14 +2556,14 @@
     // as fontes chegaram depois do boot: os outdoors pintados com a fonte reserva são refeitos
     // (os conjuntos fora de uso são descartados e a pré-construção recomeça; o da tela atual fica)
     fontsReady() {
-      for (const id in caches) if (!S || id !== S.cacheId) freeCache(id);
+      for (const id in caches) if (!S || (id !== S.cacheId && !(S.fb && id === S.fb.id))) freeCache(id);
       PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {};
     },
     // o roteiro da fase avisa que o cartão-postal deve passar agora ('itamaraty', 'jk'); ver landmarkDue
     landmark(id, g) { LMREQ = { id: String(id), g: g || G.game || null }; },
     // para testes: estado atual (posição do mundo, blocos visíveis, estacionamento no chefão)
     _state() { return S; },
-    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice() } : null; },
+    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice(), fb: S.fb ? S.fb.id : null } : null; },
     builds() { return BUILDS.slice(); },
     cacheStats,
   });

@@ -448,38 +448,100 @@
   // ---------- sprites na resolução do aparelho (desempenho) ----------
   // Desenhos vetoriais caros e quase fixos (o corpo do Centrão, a maleta) vão para canvas fora da tela e são
   // reaproveitados. Só no canvas do jogo e na escala 1 (o retrato do diálogo continua vetorial).
-  const sprCache = new Map();
+  // Pintar um sprite grande no mesmo quadro em que ele é usado custa caro (o navegador rasteriza tudo na hora:
+  // 15-45 ms com a CPU 4× mais lenta). Por isso eles são pintados ANTES, numa fila (sprWant), em fatias: uma
+  // fatia (paint) por quadro, e o navegador rasteriza cada fatia no fim do próprio quadro.
+  const sprCache = new Map();   // chave → canvas pronto (cv._res = resolução em que foi pintado)
+  const sprStale = new Map();   // pintados na resolução anterior: desenhados escalados até a fila repintar
+  const sprRecipe = new Map();  // chave → { box, steps() } (receita, para repintar na troca de resolução)
+  const sprQ = [];              // fila: { key, box, steps: [fn(x)], i, cv, x, res }
   let sprRes = 0;
   function devRes() { return G.canvas && G.ctx ? G.canvas.width / G.W : 0; }
   function fontKey() { return document.fonts ? document.fonts.status : ''; } // refaz o texto quando a fonte chegar
-  // sprGet: só consulta (sem alocar nada por quadro); sprite: cria. box = [x, y, w, h] em unidades locais.
-  function sprGet(key) {
+  // troca de qualidade (resolução): os prontos viram "velhos" e voltam para a fila, na ordem em que estavam
+  function sprCheckRes() {
     const res = devRes();
-    if (res !== sprRes) { sprCache.clear(); sprRes = res; }
-    return sprCache.get(key) || null;
+    if (res === sprRes) return res;
+    const redo = [];
+    for (const [k, cv] of sprCache) { if (cv._res > 0) sprStale.set(k, cv); redo.push(k); }
+    for (const j of sprQ) redo.push(j.key);
+    sprCache.clear(); sprQ.length = 0; sprRes = res;
+    if (res > 0) for (const k of redo) { const r = sprRecipe.get(k); if (r) sprQ.push(sprJob(k, r.box, r.steps)); }
+    return res;
   }
-  function sprite(key, box, paint) {
-    const res = devRes();
-    if (!(res > 0)) return null;
-    if (res !== sprRes) { sprCache.clear(); sprRes = res; }
-    let cv = sprCache.get(key);
-    if (cv) return cv;
-    if (sprCache.size >= 24) sprCache.clear();
-    cv = document.createElement('canvas');
-    cv.width = Math.max(1, Math.ceil(box[2] * res)); cv.height = Math.max(1, Math.ceil(box[3] * res));
-    const x = cv.getContext('2d');
-    if (!x) return null;
-    x.setTransform(res, 0, 0, res, -box[0] * res, -box[1] * res);
-    x.lineJoin = 'round'; x.lineCap = 'round';
-    try { paint(x); } catch (err) { G.reportError(err, 'bosses sprite ' + key); }
+  function sprReset() { sprCache.clear(); sprStale.clear(); sprRecipe.clear(); sprQ.length = 0; sprRes = devRes(); }
+  function sprJob(key, box, steps) { return { key, box, steps: steps(), i: 0, cv: null, x: null, res: 0 }; }
+  // pinta a próxima fatia de um trabalho; true = terminou (entra no cache)
+  function sprStepJob(j) {
+    const res = sprRes;
+    if (!j.cv || j.res !== res) {
+      j.res = res; j.i = 0;
+      j.cv = document.createElement('canvas');
+      j.cv.width = Math.max(1, Math.ceil(j.box[2] * res)); j.cv.height = Math.max(1, Math.ceil(j.box[3] * res));
+      j.x = j.cv.getContext('2d');
+      if (!j.x) { j.i = j.steps.length; return true; }
+      j.x.setTransform(res, 0, 0, res, -j.box[0] * res, -j.box[1] * res);
+      j.x.lineJoin = 'round'; j.x.lineCap = 'round';
+    }
+    const x = j.x;
+    if (x) {
+      x.save();
+      try { j.steps[j.i](x); } catch (err) { G.reportError(err, 'bosses sprite ' + j.key); }
+      x.restore();
+    }
+    j.i++;
+    if (j.i < j.steps.length) return false;
+    if (x) sprPut(j.key, j.cv);
+    return true;
+  }
+  function sprPut(key, cv) {
+    if (sprCache.size >= 32) sprCache.delete(sprCache.keys().next().value); // rede de segurança (o mais antigo)
+    cv._res = sprRes;
     sprCache.set(key, cv);
-    return cv;
+    const old = sprStale.get(key);
+    if (old) { sprStale.delete(key); old.width = old.height = 1; }
+  }
+  // pede um sprite para logo (sem pintar agora). steps() devolve as fatias: [fn(ctx), ...]
+  function sprWant(key, box, steps) {
+    if (!sprRecipe.has(key)) sprRecipe.set(key, { box, steps });
+    if (sprCheckRes() > 0 && !sprCache.has(key) && !sprQ.some((j) => j.key === key)) sprQ.push(sprJob(key, box, steps));
+  }
+  // uma fatia da fila (chamado no máximo uma vez por quadro). true = ainda tem trabalho
+  function sprStep() {
+    if (!sprQ.length || !(sprCheckRes() > 0)) return false;
+    if (sprStepJob(sprQ[0])) sprQ.shift();
+    return sprQ.length > 0;
+  }
+  // descarta sprites (pronto, velho, na fila e receita) cuja chave satisfaz drop(key)
+  function sprDrop(drop) {
+    for (const k of Array.from(sprCache.keys())) if (drop(k)) sprCache.delete(k);
+    for (const k of Array.from(sprStale.keys())) if (drop(k)) { sprStale.get(k).width = 1; sprStale.delete(k); }
+    for (const k of Array.from(sprRecipe.keys())) if (drop(k)) sprRecipe.delete(k);
+    for (let i = sprQ.length - 1; i >= 0; i--) if (drop(sprQ[i].key)) sprQ.splice(i, 1);
+  }
+  // sprGet: só consulta (sem alocar nada por quadro). Um sprite da resolução anterior serve até sair o novo.
+  function sprGet(key) {
+    sprCheckRes();
+    return sprCache.get(key) || sprStale.get(key) || null;
+  }
+  // precisa AGORA: termina o trabalho da fila (ou pinta tudo de uma vez, como antes). paint = fn(ctx) ou steps()
+  function sprite(key, box, paint, steps) {
+    const res = sprCheckRes();
+    if (!(res > 0)) return null;
+    const cv = sprCache.get(key);
+    if (cv) return cv;
+    if (steps && !sprRecipe.has(key)) sprRecipe.set(key, { box, steps });
+    let k = sprQ.findIndex((j) => j.key === key);
+    const j = k >= 0 ? sprQ[k] : sprJob(key, box, steps || (() => [paint]));
+    while (!sprStepJob(j));
+    if (k >= 0) sprQ.splice(k, 1);
+    return sprCache.get(key) || null;
   }
   // Cola um sprite feito por sprite() no lugar do box. exact = a transformação atual não tem escala (só ±1):
   // copia pixel a pixel, alinhado à grade do aparelho e sem suavização (bem mais barato na CPU; idêntico na tela).
   function blitExact(c, spr, box, exact) {
     if (exact && c.getTransform) {
-      const m = c.getTransform(), res = sprRes;
+      const m = c.getTransform(), res = spr._res || sprRes;
       if (m.b === 0 && m.c === 0 && Math.abs(Math.abs(m.a) - res) < 0.02 && Math.abs(m.d - res) < 0.02) {
         c.save();
         c.setTransform(m.a < 0 ? -1 : 1, 0, 0, 1, Math.round(m.e), Math.round(m.f));
@@ -492,10 +554,14 @@
     c.drawImage(spr, box[0], box[1], box[2], box[3]);
   }
   // maleta (desenho compartilhado: na mão e sub-inimigo)
+  function caseKey(w, fl, label) { return 'case|' + w + '|' + (fl ? 1 : 0) + '|' + (label || '') + '|' + fontKey(); }
+  function caseSteps(w, fl, label) { return () => [(x2) => briefcaseVec(x2, 0, 0, w, 0, fl, label)]; }
+  function caseBox(w) { const B = w * 0.7 + 2; return [-B, -B, 2 * B, 2 * B]; }
+  function caseWant(w, label) { for (const fl of [false, true]) sprWant(caseKey(w, fl, label), caseBox(w), caseSteps(w, fl, label)); }
   function briefcase(c, x, y, w, rot, fl, label) {
     if (c === G.ctx) {
-      const B = w * 0.7 + 2, key = 'case|' + w + '|' + (fl ? 1 : 0) + '|' + (label || '') + '|' + fontKey();
-      const spr = sprGet(key) || sprite(key, [-B, -B, 2 * B, 2 * B], (x2) => briefcaseVec(x2, 0, 0, w, 0, fl, label));
+      const B = w * 0.7 + 2, key = caseKey(w, fl, label);
+      const spr = sprGet(key) || sprite(key, caseBox(w), null, caseSteps(w, fl, label));
       if (spr) { c.save(); c.translate(x, y); if (rot) c.rotate(rot); c.drawImage(spr, -B, -B, 2 * B, 2 * B); c.restore(); return; }
     }
     briefcaseVec(c, x, y, w, rot, fl, label);
@@ -536,14 +602,18 @@
   // (só no desenho vetorial: o retrato do diálogo). Área ocupada: CEN_BOX.
   const CEN_BOX = [-86, -56, 172, 126];
   const NO_WOB = () => 1;
-  function cenBody(c, sd, fl, hp, t, wobble, banner) {
+  // p0..p1 (para pintar o sprite em fatias; sem eles, tudo): 0 contorno, 1-6 calombos, 7 rasgos e faixa
+  function cenBody(c, sd, fl, hp, t, wobble, banner, p0, p1) {
+    if (p0 == null) { p0 = 0; p1 = 7; }
     const C = (col) => (fl ? WHITE : col);
     const wob = wobble ? (i, a) => 1 + 0.035 * Math.sin(t * 2.4 + i * 1.9 + a) : NO_WOB;
     // corpo: contorno único por fora + calombos
-    c.beginPath();
-    for (let i = 0; i < CEN_LUMPS.length; i++) { const L = CEN_LUMPS[i]; E(c, L[0], L[1], L[2] * wob(i, 0), L[3] * wob(i, 1.3)); }
-    c.lineWidth = 6; c.strokeStyle = INK; c.stroke();
-    for (let i = 0; i < CEN_LUMPS.length; i++) {
+    if (p0 <= 0) {
+      c.beginPath();
+      for (let i = 0; i < CEN_LUMPS.length; i++) { const L = CEN_LUMPS[i]; E(c, L[0], L[1], L[2] * wob(i, 0), L[3] * wob(i, 1.3)); }
+      c.lineWidth = 6; c.strokeStyle = INK; c.stroke();
+    }
+    for (let i = Math.max(0, p0 - 1), n = Math.min(CEN_LUMPS.length, p1); i < n; i++) {
       const L = CEN_LUMPS[i], rx = L[2] * wob(i, 0), ry = L[3] * wob(i, 1.3);
       c.beginPath(); E(c, L[0], L[1], rx, ry);
       c.fillStyle = C(L[4]); c.fill();
@@ -555,6 +625,7 @@
       c.lineWidth = 1.6; c.strokeStyle = 'rgba(16,20,24,0.4)'; c.beginPath(); E(c, L[0], L[1], rx, ry); c.stroke();
       if (i < 5) cenTorso(c, L, i, sd, hp);
     }
+    if (p1 < 7) return;
     // rasgos (dano)
     if (!fl && hp < 0.45) { rip(c, -55, 22, 16, 5, 0.5); rip(c, 52, 28, 14, 4.5, -0.4); }
     if (!fl && hp < 0.25) { rip(c, -20, 46, 13, 4, 0.1); rip(c, 30, 4, 10, 3.5, 1.2); }
@@ -568,13 +639,25 @@
     }
   }
   // sprite do corpo + parte fixa do rosto: muda só com o lado, o estado de dano, o letreiro e o flash
-  function cenBodySprite(side, fl, hpSt, banner) {
-    const key = fl ? 'cenF' : 'cen|' + side + '|' + hpSt + '|' + banner + '|' + fontKey();
-    return sprGet(key) || sprite(key, CEN_BOX, (x) => {
-      cenBody(x, SIDE[side], fl, hpSt === 2 ? 0.2 : hpSt === 1 ? 0.4 : 1, 0, false, banner);
-      cenFaceBase(x, fl);
-    });
+  const HP_ST = [1, 0.4, 0.2]; // hp usado no desenho de cada estado de dano (ver hpSt em drawCentrao)
+  function cenBodyKey(side, fl, hpSt, banner) { return fl ? 'cenF' : 'cen|' + side + '|' + hpSt + '|' + banner + '|' + fontKey(); }
+  // as fatias do corpo (5, uma por quadro na fila); o flash é barato (sem sombras nem detalhes): uma só
+  function cenBodySteps(side, fl, hpSt, banner) {
+    const sd = SIDE[side], hp = HP_ST[hpSt];
+    if (fl) return () => [(x) => { cenBody(x, sd, true, 1, 0, false, ''); cenFaceBase(x, true); }];
+    return () => [
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 0, 3),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 4, 5),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 6, 6),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 7, 7),
+      (x) => cenFaceBase(x, false),
+    ];
   }
+  function cenBodySprite(side, fl, hpSt, banner) {
+    const key = cenBodyKey(side, fl, hpSt, banner);
+    return sprGet(key) || sprite(key, CEN_BOX, null, cenBodySteps(side, fl, hpSt, banner));
+  }
+  function cenBodyWant(side, fl, hpSt, banner) { sprWant(cenBodyKey(side, fl, hpSt, banner), CEN_BOX, cenBodySteps(side, fl, hpSt, banner)); }
 
   // sapatinhos (muitos pés), braços com maleta e bandeira
   function cenShoes(c, t, fl) {
@@ -597,21 +680,26 @@
     sideFlag(c, hRx - 2, hRy, sd, t, fl);
   }
   // O REFLEXO (fase 2) é translúcido e não leva dano: pés, corpo, rosto (sorrisinho olhando pra frente), braços em
-  // repouso e bandeira ficam todos num sprite só. As cabecinhas continuam ao vivo (elas avisam os tiros dele).
+  // repouso e bandeira ficam todos num sprite só. As cabecinhas e a maleta (com a mão por cima) são ao vivo.
   const GH_BOX = [-104, -58, 216, 130];
-  const GH_FACE = { t: 0, mood: 'smug', mouth: 0, look: [0, 0.25], hp: 1, armL: 0, armR: 0, holdCase: true };
-  function cenGhostSprite(side, hpSt, banner, holdCase) {
-    const key = 'cenG|' + side + '|' + hpSt + '|' + banner + '|' + (holdCase ? 1 : 0) + '|' + fontKey();
-    return sprGet(key) || sprite(key, GH_BOX, (x) => {
-      const sd = SIDE[side];
-      cenShoes(x, 0, false);
-      cenBody(x, sd, false, hpSt === 2 ? 0.2 : hpSt === 1 ? 0.4 : 1, 0, false, banner);
-      cenFaceBase(x, false);
-      GH_FACE.hp = hpSt ? 0.5 : 1; GH_FACE.holdCase = holdCase;
-      cenFaceLive(x, GH_FACE, false);
-      cenArms(x, GH_FACE, sd, false, 0);
-    });
+  const GH_FACE = { t: 0, mood: 'smug', mouth: 0, look: [0, 0.25], hp: 1, armL: 0, armR: 0, holdCase: false };
+  function cenGhostKey(side, hpSt, banner) { return 'cenG|' + side + '|' + hpSt + '|' + banner + '|' + fontKey(); }
+  function cenGhostSteps(side, hpSt, banner) {
+    const sd = SIDE[side], hp = HP_ST[hpSt];
+    return () => [
+      (x) => { cenShoes(x, 0, false); cenBody(x, sd, false, hp, 0, false, banner, 0, 3); },
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 4, 5),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 6, 6),
+      (x) => cenBody(x, sd, false, hp, 0, false, banner, 7, 7),
+      (x) => { cenFaceBase(x, false); GH_FACE.hp = hpSt ? 0.5 : 1; cenFaceLive(x, GH_FACE, false); },
+      (x) => cenArms(x, GH_FACE, sd, false, 0),
+    ];
   }
+  function cenGhostSprite(side, hpSt, banner) {
+    const key = cenGhostKey(side, hpSt, banner);
+    return sprGet(key) || sprite(key, GH_BOX, null, cenGhostSteps(side, hpSt, banner));
+  }
+  function cenGhostWant(side, hpSt, banner) { sprWant(cenGhostKey(side, hpSt, banner), GH_BOX, cenGhostSteps(side, hpSt, banner)); }
 
   /**
    * Desenha o Centrão. k = escala (1 = jogo). S = estado visual:
@@ -636,11 +724,16 @@
     if (!S.ghost && !S.noShadow) { c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(0, 68, 66, 9, 0, 0, TAU); c.fill(); }
     const hpSt = hp < 0.25 ? 2 : hp < 0.45 ? 1 : 0;
     const exact = sq === 0 && (fx === 1 || fx === -1);
-    const ghostSpr = game && S.ghost && !S.orbit && !fl ? cenGhostSprite(side, hpSt, banner, !!S.holdCase) : null;
+    const ghostSpr = game && S.ghost && !S.orbit && !fl ? cenGhostSprite(side, hpSt, banner) : null;
     if (!ghostSpr) cenShoes(c, t, fl);
     // cabecinhas atrás do corpo
     if (!S.orbit) for (let i = 0; i < 8; i++) { const pop = S.pops ? S.pops[i] : 0.5; if (pop < 0.06) continue; const p = cenSlot(i, pop); cenHead(c, p[0], p[1], i, S, fl); }
-    if (ghostSpr) { blitExact(c, ghostSpr, GH_BOX, exact); c.restore(); return; }
+    if (ghostSpr) {
+      blitExact(c, ghostSpr, GH_BOX, exact);
+      // maleta na mão esquerda (braço em repouso: mão em -86, 34), com a mão por cima, como em cenArms
+      if (S.holdCase) { briefcase(c, -88, 43, 22, -0.15, false, 'EMENDA'); c.beginPath(); O(c, -86, 34, 6.2); inked(c, CEN_SKIN, 2); }
+      c.restore(); return;
+    }
     // corpo + rosto
     const spr = game ? cenBodySprite(side, fl, hpSt, banner) : null;
     if (spr) {

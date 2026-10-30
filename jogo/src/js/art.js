@@ -952,6 +952,15 @@
   const pcache = new Map(), pseen = new Map();
   let pRes = 0, pPixels = 0;
   const P_MAX = 600, P_BUDGET = 5.5e6; // no máximo ~22 MB de sprites
+  // Troca de resolução do canvas (degrau da qualidade automática, giro da tela): o cache antigo
+  // vira "velho" (pStale) em vez de ser jogado fora. Um sprite velho continua sendo desenhado,
+  // escalado pelo caminho não exato, até ser repintado na resolução nova: nos primeiros ~10 s só
+  // em segundo plano (na frente da fila de aquecimento); depois disso o que não foi usado no
+  // último segundo sai e o que ainda está na tela é repintado no quadro, dentro do teto por
+  // quadro. O mapa velho some quando esvazia (ou de vez aos 20 s).
+  let pStale = null, pStalePx = 0, pStaleT = 0, pStaleChk = -1, pStaleHit = false, pStaleLate = false;
+  const STALE_MS = 10000;
+  let pFramed = 0; // sprites pintados dentro de quadros (testes/perfil: cacheStats().framed)
   const BOX_BODY = [-50, 2, 100, 58], BOX_HEAD = [-53, -77, 106, 106], BOX_ARMS = [-47, -21, 94, 48];
   // Teto de sprites NOVOS por quadro: uma onda inteira de ministros (ou a entrada de um chefão)
   // pintava 20+ sprites no mesmo quadro (35–55 ms a 4x). Passou do teto, o personagem sai em
@@ -962,18 +971,49 @@
   let rafN = 0;
   if (typeof requestAnimationFrame !== 'undefined') { const tick = () => { rafN++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
   function frameId() { return rafN; }
+  // repinta na resolução nova um sprite velho que está na tela (o estado de setScale vai junto)
+  function staleJob(key, box, s, res, paint) {
+    const sz = Math.round(s * 100), fl = FL;
+    WARM.q.unshift(() => {
+      if (res !== pRes || pcache.has(key)) return;
+      setScale(sz, fl);
+      partSprite(key, box, s, res, paint, true);
+    });
+    pumpWarmSoon();
+  }
+  function frameRoom() {
+    const f = frameId();
+    if (f !== pFrame) { pFrame = f; pMade = 0; }
+    if (pMade >= P_PER_FRAME) return false;
+    pMade++;
+    return true;
+  }
   function partSprite(key, box, s, res, paint, force) {
     let cv = pcache.get(key);
     if (cv) { pcache.delete(key); pcache.set(key, cv); return cv; } // LRU
+    const stale = pStale !== null ? pStale.get(key) : undefined;
     if (!force) {
-      const n = (pseen.get(key) || 0) + 1;      // só guarda o que aparece mais de uma vez
-      if (n < 2) { if (pseen.size > 3000) pseen.clear(); pseen.set(key, n); return null; }
-      const f = frameId();
-      if (f !== pFrame) { pFrame = f; pMade = 0; }
-      if (pMade >= P_PER_FRAME) return null;    // fica para o próximo quadro (pseen continua em 1)
-      pMade++;
-      pseen.delete(key);
+      if (stale !== undefined) {
+        // sprite da resolução anterior: desenha o velho (escalado) e pede a repintura em segundo
+        // plano, na frente da fila. Repintar dentro do quadro logo de cara gastava o teto inteiro
+        // por ~10 s depois do degrau de qualidade, justo quando o jogo já está pesado; só depois
+        // dos 10 s (pStaleLate) o que sobrou na tela é trocado no quadro, dentro do teto.
+        stale._hit = rafN;
+        if (!pStaleLate || !frameRoom()) {
+          pStaleHit = true;
+          if (!stale._rq) { stale._rq = 1; staleJob(key, box, s, res, paint); }
+          return stale;
+        }
+        pFramed++;
+      } else {
+        const n = (pseen.get(key) || 0) + 1;      // só guarda o que aparece mais de uma vez
+        if (n < 2) { if (pseen.size > 3000) pseen.clear(); pseen.set(key, n); return null; }
+        if (!frameRoom()) return null;            // fica para o próximo quadro (pseen continua em 1)
+        pseen.delete(key);
+        pFramed++;
+      }
     }
+    if (stale !== undefined) { pStale.delete(key); pStalePx -= stale.width * stale.height; }
     const k = s * res;
     cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.ceil(box[2] * k)); cv.height = Math.max(1, Math.ceil(box[3] * k));
@@ -1016,8 +1056,55 @@
   // resolução dos sprites do jogo (px do aparelho por px lógico); muda com a qualidade
   function gameRes() {
     const res = G.canvas ? G.canvas.width / G.W : 0;
-    if (res > 0 && res !== pRes) { pcache.clear(); pseen.clear(); pRes = res; pPixels = 0; WARM.q.length = 0; WARM.seen.clear(); }
+    if (res > 0 && res !== pRes) changeRes(res);
+    else if (pStale !== null && rafN !== pStaleChk) { // uma checagem por quadro
+      pStaleChk = rafN;
+      const age = performance.now() - pStaleT;
+      if (!pStale.size || age > STALE_MS * 2) dropStale();
+      else if (age > STALE_MS && !pStaleLate) {
+        // 10 s: solta o que não apareceu no último ~1 s; o resto é trocado no quadro (no teto)
+        pStaleLate = true;
+        for (const [key, cv] of pStale) if (!(rafN - (cv._hit || -1e9) <= 60)) { pStalePx -= cv.width * cv.height; pStale.delete(key); }
+        if (!pStale.size) dropStale();
+      }
+    }
     return res;
+  }
+  // (sem encolher os canvas na hora: zerar a largura de ~150 canvas custou 44 ms num quadro a 4x;
+  // o coletor de lixo devolve a memória, como no pcache)
+  function dropStale() {
+    pStale = null; pStalePx = 0; pStaleLate = false;
+  }
+  function changeRes(res) {
+    const first = !(pRes > 0);
+    pRes = res;
+    // o cache atual vira velho (somado ao velho de uma troca anterior, até o mesmo orçamento);
+    // os sprites com resolução própria (arte do título, chave com '@') continuam valendo
+    const st = pStale !== null ? pStale : new Map();
+    if (pStale === null) pStalePx = 0;
+    const own = [];
+    for (const [key, cv] of pcache) {
+      if (key.indexOf('@') >= 0) { own.push(key, cv); continue; }
+      const prev = st.get(key);
+      if (prev !== undefined) { st.delete(key); pStalePx -= prev.width * prev.height; }
+      st.set(key, cv); pStalePx += cv.width * cv.height;
+    }
+    pcache.clear(); pPixels = 0;
+    for (let i = 0; i < own.length; i += 2) { pcache.set(own[i], own[i + 1]); pPixels += own[i + 1].width * own[i + 1].height; }
+    while (st.size && pStalePx > P_BUDGET) { // os menos usados saem primeiro
+      const k0 = st.keys().next().value, c0 = st.get(k0);
+      pStalePx -= c0.width * c0.height; st.delete(k0);
+    }
+    for (const cv of st.values()) cv._rq = 0; // a fila antiga (com os pedidos de repintura) vai embora
+    pStale = st.size ? st : null; pStalePx = pStale !== null ? pStalePx : 0;
+    pStaleT = performance.now(); pStaleChk = rafN; pStaleLate = false;
+    // aquecimento: a fila antiga era da resolução anterior; repõe já quem está na tela agora
+    // (visto nos últimos ~90 quadros), do mais recente para o mais antigo, até a fila encher
+    const live = [];
+    if (!first) for (const e of WARM.live.values()) if (rafN - e.f <= 90) live.push(e);
+    live.sort((a, b) => b.f - a.f);
+    clearWarmQueue(); WARM.seen.clear(); WARM.live.clear();
+    for (const e of live) if (queueWarm(e.sk, e.sz, e.spec, e.mood, e.pose, e.big)) { WARM.seen.set(e.id, 2); WARM.live.set(e.id, e); }
   }
   // resOver: resolução própria (arte do título, fora do canvas do jogo)
   function personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY, resOver) {
@@ -1047,6 +1134,7 @@
     const skin = flash ? WHITE : spec.skin || '#e8b48a';
     if (!resOver) noteWarm(sk, sz, spec, mood, pose, false);
     setScale(sz, flash);
+    pStaleHit = false;
     let bodyS = null, armS = null;
     if (hasBody) {
       bodyS = partSprite(base + '|b|' + pose + '|' + sw + '|' + (arms ? 1 : 0), BOX_BODY, s, res, (c) => {
@@ -1074,7 +1162,7 @@
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
     let m = null;
-    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+    if (EXACT && !flash && k === 1 && !pStaleHit && ctx.getTransform) { // sprite velho: tamanho de outra resolução, vai escalado
       m = ctx.getTransform();
       if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
     }
@@ -1122,6 +1210,7 @@
     const skin = flash ? WHITE : spec.skin || '#e8b48a';
     noteWarm(sk, sz, spec, mood, pose, true);
     setScale(sz, flash);
+    pStaleHit = false;
     const bodyS = partSprite(bodyKey(sk, sz, flash, pose, sw, arms), BOX_BODY, s, res, (c) => paintBigBody(c, spec, body, skin, pose, sw, arms, raised));
     if (!bodyS) return false;
     setScale(size, flash);
@@ -1131,7 +1220,7 @@
     if (o.alpha != null) ctx.globalAlpha *= o.alpha;
     if (flash) ctx.scale(1.07 * face * k, 0.93 * k); else ctx.scale(face * k, k);
     let m = null;
-    if (EXACT && !flash && k === 1 && ctx.getTransform) {
+    if (EXACT && !flash && k === 1 && !pStaleHit && ctx.getTransform) {
       m = ctx.getTransform();
       if (m.b !== 0 || m.c !== 0 || Math.abs(Math.abs(m.a) - res) > 0.02 || Math.abs(m.d - res) > 0.02) m = null;
     }
@@ -1164,25 +1253,47 @@
   // mais comuns (balanço, olhar para os lados/para baixo, flash do acerto) são pintadas fora
   // do quadro, em fatias de ~3 ms entre os quadros. G.Art.prewarm(lista) faz o mesmo antes
   // de o personagem entrar (introdução da fase, aviso do chefão).
-  const WARM = { q: [], seen: new Map(), timer: 0 };
+  // WARM.seen: id → 1 (visto uma vez) | 2 (já na fila); WARM.live: id → quem foi para a fila e
+  // em que quadro apareceu por último (na troca de resolução, quem está na tela volta para a fila).
+  // q2: fila de baixa prioridade (cabeças piscando), só anda com a fila principal vazia
+  const WARM = { q: [], q2: [], seen: new Map(), live: new Map(), timer: 0 };
+  const WARM_CAP = 400; // tarefas na fila principal (cada combinação pequena: 17 a 27)
   const SWAYS = [-1, -0.5, 0, 0.5, 1];
+  const LOOKS = [[-1, 0.5], [0, 0.5], [1, 0.5], [-1, 0], [0, 0], [1, 0]];
   function noteWarm(sk, sz, spec, mood, pose, big) {
     const id = sk + '|' + sz + '|' + mood + '|' + pose;
-    const n = (WARM.seen.get(id) || 0) + 1;
-    if (n > 2) return;
-    if (WARM.seen.size > 1500) WARM.seen.clear();
-    WARM.seen.set(id, n);
-    if (n === 2) queueWarm(sk, sz, spec, mood, pose, big);
+    const n = WARM.seen.get(id) || 0;
+    if (n >= 2) { const e = WARM.live.get(id); if (e !== undefined) e.f = rafN; return; }
+    if (WARM.seen.size > 1500) { WARM.seen.clear(); WARM.live.clear(); }
+    // 2ª vez: vai para a fila; fila cheia = continua em 1 e tenta de novo na próxima aparição
+    if (n === 1 && queueWarm(sk, sz, spec, mood, pose, big)) markWarm(id, sk, sz, spec, mood, pose, big, rafN);
+    else WARM.seen.set(id, 1);
   }
+  function markWarm(id, sk, sz, spec, mood, pose, big, f) {
+    WARM.seen.set(id, 2);
+    WARM.live.set(id, { id, sk, sz, spec, mood, pose, big, f });
+  }
+  // Põe na fila as variações de uma combinação (spec × tamanho × humor × pose). false = fila cheia.
+  // Ordem: sem flash (corpo nos 5 balanços, braços erguidos nas 5 fases, cabeça em 6 olhares),
+  // flash (corpo, braços, cabeça); as cabeças piscando (~4% do tempo) vão para a fila q2.
   function queueWarm(sk, sz, spec, mood, pose, big) {
-    if (WARM.q.length > 400) return;
+    if (WARM.q.length > WARM_CAP) return false;
     const body = spec.body || 'suit';
     const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
     const arms = body !== 'none' && spec.arms !== false;
-    const res = pRes;
+    const res = pRes, s = sz / 100;
     const J = (fn) => WARM.q.push(fn);
+    const head = (flash, skin, blink, L) => (blink ? WARM.q2 : WARM.q).push(() => {
+      if (res !== pRes) return;
+      setScale(sz, flash);
+      partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|' + (blink ? 1 : 0) + '|0|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
+        BLINK = blink; NO_EMOTES = true;
+        drawHead(c, spec, { mouth: 0 }, mood, -14, 0, skin, L[0], L[1]);
+        BLINK = null; NO_EMOTES = false;
+      }, true);
+    });
     for (const flash of [false, true]) {
-      const skin = flash ? WHITE : spec.skin || '#e8b48a', s = sz / 100;
+      const skin = flash ? WHITE : spec.skin || '#e8b48a';
       if (body !== 'none') for (const sw of SWAYS) {
         J(() => {
           if (res !== pRes) return;
@@ -1195,32 +1306,34 @@
         });
       }
       if (big) continue;
-      // cabeça: olhando para baixo (o Fusca quase sempre está embaixo) e reto; no flash, uma só
-      const looks = flash ? [[0, 0]] : [[-1, 0.5], [0, 0.5], [1, 0.5], [-1, 0], [0, 0], [1, 0]];
-      for (const L of looks) {
+      // braços erguidos (aceno, punho, mãos para cima): uma imagem por fase da oscilação
+      if (arms && raised) for (const fq of SWAYS) {
         J(() => {
           if (res !== pRes) return;
           setScale(sz, flash);
-          partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|0|0|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
-            BLINK = false; NO_EMOTES = true;
-            drawHead(c, spec, { mouth: 0 }, mood, -14, 0, skin, L[0], L[1]);
-            BLINK = null; NO_EMOTES = false;
-          }, true);
+          partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|a|' + pose + '|' + fq, BOX_ARMS, s, res, (c) => drawArms(c, poseHands(pose, 0, fq), spec, body, skin, pose), true);
         });
       }
+      // cabeça: olhando para baixo (o Fusca quase sempre está embaixo) e reto; no flash, uma só
+      if (flash) head(true, skin, false, [0, 0]);
+      else for (const L of LOOKS) head(false, skin, false, L);
     }
+    if (!big && mood !== 'laugh' && mood !== 'hurt' && WARM.q2.length < WARM_CAP) { const skin = spec.skin || '#e8b48a'; for (const L of LOOKS) head(false, skin, true, L); }
     pumpWarmSoon();
+    return true;
   }
-  function pumpWarmSoon() { if (!WARM.timer && WARM.q.length) WARM.timer = setTimeout(pumpWarm, 0); }
+  function pumpWarmSoon() { if (!WARM.timer && (WARM.q.length || WARM.q2.length)) WARM.timer = setTimeout(pumpWarm, 0); }
+  function clearWarmQueue() { WARM.q.length = 0; WARM.q2.length = 0; }
   function pumpWarm() {
     WARM.timer = 0;
-    if (typeof document !== 'undefined' && document.hidden) { if (WARM.q.length) WARM.timer = setTimeout(pumpWarm, 150); return; }
+    const left = () => WARM.q.length + WARM.q2.length;
+    if (typeof document !== 'undefined' && document.hidden) { if (left()) WARM.timer = setTimeout(pumpWarm, 150); return; }
     const t0 = performance.now();
-    while (WARM.q.length && performance.now() - t0 < 3) {
-      const fn = WARM.q.shift();
-      try { fn(); } catch (err) { G.reportError(err, 'art.warm'); WARM.q.length = 0; }
+    while (left() && performance.now() - t0 < 3) {
+      const fn = WARM.q.length ? WARM.q.shift() : WARM.q2.shift();
+      try { fn(); } catch (err) { G.reportError(err, 'art.warm'); clearWarmQueue(); }
     }
-    if (WARM.q.length) WARM.timer = setTimeout(pumpWarm, 4);
+    if (left()) WARM.timer = setTimeout(pumpWarm, 4);
   }
   // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose? }] — pinta antes de o personagem
   // aparecer. Sem lista: aquece os sprites dos itens (ver warmItems).
@@ -1235,8 +1348,9 @@
       const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
       const id = sk + '|' + sz + '|' + mood + '|' + pose;
       if ((WARM.seen.get(id) || 0) >= 2) continue;
-      WARM.seen.set(id, 2);
-      queueWarm(sk, sz, it.spec, mood, pose, sz >= 70);
+      // só marca como feito o que entrou na fila (fila cheia: fica para a 2ª aparição no jogo)
+      if (WARM.seen.size > 1500) { WARM.seen.clear(); WARM.live.clear(); }
+      if (queueWarm(sk, sz, it.spec, mood, pose, sz >= 70)) markWarm(id, sk, sz, it.spec, mood, pose, sz >= 70, -1e9);
     }
   }
 
@@ -1662,6 +1776,7 @@
         const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
         const x = cv.getContext('2d'); x.translate(32, 32);
         for (const ty of ['power', 'bomb', 'shield', 'life', 'cafe', 'pix', 'pix5', 'mala']) pickup(x, ty, 0, 0, 0.3, { wtype: 'voto', cycle: true });
+        pickup(x, 'power', 0, 0, 0.3, { wtype: 'voto', restore: true }); // fonte menor do +1 do P da morte
         cv.width = 1;
       },
     ];
@@ -1682,7 +1797,7 @@
   // fontes chegaram depois do boot: refaz os sprites com texto (e o resto do cache de personagens)
   function fontsReady() {
     spriteCache.clear();
-    pcache.clear(); pseen.clear(); pPixels = 0; WARM.q.length = 0; WARM.seen.clear();
+    pcache.clear(); pseen.clear(); pPixels = 0; dropStale(); clearWarmQueue(); WARM.seen.clear(); WARM.live.clear();
     TL.key = '';
     if (fuscaSpr) { fuscaSpr.c.width = 1; fuscaSpr = null; }
     warmItems();
@@ -1734,16 +1849,17 @@
         c.beginPath(); O(c, 0, 0, 9.4); fillP(c, '#141a2e');
         c.beginPath(); c.arc(0, 0, 11, PI * 1.1, PI * 1.55); strokeP(c, 'rgba(255,255,255,0.6)', 1.4);
         weaponIcon(c, w, 0, 0.5, 13.5);
-        // etiqueta "P"
-        c.beginPath(); O(c, 9, -9, 5.4); c.lineWidth = 2.2; c.strokeStyle = INK; c.stroke(); fillP(c, WHITE);
-        c.fillStyle = INK; c.font = '900 7.4px ' + FD(); c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillText('P', 9.2, -8.5);
+        // etiqueta "P" (o P que caiu na morte, item.restore: "+1" dourado, devolve o nível perdido)
+        const back = !!item.restore;
+        c.beginPath(); O(c, 9, -9, 5.4); c.lineWidth = 2.2; c.strokeStyle = INK; c.stroke(); fillP(c, back ? '#ffd23f' : WHITE);
+        c.fillStyle = INK; c.font = '900 ' + (back ? 6.4 : 7.4) + 'px ' + FD(); c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(back ? '+1' : 'P', back ? 9 : 9.2, -8.5);
         c.restore();
-        // nome curto da arma
-        const nm = WNAME[w];
+        // nome curto da arma ("DE VOLTA" no P da morte)
+        const nm = back ? 'DE VOLTA' : WNAME[w];
         c.font = '900 7px ' + FB(); c.textAlign = 'center'; c.textBaseline = 'middle';
         c.lineWidth = 2.6; c.strokeStyle = INK; c.lineJoin = 'round'; c.strokeText(nm, x, y + bob + 19);
-        c.fillStyle = col; c.fillText(nm, x, y + bob + 19);
+        c.fillStyle = back ? WHITE : col; c.fillText(nm, x, y + bob + 19);
         return;
       }
       case 'bomb': {
@@ -2455,16 +2571,20 @@
   };
 
   SC.planalto = function (c, L, t) {
+    // a mesma cena abre a história (ameaça) e o final: no final (G.state 'ending') o chefão
+    // aparece derrotado — sem o brilho vermelho, olhos fechados, afundado atrás do palácio e
+    // um carimbo de PAGO na fachada
+    const won = G.state === 'ending';
     c.fillStyle = vgrad(c, L.y, 178, [0, '#060a1c', 0.6, '#1c1440', 1, '#4a1630']); c.fillRect(L.x, L.y, L.w, 178 - L.y);
     stars(c, L, t, 40, 120, 11);
     // lua
     c.beginPath(); O(c, 52, 40, 16); fillP(c, '#f4f1e8');
     c.beginPath(); O(c, 59, 36, 14); fillP(c, '#0b1026');
     // brilho vermelho ameaçador
-    glow(c, 180, 120, 180, '#e63946', 0.5);
+    if (!won) glow(c, 180, 120, 180, '#e63946', 0.5);
     // silhueta barbuda gigante atrás do palácio
     const br = Math.sin(t * 1.6) * 1.5;
-    c.save(); c.translate(180, 96 + br);
+    c.save(); c.translate(180, won ? 104 + br * 0.5 : 96 + br);
     const sil = () => {
       c.beginPath();
       c.moveTo(-110, 80); c.quadraticCurveTo(-100, 34, -52, 26); c.lineTo(52, 26); c.quadraticCurveTo(100, 34, 110, 80); c.closePath();
@@ -2474,24 +2594,33 @@
       for (let i = 0; i < 2; i++) { const sd = i ? 1 : -1; c.moveTo(sd * 44, 4); c.bezierCurveTo(sd * 54, -14, sd * 52, -36, sd * 32, -48); c.quadraticCurveTo(sd * 40, -30, sd * 38, -12); c.closePath(); }
     };
     // luz de contorno vermelha (silhueta deslocada) + silhueta escura por cima
-    c.save(); c.translate(-2.5, -2.5); sil(); fillP(c, 'rgba(255,90,90,0.75)'); c.restore();
-    c.save(); c.translate(2.5, -1.5); sil(); fillP(c, 'rgba(255,170,90,0.35)'); c.restore();
+    c.save(); c.translate(-2.5, -2.5); sil(); fillP(c, won ? 'rgba(150,160,195,0.4)' : 'rgba(255,90,90,0.75)'); c.restore();
+    c.save(); c.translate(2.5, -1.5); sil(); fillP(c, won ? 'rgba(120,130,165,0.2)' : 'rgba(255,170,90,0.35)'); c.restore();
     sil(); fillP(c, '#120914');
     // textura da barba
     c.beginPath();
     for (let i = 0; i < 5; i++) { const bx = -24 + i * 12; c.moveTo(bx - 4, 32 + Math.abs(i - 2) * -3); c.quadraticCurveTo(bx, 40 + Math.abs(i - 2) * -3, bx + 4, 32 + Math.abs(i - 2) * -3); }
     c.moveTo(-36, 4); c.quadraticCurveTo(-30, 12, -22, 10); c.moveTo(36, 4); c.quadraticCurveTo(30, 12, 22, 10);
-    strokeP(c, 'rgba(255,90,90,0.35)', 2);
-    // olhos e sorrisinho
-    c.beginPath(); c.moveTo(-26, -24); c.lineTo(-8, -18); c.lineTo(-10, -14); c.lineTo(-25, -17); c.closePath();
-    c.moveTo(26, -24); c.lineTo(8, -18); c.lineTo(10, -14); c.lineTo(25, -17); c.closePath();
-    fillP(c, '#ffd23f');
-    c.beginPath(); c.moveTo(-16, 16); c.quadraticCurveTo(0, 28, 16, 16); c.quadraticCurveTo(0, 22, -16, 16); c.closePath(); fillP(c, '#f4f1e8');
-    // mão erguida com o espeto de picanha
-    c.beginPath(); c.moveTo(78, 40); c.lineTo(96, -12); strokeP(c, '#120914', 20);
-    c.beginPath(); O(c, 97, -16, 12); fillP(c, '#120914');
-    c.beginPath(); c.moveTo(97, -16); c.lineTo(112, -76); strokeP(c, '#8a96a8', 2.5);
-    for (let i = 0; i < 3; i++) { c.beginPath(); E(c, 103 + i * 2.6, -36 - i * 12, 9, 6.5, -0.25); inked(c, i === 1 ? '#c0283a' : '#9b2335', 1.6); c.beginPath(); E(c, 101 + i * 2.6, -38 - i * 12, 7, 2, -0.25); fillP(c, '#f4e1c8'); }
+    strokeP(c, won ? 'rgba(150,160,195,0.25)' : 'rgba(255,90,90,0.35)', 2);
+    if (won) {
+      // derrotado: olhos fechados (pálpebras caídas), boquinha murcha e a mão com o espeto abaixada
+      c.beginPath();
+      c.moveTo(-26, -16); c.quadraticCurveTo(-17, -22, -8, -16);
+      c.moveTo(26, -16); c.quadraticCurveTo(17, -22, 8, -16);
+      c.moveTo(-10, 20); c.quadraticCurveTo(0, 15, 10, 20);
+      strokeP(c, '#9a8ea8', 2.4);
+    } else {
+      // olhos e sorrisinho
+      c.beginPath(); c.moveTo(-26, -24); c.lineTo(-8, -18); c.lineTo(-10, -14); c.lineTo(-25, -17); c.closePath();
+      c.moveTo(26, -24); c.lineTo(8, -18); c.lineTo(10, -14); c.lineTo(25, -17); c.closePath();
+      fillP(c, '#ffd23f');
+      c.beginPath(); c.moveTo(-16, 16); c.quadraticCurveTo(0, 28, 16, 16); c.quadraticCurveTo(0, 22, -16, 16); c.closePath(); fillP(c, '#f4f1e8');
+      // mão erguida com o espeto de picanha
+      c.beginPath(); c.moveTo(78, 40); c.lineTo(96, -12); strokeP(c, '#120914', 20);
+      c.beginPath(); O(c, 97, -16, 12); fillP(c, '#120914');
+      c.beginPath(); c.moveTo(97, -16); c.lineTo(112, -76); strokeP(c, '#8a96a8', 2.5);
+      for (let i = 0; i < 3; i++) { c.beginPath(); E(c, 103 + i * 2.6, -36 - i * 12, 9, 6.5, -0.25); inked(c, i === 1 ? '#c0283a' : '#9b2335', 1.6); c.beginPath(); E(c, 101 + i * 2.6, -38 - i * 12, 7, 2, -0.25); fillP(c, '#f4e1c8'); }
+    }
     c.restore();
     // holofotes
     for (let i = 0; i < 2; i++) {
@@ -2506,7 +2635,7 @@
     c.fillStyle = '#ffcf6b';
     for (let i = 0; i < 26; i++) { if (hash(i * 3.3) > 0.3) { c.globalAlpha = hash(i) > 0.8 ? 0.6 + 0.4 * Math.sin(t * 4 + i) : 0.9; c.fillRect(16 + i * 12.8, 132, 9.6, 18); } }
     c.globalAlpha = 1;
-    c.fillStyle = '#e63946'; c.globalAlpha = 0.55; c.fillRect(146, 132, 68, 18); c.globalAlpha = 1;
+    if (!won) { c.fillStyle = '#e63946'; c.globalAlpha = 0.55; c.fillRect(146, 132, 68, 18); c.globalAlpha = 1; }
     c.beginPath(); c.rect(6, 120, 348, 9); inked(c, '#e9edf3', 1.6);
     c.beginPath(); c.rect(24, 154, 312, 22); fillP(c, '#1a1626');
     // colunas
@@ -2524,6 +2653,15 @@
     for (let i = 0; i < 6; i++) { c.beginPath(); O(c, 274 + i * 6, 186, 1.6 + Math.abs(Math.sin(t * 7 + i)) * 1.2); fillP(c, i % 2 ? '#ff8c1a' : '#ffd23f'); }
     smokePuffs(c, 288, 182, t, 9, 7, 'rgba(200,190,210,0.28)', -60, 6);
     c.beginPath(); c.moveTo(L.x, 176); c.lineTo(L.x + L.w, 176); strokeP(c, 'rgba(255,255,255,0.12)', 1);
+    if (won) { // carimbo "PAGO" na fachada (a fatura foi entregue)
+      c.save(); c.translate(180, 142); c.rotate(-0.14);
+      c.beginPath(); RR(c, -33, -12.5, 66, 25, 3); fillP(c, 'rgba(255,246,236,0.16)'); strokeP(c, INK, 4.6); strokeP(c, '#ff4d5e', 2.6);
+      c.beginPath(); RR(c, -29, -8.6, 58, 17.2, 2); strokeP(c, 'rgba(255,77,94,0.85)', 1);
+      c.font = '900 15px ' + FD(); c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.lineWidth = 3.2; c.strokeStyle = INK; c.lineJoin = 'round'; c.strokeText('PAGO', 0, 1);
+      c.fillStyle = '#ff4d5e'; c.fillText('PAGO', 0, 1);
+      c.restore();
+    }
   };
 
   function sceneFallback(c, L, t, id) {
@@ -2778,7 +2916,7 @@
     prewarm,
     fontsReady,
     // depuração: tamanho do cache de sprites dos personagens
-    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, items: spriteCache.size, specs: specIds.size, exact: EXACT }; },
+    cacheStats() { return { sprites: pcache.size, pixels: pPixels, pending: pseen.size, warmQueue: WARM.q.length, warmQueue2: WARM.q2.length, items: spriteCache.size, specs: specIds.size, exact: EXACT, stale: pStale !== null ? pStale.size : 0, stalePixels: pStalePx, framed: pFramed }; },
     _exact(v) { EXACT = !!v; }, // testes A/B da cópia exata
   });
 })();

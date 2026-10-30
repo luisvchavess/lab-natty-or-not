@@ -536,7 +536,7 @@
     try { if (!coarseMQ && window.matchMedia) coarseMQ = window.matchMedia('(pointer: coarse)'); } catch (e) { /* nada */ }
     const land = vw > vh * 1.15 && !!(coarseMQ && coarseMQ.matches);
     document.body.classList.toggle('rotate-hint', land);
-    // celular (tela baixa) acabou de deitar: pausa uma vez. Tablet deitado continua jogável (base.css só avisa).
+    // celular (tela baixa) deitado: pausa (e continua pausando enquanto estiver deitado). Tablet deitado continua jogável (base.css só avisa).
     const phoneLand = land && vh < 560;
     wasPhoneLand = phoneLand; // frame() pausa enquanto estiver assim (vale também para a 'play' que começa deitada)
     if (phoneLand && G.state === 'play') G.pause();
@@ -2354,18 +2354,20 @@
     // quadro longo conta (limitado a 120 ms para um soluço isolado não pesar demais na média)
     QM.ema += ((dtMs < 120 ? dtMs : 120) - QM.ema) * 0.05;
     QM.slowT = QM.ema > 22 ? QM.slowT + dtMs : 0;
-    QM.verySlowT = QM.ema > 36 ? QM.verySlowT + dtMs : 0;
+    QM.verySlowT = QM.ema > 32 ? QM.verySlowT + dtMs : 0;
     QM.stageN++;
     if (QM.stageN > 120 && QM.ema > QM.stageMax) QM.stageMax = QM.ema;
     if (!G.qualityAuto()) return;
     const i = Q_ORDER.indexOf(G.quality);
     if (i <= 0) return;
-    // Muito lento (< 28 fps) por 1,5 s: desce dois níveis de uma vez (high -> low). O 'mid' só tira
-    // ~25% da rasterização, não salvaria; assim o celular fraco paga UMA reconstrução de caches, não duas.
-    const drop = QM.verySlowT > 1500 ? 2 : QM.slowT > 2500 ? 1 : 0;
-    if (!drop) return;
+    // Lento (> 22 ms) por 2,5 s, ou muito lento (> 32 ms, < 31 fps) por 1,5 s: desce. Se a média ainda está
+    // acima de 32 ms, desce dois níveis de uma vez (high -> low): o 'mid' só tira ~20-25% do quadro, não
+    // salvaria; assim o celular fraco paga UMA reconstrução de caches, não duas.
+    // Só o nível que caiu fica marcado: o 'mid' pulado ainda pode voltar no começo de uma fase.
+    if (!(QM.verySlowT > 1500 || QM.slowT > 2500)) return;
+    const drop = QM.ema > 32 ? 2 : 1; // a média (~20 quadros) na hora da decisão escolhe o tamanho do degrau
     QM.slowT = 0; QM.verySlowT = 0; QM.ema = 16.7;
-    for (let j = Math.max(0, i - drop); j < i; j++) QM.failed[Q_ORDER[j + 1]] = true;
+    QM.failed[G.quality] = true;
     setAutoTier(Q_ORDER[Math.max(0, i - drop)]);
   }
   // Começo de fase: sobe um nível se a fase anterior inteira rodou liso (média nunca acima de 18 ms:
@@ -2428,7 +2430,7 @@
   G.debug = {
     god: false, auto: false, timeScale: 1, hitboxes: false, skipUI: false, skipDialogue: false, skipStory: false, autoContinue: false,
     qualityForced: null, // ?quality=high|mid|low (testes): fixa a qualidade e desliga o modo automático
-    qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN }; },
+    qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN, failed: Object.keys(QM.failed) }; },
     // pula direto para o chefão da fase atual
     toBoss() {
       const g = G.game; if (!g || !g.stage || !g.stage.boss) return;

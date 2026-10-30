@@ -50,13 +50,15 @@ G.saveGame()   // persist G.save (localStorage, wrapped in try/catch)
 G.state        // 'menu'|'intro'|'play'|'dialogue'|'pause'|'clear'|'over'|'ending'
 G.fmt(n)       // 1234567 -> "1.234.567"     G.fmtMoney(n) -> "R$ 1.234"
 G.call(obj, 'method', ...args)  // safe call (errors are logged into G.errors, never thrown). No allocation for ≤ 6 args.
+G.errors, G.errorCount          // the last 50 error messages ('[bg.draw] ...', '[enemy:cabo.update] ...') / count of ALL errors
 G.quality      // 'high' | 'mid' | 'low' — current graphics tier (read it while drawing, see §10)
 G.setQuality(q)// 'auto' | 'high' | 'mid' | 'low' (UI setting "Qualidade"). Persists in G.save.settings.quality.
 G.bossBoxes(b) // b.hitboxes, or a reused default [{dx:0,dy:0,r:b.r}] (never allocate one per bullet)
-G.rankFor(hits, bombs, stageIdx)  // stage rank 'S'|'A'|'B'|'C' (see §9)
+G.rankFor(hits, bombs, stageIdx)  // stage rank 'S'|'A'|'B'|'C' (see §9); ui.js builds its boletim tips from it
 G.powerNeed(lv)                   // how many P items to go from level lv to lv+1 (1, 2, 3, 3)
 G.fontsReady() // main.js calls it if the web fonts arrive after boot; core then calls the OPTIONAL hooks
                // G.BG.fontsReady(), G.Art.fontsReady(), G.UI.fontsReady() so text baked into caches can be redrawn
+               // (all three are implemented: bg rebuilds its billboards, ui re-runs the fit-to-width of the open screen)
 ```
 
 ### Spawning & bullets
@@ -96,12 +98,14 @@ G.part({x,y,vx,vy,life,size,color,type:'dot'|'spark'|'ring'|'flash'|'smoke'|'pap
 G.burst(x, y, n, {colors, speed, speedMin, size, life, type, angle, spread, grav, drag})
 G.explode(x, y, size 1..4, {colors, ring, confetti})
 G.confetti(x, y, n)       // flying santinhos/bills – the visual signature of a politician being "cassado"
-G.text(x, y, str, {color, size, life, vy, font, stroke})
+G.text(x, y, str, {color, size, life, vy, font, stroke})   // x is clamped so the whole text stays on screen
 G.shake(mag) G.flash(alpha, color) G.hitstop(seconds)
 G.banner(title, sub, {dur, color, small})
 G.say(entity, 'Talkey?', dur)       // speech bubble drawn above the entity (enemy or boss). Short lines (≤ 28 chars)!
 G.count(counterName, n)  G.unlock(achievementId)    // e.g. G.count('rachadinha') – see data.js ACHIEVEMENTS
 G.isFlash(entity)          // true while it should be drawn white (hit flash). Pass as `flash` to G.Art.person.
+                           // Core sets it on hit: small enemies 0.05 s at most every 0.13 s; `big` enemies and bosses
+                           // 0.034 s (2–3 frames) at most every 0.35 s (≤ 3 white flashes per second on big sprites).
 ```
 
 ### Audio (implemented by audio.js; safe to call from anywhere through `G.call(G.Audio,'sfx',name)` or directly)
@@ -124,6 +128,8 @@ G.Art.scene(ctx, sceneId, w, h, t)       // story panel illustration: urna|briga
 G.Art.titleArt(ctx, w, h, t)             // optional title key art (UI may use it)
 G.Portraits.define(id, fn(ctx, x, y, size, o))  // portrait bust for dialogue, centered, size×size box, o: {t, mood, mouth}
 G.drawPortrait(ctx, id, x, y, size, o)          // what UI calls
+G.Art.cacheStats()                       // { sprites, pixels, pending, warmQueue, items, specs, exact } (tests/profiling)
+G.Art._exact(bool)                       // TEST ONLY: A/B switch for the exact-copy sprite path
 ```
 
 ### UI (implemented by ui.js) – the core calls these
@@ -132,14 +138,23 @@ G.drawPortrait(ctx, id, x, y, size, o)          // what UI calls
 `ending(info, done)`, `toast({title, text, kind})`. Flow functions UI calls: `G.startRun(stageIdx, loop)`, `G.toMenu()`,
 `G.resume()`, `G.buyUpgrade(id)`, `G.upgradeCost(id)`, `G.upg(id)`, `G.resetSave()`, `G.setQuality(q)`.
 - `G.startRun(0, 1)` plays the 6-panel intro story only while `G.save.seenIntro` is false. To rewatch it, the UI calls
-  `G.UI.story(G.STORY.intro, done)` itself.
+  `G.UI.story(G.STORY.intro, done)` itself: `G.UI.show('story')` does that (also offered in CRÉDITOS → HISTÓRIA).
+- `G.resetSave()` (APAGAR PROGRESSO) also puts the quality back to `auto` from `high` and restarts the auto meter.
 - `G.buyUpgrade(id)` during the between-stages shop (`G.state === 'clear'`) also applies vida/bomba/arma to the current run.
 - `G.resume()` freezes the world for 1 s ("PRONTO? VAI!", `G.game.resumeT`) so the thumb can get back to the screen.
-- The core toggles `body.rotate-hint` when a touch device is in landscape (base.css shows the hint) and pauses the
-  game once when a phone (viewport height < 560) turns sideways.
+- The core toggles `body.rotate-hint` when a touch device is in landscape (base.css shows the hint). While a phone
+  (viewport height < 560) is sideways, `'play'` is never kept: the core pauses as soon as it sees it (turning during play,
+  or a stage starting under the hint after the auto-advancing stage card). The pause screen waits under the hint.
 
 ### Background (implemented by bg.js)
 `G.BG.draw(ctx, id, scrollY, t, W, H)` must paint the **entire** canvas every frame. ids: `menu rodoviaria esplanada paranoa planalto`.
+If it throws, the core unwinds the ctx (`restore()` until the save stack is empty) and paints a flat `#0d1b3d` fill for
+**that frame only**; the next frame calls `draw` again as usual.
+- Optional `G.BG.landmark(id, g)`: stages.js calls it (through `G.call`) at the moment a mid-stage postcard must scroll in
+  (`'itamaraty'` on the Esplanada, `'jk'` on the Paranoá), together with setting `g.landmark = id`.
+- Mid-stage landmark order in bg.js: `g.landmark` / `G.BG.landmark` first; else `g.progress ≥ prog` (Esplanada 0.75,
+  Paranoá 0.45); else the scroll distance when the stage sends no signal; and if the boss comes first, the landmark is
+  inserted during the boss warning/entrance.
 
 ## 4. Enemies
 
@@ -181,13 +196,19 @@ flash invuln invulnT phase phases dmgMul data mood mouth sayText bubbleY`.
 - Phase = highest index whose `at` ≥ current hp fraction (list `at` in descending order). HP bar shows phase ticks.
 - On death core does the explosion sequence, the "CASSADO!" stamp (`defeatText`, auto-scaled to fit the screen), drops Pix, unlocks the achievement with the boss id, then the boss flies away.
 - Phase change banner: `"2º TURNO"`, `"3º TURNO"`… + the phase name (stages are called "FASE", so phases are "turnos").
+  Lule's 2nd life starts with the banner `"NOVO MANDATO"` + its first phase name; after that the core numbers its phases
+  `"2º TURNO"`, `"3º TURNO"` again (new mandate, new count).
 - `G.bomb()` is refused (sfx `denied`, no bomb spent) while the boss is `dying`/`leaving`, after the stage script ended,
   and during a cinematic where the boss is in `fight` with `b.invuln && b.harmless` (or `b.data.reviving`), e.g. Lule's revival.
 - `G.setBossPhases(b, phases, hpFrac)` replaces phases and sets hp (for revivals). `b.dmgMul` = armor. `b.invuln` for invulnerable moments (shots "tink").
-- Player damage reference, single target from the bottom of the screen (dps, L1/L3/L5): VOTO 22/44/56; BOCA DE URNA ≈24/33/42
-  (a straight centre stream + a wide fan of 0.7 pellets for crowds); PANELAÇO 18/35/74 homing; LAVA-JATO beam 31/53/75
-  (pierces the column: the nearest target takes full damage, the ones behind 60%, `big` enemies always full).
-  Bomb = 4.5% boss hp (max 220). `G.upg('turbo')` adds +10% fire rate per level, cafezinho ×1.5.
+- Player damage reference, single target from the bottom of the screen (dps, L1–L5): VOTO 22/33/44/56/67 (every level adds
+  one straight shot; L4–L5 add an angled pair for waves); BOCA DE URNA 25/34/43/52/61 (a straight centre stream of 2–6 shots
+  + a fan of 0.7 pellets for crowds, 28°/46°/46°/66°/84°); PANELAÇO 18/29/35/60/74 homing; LAVA-JATO beam 26/38/50/62/74
+  (`14 + 12 × level`, no travel time; pierces the column: the nearest target takes full damage, the ones behind 60%,
+  `big` enemies always full). Bomb = 4.5% boss hp (max 220). `G.upg('turbo')` adds +10% fire rate per level for every
+  weapon (interval ÷ (1 + 0.1 × level); the beam's dps × the same factor), cafezinho ×1.5.
+- Lule (final boss): HP 4400 (1st life) + 2850 (2nd life). Anti-stalemate fatigue per life: starts at 75 s (1st) / 50 s
+  (2nd) of fight and reaches 2× damage taken 35 s later. The other bosses also tire after a long fight (bosses.js).
 
 ## 6. Stages
 
@@ -210,6 +231,10 @@ Dialogue text for stage intros / boss pre/post lives in `data.js` (`G.STORY`) an
 `g.loop` is 2 on the "2º Mandato" (new game+): add density there.
 
 `G.game` fields of interest: `t frame stageIdx stage loop diff player{x,y,r,alive,inv,...} enemies eb pb pickups parts texts lasers boss scrollY approval resumeT rank`.
+Stage-progress signals set by stages.js for bg.js: `g.progress` (0..1, only goes up at script milestones; ≈ 0.55–0.6 when
+the mid-boss arrives, 1 when the boss arrives) and `g.landmark` (`'itamaraty'` right after the Lobista-Mor fight, about
+35–40 s before Dilmãe; `'jk'` at stage time 84 s, so the bridge scrolls in during the T90 motociata parade). The same
+moment also calls the optional `G.BG.landmark(id, g)`.
 `G.run` also has `pp` (P items collected toward the next level), `total` (points of the whole run, not reset by a continue)
 and `extGiven` (score extends already given: 500k / 1,5M / 3M / 6M, once per run).
 
@@ -264,9 +289,17 @@ Cast (keep these traits consistent everywhere — in-game sprite, portrait, stor
 - Power: EVERY P item adds progress (1, 2, 3, 3 items for levels 2..5); its colour picks the weapon. A death costs 1 level,
   which drops as a non-cycling "restore" P (+1 level when caught). The magnet upgrade and the top-of-screen auto-collect
   never pull P items (the colour is the player's choice); at stage clear leftover P items count for the current weapon.
-- Stage rank: S = no deaths and ≤ 1 bomb; A = no deaths; B = deaths ≤ 1 / 2 / 4 / 6 (stages 1..4); C = the rest.
+- Stage rank (`G.rankFor`): S = no lives lost and ≤ 1 Delação (bomb); A = no lives lost (any number of bombs) OR exactly
+  1 life lost with ≤ 1 Delação; B = lives lost ≤ 1 / 2 / 4 / 6 (stages 1..4); C = the rest.
   Rank Pix = {S 250, A 160, B 90, C 40} × (1 + 0,25 × stage index), ×2 on the 2º Mandato.
-- Economy: the Lojinha costs R$ 22.700 in total (target: fully upgraded after ~6 runs for a good player, ~9 casual).
+- Campaign targets (measured with `tools/humanbot.js`, 3 recontagens per run):
+  - **1º Mandato**: the first run (no upgrades) clears within the 3 recontagens using 1–3 continues, for casual and good
+    players alike; upgrades remove the need for continues (≈ R$ 6.8k bought: ~0.7 continues; everything: none).
+  - **2º Mandato** is the upgrade-gated test: bot clears within the limit with no upgrades 0/8, with ≈ R$ 6.8k 1/8,
+    fully upgraded (R$ 22.7k) 6/6.
+  - Lule is the hardest fight (several deaths per fight); boss fights without upgrades last ~60–110 s (Lule ~130 s).
+- Economy: the Lojinha costs R$ 22.700 in total; a run earns ~R$ 3–5k, so everything is bought after ~6 runs, for casual
+  and good players alike.
 
 ## 10. Performance
 
@@ -274,14 +307,25 @@ Target 60 fps on a mid phone at devicePixelRatio 2. Avoid `shadowBlur` and `ctx.
 `BulletStyles.paint` or your own pre-rendered offscreen canvases). Cache gradients/patterns. Avoid allocating in hot loops.
 
 Quality tiers (`G.quality`). In `auto` mode (default) the core measures the real rAF interval (which includes raster and
-compositing) during play and steps down one tier after 2,5 s with a smoothed interval > 22 ms; it steps back up only at a
-stage start, after a whole stage under 12 ms (90/120 Hz screens). The chosen tier is remembered in `G.save.qualityTier`.
-When the tier changes the core calls `resize()` (canvas resolution changes: re-key caches by resolution).
+compositing) during play (from 3 s into the stage; frames over 500 ms, hidden tabs and pauses are skipped, long frames
+count clamped to 120 ms). It steps down after 2,5 s with a smoothed interval > 22 ms (or 1,5 s > 32 ms): one tier, or
+straight from `high` to `low` when the smoothed interval is > 32 ms at that moment (`mid` only saves ~20–25% of the frame,
+so a phone that slow pays one rebuild, not two).
+It steps back up one tier only at a stage start, after a whole stage (≥ 1200 measured frames) whose smoothed interval never
+went over 18 ms (a solid 60 Hz, or headroom on 90/120 Hz), and never into a tier it dropped from in this session (a `mid`
+skipped by the high → low jump may still be tried).
+The chosen tier is remembered in `G.save.qualityTier`. When the tier changes the core calls `resize()` (canvas resolution
+changes: re-key caches by resolution).
+
 | tier | core does | modules should |
 |---|---|---|
 | `high` | canvas dpr ≤ 2, ≤ 600 particles | everything |
 | `mid` | canvas dpr ≤ 1,5, ≤ 450 particles | skip purely decorative extras (ghost copies, extra glows) |
 | `low` | canvas dpr 1, ≤ 300 particles, half bursts/confetti, no stroke on small floating texts | bg: drop cloud/tint layers; art: no glow halos; bosses: no decorative particles; audio: no convolver; ui: 30 fps title loop |
+
+ui.js: the title loop is capped at 60 fps on 90/120 Hz screens (30 fps on `low`), and the title canvas DPR follows the tier
+(`low` 1, `mid` 1,5).
+
 Other core rules: a frame with no simulation step is not redrawn (90/120 Hz screens); while paused the canvas is drawn once.
 
 ## 11. Testing
