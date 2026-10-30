@@ -10,9 +10,16 @@
    ele desaba, a tela escurece, silêncio... "ELE VOLTOU!".
    2ª vida (3 fases): Volta por Cima · Picanha Infinita · A Última Picanha.
 
+   Manha (ENGINE §5.1): OLÉ — o Leão da Receita entra por baixo, mira no
+   Zé e dá o bote. Quem fica entre o Leão e o Lule e sai na hora faz o
+   Leão morder o BOLSO do Lule: "TAXARAM O TAXADOR!" (tonto ×2,3).
+   Quem não sai leva a mordida no próprio Pix (nunca uma vida).
+
    Cada ataque é uma "corrotina" (gerador) que faz yield de segundos,
    de uma condição (função) ou de null (próximo quadro). Várias rodam
    em paralelo (movimento, ataque A, ataque B, provocações).
+   TONTO = PAUSA: com d.stunT > 0 as corrotinas, o relógio d.clk, o
+   movimento e a ciranda param; as esperas internas usam d.clk, nunca b.ft.
    ============================================================ */
 (function () {
   'use strict';
@@ -103,6 +110,318 @@
     G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10 });
   }
   function pose(b, name, dur) { b.data.pose = name; b.data.poseT = dur || 0.8; }
+
+  // ---------- manha: OLÉ no Leão da Receita (ENGINE §5.1) ----------
+  // Usa o G.BossKit (bosses.js) quando existe; sem ele (mods=lule) usa as cópias locais, de mesmo comportamento.
+  const BK = G.BossKit || null;
+  const kit = (n, f) => (BK && typeof BK[n] === 'function' ? BK[n] : f);
+  const MECH = (BK && BK.MECH) || { TEAL: '#32bcad', TEAL_L: '#7ff0e2', CAR_R: 14, GOLD: '#ffd23f' };
+  // relógio do chefão: só anda fora do tonto (lSweep e ciranda esperam por ele)
+  const clk = (b) => b.data.clk || 0;
+  const fmtMul = kit('fmtMul', (m) => { const v = Math.round(m * 10) / 10; return v % 1 === 0 ? String(v) : v.toFixed(1).replace('.', ','); });
+  const carNear = kit('carNear', (x, y, r) => {
+    const p = G.game && G.game.player; if (!p || !p.alive || p.entering) return false;
+    const k = r + MECH.CAR_R;
+    return M.dist2(p.x, p.y, x, y) < k * k;
+  });
+  const setGoal = kit('setGoal', (b, x, y, why, r, id) => {
+    const d = b.data, o = d._goal || (d._goal = { x: 0, y: 0, r: 0, why: '', id: '' });
+    o.x = M.clamp(x, 16, G.W - 16); o.y = M.clamp(y, G.H * 0.42, G.H - 30); o.r = r || 0; o.why = why; o.id = id != null ? id : why;
+    b.autoGoal = o;
+    return o;
+  });
+  const clearGoal = kit('clearGoal', (b) => { b.autoGoal = null; });
+  const mechInit = kit('mechInit', (b, kind) => { b.mech = { kind, ok: 0, miss: 0, stuns: 0 }; });
+  const mechOk = kit('mechOk', (b) => { if (b.mech) b.mech.ok++; });
+  const mechMiss = kit('mechMiss', (b) => { if (b.mech) b.mech.miss++; });
+  const dizzy = kit('dizzy', (c, x, y, t, r) => {
+    c.save();
+    for (let i = 0; i < 4; i++) {
+      const a = t * 4 + (i * TAU) / 4, sx = x + Math.cos(a) * r, sy = y + Math.sin(a) * r * 0.35;
+      c.beginPath();
+      for (let j = 0; j < 10; j++) { const aa = -PI / 2 + (j * PI) / 5, q = j % 2 ? 2.2 : 5; c.lineTo(sx + Math.cos(aa) * q, sy + Math.sin(aa) * q); }
+      c.closePath(); c.lineWidth = 2.4; c.strokeStyle = INK; c.stroke(); c.fillStyle = '#ffd23f'; c.fill();
+    }
+    c.restore();
+  });
+
+  // Ajustes do Leão (ENGINE §9). GAP = intervalo depois do FIM do leão anterior, por fase (ph1..ph7; 0 = sem leão).
+  // 2º mandato: STALK 140, AIM −0,15 (trava 0,60), SPD 660, GAP ×0,9, tonto ×0,85.
+  // AIM 1,2 (trava 0,75 s; a spec começava em 1,0): com 0,55 s de trava o humanbot casual levava a mordida em 60%
+  // dos leões que ele via (reação 0,45 s + dedo), e o good acertava 71%; com 0,75 s: 82% dos vistos nos dois.
+  const LEAO = {
+    FIRST: 7, GAP: [11, 10, 0, 9, 10, 9, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.2, TRACK: 0.45, SPD: 600,
+    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [4.0, 3.2], MUL: 2.3, PIX: 30,
+  };
+  const BITE_LINES = ['AI, MEU BOLSO!', 'ISSO É IMPOSTO?!', 'QUEM TAXA É TAXADO!'];
+
+  // dano × (tonto) × (1 + cansaço), teto 4; a etiqueta da barra mostra a brecha
+  function applyMul(b) {
+    const d = b.data, fat = d.fat || 0;
+    b.dmgMul = Math.min(4, (d.stunT > 0 ? d.stunMul : 1) * (1 + fat)); b.hudTag = d.stunT > 0 ? d.stunTag : null;
+  }
+  // TONTO = PAUSA (sem recomeçar nada): some tudo que é perigoso e o Lule fica parado, levando ×mul
+  function luleStun(b, dur, mul) {
+    const d = b.data, g = G.game;
+    d.stunT = d.stunT0 = dur * (L2() ? 0.85 : 1); d.stunMul = mul;
+    d.stunTag = { text: 'BRECHA ×' + fmtMul(mul), color: '#ffd23f' };
+    d.stunId = 'stun' + (d.lionN || 0);
+    d.lanes.length = 0; d.stamps.length = 0; d.lsign = null;
+    if (g) for (const l of g.lasers) if (l.data && l.data.lt != null) { l.t = l.warn + l.life + 1; }
+    G.clearBullets(true);
+    pose(b, 'shrug', d.stunT); d.moodT = d.stunT; d.moodOv = 'hurt';
+    if (b.mech) b.mech.stuns++;
+    sfx('mech_ok');
+    const run = G.run;
+    if (run && !(run.loop > 1) && !run._brecha) {
+      run._brecha = 1;
+      // (abaixo do "NHAC! TAXARAM O TAXADOR!" quando a tela é baixa, para os dois não se cobrirem)
+      G.text(G.W / 2, Math.max(G.H * 0.42, b.y + 118), 'BRECHA! DANO DOBRADO!', { color: '#ffd23f', size: 16, life: 2.0, stroke: true });
+    }
+    applyMul(b);
+  }
+  function luleStunEnd(b) {
+    const d = b.data;
+    d.stunT = 0;
+    d.pose = 'idle'; d.poseT = 0; d.moodT = 0;
+    say(b, 'VOU CRIAR UMA TAXA PRA ISSO!', 2);
+    lionRunOff(b);
+    applyMul(b);
+  }
+  // fim do tonto sem fala nem fuga com o saco (cena da volta, morte)
+  function stunClear(b) { const d = b.data; d.stunT = 0; d.stunMul = 1; b.hudTag = null; }
+
+  // Mordida no Pix do Zé (cópia de G.EnemyArt.taxBite para quando o enemies.js não está carregado)
+  function taxBiteLocal(x, y) {
+    const g = G.game, run = G.run;
+    if (!g || !run) return 0;
+    const pix = Math.max(0, run.pix || 0);
+    let steal = M.clamp(Math.round((g.pixStage || 0) * 0.15), 5, 40);
+    steal = Math.min(steal, pix);
+    run.pix = pix - steal;
+    const unc = Math.max(0, (g.pixStage || 0) - (g.pixCommitted || 0));
+    if (g.pixStage != null) g.pixStage -= Math.min(unc, steal);
+    if (steal > 0) {
+      G.text(x, y - 34, 'MORDIDA DO LEÃO -R$ ' + steal, { color: G.C.orange, size: 13, life: 1.7, vy: -22 });
+      G.burst(x, y - 8, 12, { colors: [G.C.pix, '#ffffff'], speed: 150, life: 0.5 });
+    } else {
+      G.text(x, y - 34, 'MORDIDA DO LEÃO: ISENTO!', { color: G.C.orange, size: 12, life: 1.6, vy: -22 });
+    }
+    G.shake(4);
+    G.call(G, 'vibrate', 80);
+    sfx('bite');
+    return steal;
+  }
+
+  // ---------- o Leão (d.lion) ----------
+  // st: enter → stalk (segue o x do Zé embaixo) → aim (mira; trava) → lunge (bote) → hold (pendurado no Lule) | flee
+  function lionGap(b) {
+    const d = b.data, i = (d.life === 1 ? 0 : 4) + (b.phase || 0);
+    return (LEAO.GAP[M.clamp(i, 0, LEAO.GAP.length - 1)] || 0) * (L2() ? 0.9 : 1);
+  }
+  function spawnLion(b) {
+    const d = b.data, p = pl();
+    const x = p.x < G.W / 2 ? G.W - 22 : 22, y = G.H - 34;
+    const n = d.lionN = (d.lionN || 0) + 1;
+    d.lion = {
+      st: 'enter', x, y, a: -DOWN, t: 0, T: 0, n, gold: false, locked: false, vx: 0, vy: 0, mouth: 0,
+      dir: x < G.W / 2 ? 1 : -1, x0: x, s: 1, passed: false, bristle: 0, sx: 1, sy: 1, rot: 0, look: 0,
+      eyes: false, bag: false, hit: -1, ex: x, ey: 60, coinT: 0, gx: null, idA: 'leao' + n, idS: 'leao' + n + 's',
+    };
+    // (mais alto e para dentro: no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas)
+    G.text(M.clamp(x, 48, G.W - 104), G.H - 110, 'LEÃO!', { color: G.C.orange, size: 14, stroke: true });
+    sfx('roar');
+    // o 1º leão da partida (1º mandato) é o tutorial: a 1ª fase segura os espetinhos e as latinhas
+    const run = G.run;
+    if (run && !(run.loop > 1) && !run._leaoTut) {
+      run._leaoTut = 1;
+      d.lionTut = true;
+      hint('ole', 'DEIXE O LEÃO MORDER O LULE!', '#ffb02e');
+    }
+  }
+  function lionEnd(b) {
+    const d = b.data;
+    d.lion = null; d.lionTut = false;
+    d.lionT = lionGap(b);
+  }
+  // desistiu (Zé morreu na mira, cena da volta, fim da luta)
+  function lionFlee(b) {
+    const L = b.data.lion; if (!L) return;
+    if (L.st === 'hold') { lionRunOff(b); return; }
+    if (L.st === 'flee') return;
+    G.text(L.x, L.y - 30, 'VOLTO EM ABRIL!', { size: 10, color: '#ffd9a8' });
+    L.st = 'flee'; L.t = 0; L.gold = false; L.eyes = false; L.locked = false;
+    L.vx = (L.x < G.W / 2 ? -1 : 1) * 110; L.vy = 230; L.sx = -1; L.rot = 0;
+  }
+  // saiu do bolso do Lule com o saco de dinheiro: para cima e para a direita
+  function lionRunOff(b) {
+    const L = b.data.lion; if (!L || L.st !== 'hold') return;
+    L.st = 'flee'; L.t = 0; L.bag = true; L.mouth = 0;
+    L.vx = 170; L.vy = -190; L.rot = 0.35; L.sx = 1;
+    G.text(L.x, L.y - 26, 'IMPOSTO PAGO!', { size: 10, color: '#ffd23f' });
+    sfx('whoosh');
+  }
+  const clampAim = (a) => M.clamp(a, -DOWN - LEAO.CLAMP, -DOWN + LEAO.CLAMP);
+  // raio do bote (do leão até y = 60): índice da 1ª caixa do Lule que ele pega (folga hb.r + 8), ou -1
+  function lionRay(b, L) {
+    const ca = Math.cos(L.a), sa = Math.sin(L.a);
+    const len = Math.max(0, L.y - 60) / Math.max(0.2, -sa);
+    L.ex = L.x + ca * len; L.ey = L.y + sa * len;
+    let best = -1, bt = Infinity;
+    const hb = b.hitboxes || [];
+    for (let i = 0; i < hb.length; i++) {
+      const h = hb[i], hx = b.x + h.dx, hy = b.y + h.dy, rr2 = (h.r + 8) * (h.r + 8);
+      if (M.segDist2(hx, hy, L.x, L.y, L.ex, L.ey) < rr2) {
+        const tt = (hx - L.x) * ca + (hy - L.y) * sa;
+        if (tt < bt) { bt = tt; best = i; }
+      }
+    }
+    L.hit = best;
+    return best;
+  }
+  function lionBiteZe(b, L) {
+    const p = pl(), ea = G.EnemyArt;
+    if (ea && typeof ea.taxBite === 'function') G.call(ea, 'taxBite', p.x, p.y); else taxBiteLocal(p.x, p.y);
+    G.text(p.x, p.y - 50, 'NHAC!', { color: G.C.orange, size: 14, life: 1.0, stroke: true });
+    mechMiss(b);
+    // vira e foge para baixo
+    L.st = 'flee'; L.t = 0; L.gold = false; L.eyes = false;
+    L.vx = (L.x < G.W / 2 ? -1 : 1) * 70; L.vy = 250; L.sx = -1; L.rot = 0;
+  }
+  function lionBiteLule(b, L) {
+    const d = b.data;
+    G.text(b.x, b.y + 84, 'NHAC! TAXARAM O TAXADOR!', { size: 15, color: G.C.orange, stroke: true, life: 1.8 });
+    G.hitstop(0.08); G.shake(6); sfx('bite'); sfx('stamp');
+    say(b, M.pick(BITE_LINES), 2);
+    G.dropPix(b.x, b.y + 40, LEAO.PIX);
+    L.st = 'hold'; L.t = 0; L.gold = false; L.locked = false; L.eyes = false; L.sy = 1; L.sx = 1;
+    luleStun(b, LEAO.STUN[d.life === 1 ? 0 : 1], LEAO.MUL);
+    G.count('ole');
+    mechOk(b);
+    d.oleN = (d.oleN || 0) + 1;
+    if (d.oleN >= 3) G.unlock('ole');
+  }
+  // um passo do bote (sub-passos de ≤ 8 px: rápido sem atravessar ninguém)
+  function lungeStep(b, L, g, p) {
+    const d = b.data;
+    // 1) o Zé ficou na frente: mordida no Pix dele
+    if (p.alive && !p.entering && !(p.inv > 0) && !(p.bombT > 0) && carNear(L.x, L.y, LEAO.ZE_R - MECH.CAR_R)) { lionBiteZe(b, L); return true; }
+    // 2) companheiros no caminho: TAXADO! (o onDeath deles passa 11 de HP pro Lule e agenda a volta)
+    for (const e of g.enemies) {
+      if (e.dead || e.kind !== 'lule_companheiro') continue;
+      if (M.dist2(e.x, e.y, L.x, L.y) < LEAO.COMP_R * LEAO.COMP_R) {
+        G.text(e.x, e.y, 'TAXADO!', { size: 10, color: '#ffb02e' });
+        G.killEnemy(e);
+      }
+    }
+    // 3) a picanha gigante (ph7)
+    const pc = d.picanhao;
+    if (pc && !pc.dead && M.dist2(pc.x, pc.y, L.x, L.y) < LEAO.PIC_R * LEAO.PIC_R) {
+      pc.dead = true;
+      G.text(L.x, L.y, 'O LEÃO COMEU A PICANHA!', { size: 12, color: G.C.orange });
+    }
+    // 4) o bolso do Lule
+    if (fighting(b)) {
+      const hb = b.hitboxes || [];
+      for (let i = 0; i < hb.length; i++) {
+        const h = hb[i], k = h.r + 10;
+        if (M.dist2(b.x + h.dx, b.y + h.dy, L.x, L.y) < k * k) { lionBiteLule(b, L); return true; }
+      }
+    }
+    // 5) passou direto
+    if (L.y < 40 || L.x < -30 || L.x > G.W + 30) {
+      G.text(L.x, 60, 'ESCAPOU!', { size: 10 });
+      mechMiss(b);
+      lionEnd(b);
+      return true;
+    }
+    return false;
+  }
+  function updLion(b, dt, g) {
+    const d = b.data, L = d.lion; if (!L) return;
+    const p = pl(), l2 = L2();
+    L.t += dt; L.T += dt;
+    if (!fighting(b) && L.st !== 'flee') lionFlee(b);
+    L.look = M.clamp((p.x - L.x) / 60, -1, 1);
+    switch (L.st) {
+      case 'enter': {
+        const tx = L.x0 + L.dir * 40;
+        L.x = M.approach(L.x, tx, LEAO.ENTER * dt);
+        if (L.x === tx) { L.st = 'stalk'; L.t = 0; }
+        break;
+      }
+      case 'stalk': {
+        if (!p.alive) { lionFlee(b); break; }
+        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, G.W - 22);
+        L.bristle = Math.min(1, L.bristle + dt / LEAO.STALK_MAX);
+        if (Math.abs(p.x - L.x) < 16 || L.t >= LEAO.STALK_MAX) { L.st = 'aim'; L.t = 0; }
+        break;
+      }
+      case 'aim': {
+        if (!p.alive) { lionFlee(b); break; }
+        if (!L.locked) {
+          // enquanto mira, ainda se ajeita embaixo do Zé (o raio sai quase reto: quem está embaixo do Lule acerta o Lule)
+          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, G.W - 22);
+          L.a = clampAim(Math.atan2(p.y - L.y, p.x - L.x));
+          if (L.t >= LEAO.TRACK) {
+            // TRAVOU: olhos vermelhos, agacha e o "SAI!" aponta para o lado com mais espaço
+            L.locked = true; L.eyes = true;
+            L.s = p.x < G.W / 2 ? 1 : -1;
+            L.gx = M.clamp(p.x + L.s * 56, 16, G.W - 16); // o passo do olé: 56 px para o lado, a partir de onde travou
+            sfx('charge');
+          }
+        }
+        L.sy = L.locked ? 0.85 : 1;
+        L.bristle = 1;
+        lionRay(b, L);
+        L.gold = L.hit >= 0;
+        if (L.t >= LEAO.AIM - (l2 ? 0.15 : 0)) { L.st = 'lunge'; L.t = 0; L.sy = 1; sfx('whoosh'); }
+        break;
+      }
+      case 'lunge': {
+        const dist = (l2 ? 660 : LEAO.SPD) * dt, n = Math.max(1, Math.ceil(dist / 8));
+        const sx = (Math.cos(L.a) * dist) / n, sy = (Math.sin(L.a) * dist) / n;
+        L.rot = (L.a + DOWN) * 0.8;
+        for (let i = 0; i < n; i++) {
+          L.x += sx; L.y += sy;
+          if (lungeStep(b, L, g, p)) break;
+        }
+        if (d.lion === L && L.st === 'lunge') {
+          if (!L.passed && L.y < p.y - 4) L.passed = true;
+          lionRay(b, L); L.gold = L.hit >= 0;
+        }
+        break;
+      }
+      case 'hold': {
+        // pendurado na aba do paletó, mastigando; moedinhas pulando
+        L.x = b.x + 30; L.y = b.y + 34 + bobY(b);
+        L.mouth = 0.5 + 0.5 * Math.sin(L.T * 22);
+        L.rot = -0.35 + Math.sin(L.T * 13) * 0.1;
+        L.coinT -= dt;
+        if (L.coinT <= 0) {
+          L.coinT = 0.07 + 0.05 * (1 - decoK());
+          G.part({ x: L.x + M.rand(-6, 6), y: L.y + 2, vx: M.rand(-90, 90), vy: M.rand(-190, -90), type: 'paper', size: M.rand(3, 4.5), life: M.rand(0.5, 0.8), color: M.pick(['#ffd23f', '#f5c04a', '#fff1b0']), drag: 0.97, grav: 420, rot: M.rand(0, TAU), vr: M.rand(-16, 16) });
+        }
+        break;
+      }
+      case 'flee': {
+        L.x += L.vx * dt; L.y += L.vy * dt;
+        if (L.y > G.H + 50 || L.y < -50 || L.x < -50 || L.x > G.W + 50) lionEnd(b);
+        break;
+      }
+    }
+  }
+  // alvo do piloto automático / humanbot (um objeto reaproveitado)
+  function luleGoal(b) {
+    const d = b.data, L = d.lion, p = pl();
+    if (d.stunT > 0) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.78, 'stun', 40, d.stunId || 'stun'); return; }
+    if (L && fighting(b)) {
+      if (L.st === 'stalk' || (L.st === 'aim' && !L.locked)) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.82, 'leao-alinha', 12, L.idA); return; }
+      // (x fixo na trava: com p.x + 56 recalculado todo quadro o piloto corria até a parede)
+      if ((L.st === 'aim' && L.locked) || (L.st === 'lunge' && !L.passed)) { setGoal(b, L.gx != null ? L.gx : p.x + L.s * 56, p.y, 'leao-sai', 10, L.idS); return; }
+    }
+    clearGoal(b);
+  }
 
   // ---------- aquecimento (evita a travadinha no 1º quadro de cada desenho novo) ----------
   // Lule: G.Art.prewarm pinta os sprites do corpo (pose × balanço × flash) em segundo plano, uma vez por chave.
@@ -287,6 +606,7 @@
       const a = bd.compA + (d.i * TAU) / 8;
       e.x = b.x + Math.cos(a) * d.R;
       e.y = b.y + 6 + Math.sin(a) * d.R * 0.9;
+      if (bd.stunT > 0) return; // Lule tonto: a roda para e ninguém atira
       d.fireT -= dt;
       if (d.fireT <= 0) {
         d.fireT = M.rand(2.8, 3.8) * (L2() ? 0.8 : 1);
@@ -440,6 +760,8 @@
     d.stamps.push(st);
     hint('stamp', 'SAIA DA SOMBRA DO CARIMBO!', '#ff8fa3');
   }
+  // algum carimbo ainda ameaçando (sombra seguindo / descendo)?
+  function stampLive(d) { for (const st of d.stamps) if (!st.slammed && !st.cancel) return true; return false; }
   function updStamps(d, dt) {
     const L = d.stamps, p = pl();
     for (let i = L.length - 1; i >= 0; i--) {
@@ -500,12 +822,13 @@
     opts = opts || {};
     d.tx = G.W / 2; d.ty = HOME_Y;
     pose(b, 'up', 99);
-    d.lsign = { s, pushA: null }; // letreiro de neon aceso (desenhado na mão direita)
+    const sign = d.lsign = { s, pushA: null }; // letreiro de neon aceso (desenhado na mão direita)
     say(b, 'FAZ O L!', 1.8);
     sfx('charge');
     hint('lsweep', 'FIQUE DENTRO DO L!', '#ff8fc0');
     yield 0.55;
-    if (!canShoot()) { d.lsign = null; pose(b, 'idle', 0.1); return; }
+    // (o Leão mordeu o Lule no meio do aviso: o tonto apagou o letreiro, então não tem L)
+    if (!canShoot() || d.lsign !== sign) { if (d.lsign === sign) d.lsign = null; pose(b, 'idle', 0.1); return; }
     const h0 = handPos(b, 1);
     const aEnd = Math.atan2(G.H * 0.8 - h0.y, G.W / 2 - s * 12 - h0.x);
     const aA0 = aEnd - s * delta;                       // laser "de trás" (o que empurra)
@@ -523,20 +846,20 @@
     });
     const LA = mk(aA0), LB = mk(aB0);
     if (!LA || !LB) { d.lsign = null; return; }
-    d.lsign.pushA = LA;
-    const t0 = b.ft;
+    sign.pushA = LA;
+    const t0 = clk(b);
     let n = 0;
-    while (b.ft - t0 < warn + life && !LA.dead) {
+    while (clk(b) - t0 < warn + life && !LA.dead) {
       yield opts.lEvery || 0.85;
-      if (b.ft - t0 > warn * 0.6 && n < (opts.maxL || 5)) {
+      if (LA.dead || d.lsign !== sign) break; // o tonto apagou os lasers
+      if (clk(b) - t0 > warn * 0.6 && n < (opts.maxL || 5)) {
         // a outra mão arremessa um L girando na direção do Zé
         const h = handPos(b, -1);
         fireL(h.x, h.y, G.aim(h.x, h.y) + M.rand(-0.12, 0.12), opts.lSpd || 105, M.rand(0, TAU), M.rand(1.8, 2.4) * (n % 2 ? 1 : -1));
         n++;
       }
     }
-    d.lsign = null;
-    pose(b, 'idle', 0.1);
+    if (d.lsign === sign) { d.lsign = null; pose(b, 'idle', 0.1); }
   }
 
   // --- Espiral da ciranda ---
@@ -544,16 +867,16 @@
     o = o || {};
     const arms = o.arms || 3, every = o.every || 0.12, spd = o.spd || 115, w = o.w || 1.05, seg = o.seg || 4.2;
     let a = M.rand(0, TAU), dir = Math.random() < 0.5 ? 1 : -1;
-    const tEnd = o.dur ? b.ft + o.dur : Infinity;
-    while (b.ft < tEnd) {
-      for (let t = 0; t < seg && b.ft < tEnd; t += every) {
+    const tEnd = o.dur ? clk(b) + o.dur : Infinity;
+    while (clk(b) < tEnd) {
+      for (let t = 0; t < seg && clk(b) < tEnd; t += every) {
         for (let i = 0; i < arms; i++) shoot(b.x, b.y + 8, a + (i * TAU) / arms, spd, { style: 'rice', color: o.color || COL.magenta });
         a += dir * w * every;
         if (((t / every) | 0) % 3 === 0) sfx('enemy_shot');
         yield every;
       }
       // "volta e meia vamos dar": pausa curta e troca o sentido
-      if (b.ft < tEnd) {
+      if (clk(b) < tEnd) {
         G.text(b.x, b.y + 92, 'VOLTA E MEIA!', { color: '#ffd1f4', size: 11, life: 0.8, vy: -20 });
         yield 0.55;
         dir = -dir;
@@ -617,6 +940,9 @@
     d.wantComps = false;
     if (d.life === 1 && idx !== 3) killComps(false);
     d.pose = 'idle'; d.poseT = 0;
+    // Leão: nada no Faz o L (os lasers já ocupam a tela); nas outras fases, no mínimo 3 s depois da troca
+    d.lionOff = d.life === 1 && idx === 2;
+    d.lionT = Math.max(d.lionT || 0, 3);
     const list = d.life === 1 ? [ph1, ph2, ph3, ph4] : [ph5, ph6, ph7];
     const fn = list[M.clamp(idx, 0, list.length - 1)];
     co(b, fn(b, d));
@@ -646,15 +972,16 @@
     yield 1.2;
     let k = 0;
     for (;;) {
-      tossSkewers(b, d, L2() ? 3 : 2, k);
+      // (d.lionTut: o leão-tutorial está em cena; só a picanha mirada, para dar para ler o olé)
+      if (!d.lionTut) tossSkewers(b, d, L2() ? 3 : 2, k);
       yield 0.9;
       aimedPicanha(b, 3, 0.32, 150);
       yield 0.8;
-      canRing(b, L2() ? 14 : 12, 165, k * 0.31);
+      if (!d.lionTut) canRing(b, L2() ? 14 : 12, 165, k * 0.31);
       yield 1.1;
       aimedPicanha(b, 5, 0.6, 145);
       yield 0.6;
-      if (k % 2) { tossSkewers(b, d, 2, k + 1); yield 0.6; }
+      if (k % 2 && !d.lionTut) { tossSkewers(b, d, 2, k + 1); yield 0.6; }
       k++;
     }
   }
@@ -765,7 +1092,7 @@
       let a = 0;
       const arms = L2() ? 6 : 5;
       for (;;) {
-        const w = 0.82 + 0.16 * Math.sin(b.ft * 0.55);
+        const w = 0.82 + 0.16 * Math.sin(clk(b) * 0.55);
         for (let i = 0; i < arms; i++) shoot(b.x, b.y + 10, a + (i * TAU) / arms, 120, { style: 'orb', color: COL.red });
         a += w * 0.12;
         if (Math.random() < 0.3) sfx('enemy_shot');
@@ -829,6 +1156,8 @@
     b.phases = [{ at: 1, name: '' }]; b.phase = 0; // nenhuma troca de fase durante a cena
     killCos(b);
     d.lanes.length = 0; d.stamps.length = 0; d.lsign = null; d.wantComps = false; d.respawn.length = 0;
+    // manha: o Leão vai embora (ou sai com o saco, se já mordeu), sem tonto nem alvo durante a cena
+    lionFlee(b); stunClear(b); clearGoal(b); d.lionTut = false;
     G.clearBullets(true);
     killComps(false);
     G.call(G.Audio, 'stopMusic');
@@ -900,6 +1229,8 @@
     d.reviving = false; d.revived = true; d.life = 2;
     d.dim = 0; d.slumpTo = 0; d.pinGlow = 0;
     d.lifeT0 = b.ft; b.dmgMul = 1; d.fat = 0; // o cansaço recomeça na 2ª vida
+    d.lion = null; d.lionTut = false; stunClear(b); clearGoal(b);
+    d.lionT = LEAO.FIRST; // 1º leão da 2ª vida: 7 s depois da volta
     b.invuln = false; b.harmless = false;
     G.setBossPhases(b, PH2, 1);
     b.invulnT = 1.2;
@@ -1243,6 +1574,89 @@
     }
   }
 
+  // ---------- o Leão: corpo (no def.draw, embaixo do Fusca) e mira/aviso (drawOver, por cima dos tiros) ----------
+  const LION_O = { t: 0, flash: false, sx: 1, sy: 1, pounce: false, bristle: 0, eyesRed: false, lookX: 0, mouth: 0 };
+  const RET_DIRS = [1, 0, -1, 0, 0, 1, 0, -1]; // tracinhos da mira "R$"
+  function moneyBag(c, x, y, t) {
+    c.save(); c.translate(x, y); c.rotate(Math.sin(t * 9) * 0.25);
+    c.beginPath();
+    c.moveTo(-4, -9); c.lineTo(4, -9); c.lineTo(2.5, -6);
+    c.bezierCurveTo(12, -3, 12, 10, 0, 10); c.bezierCurveTo(-12, 10, -12, -3, -2.5, -6); c.closePath();
+    inked(c, '#c9a227', 1.2);
+    c.beginPath(); c.moveTo(-3.5, -6.5); c.lineTo(3.5, -6.5); c.lineWidth = 1.6; c.strokeStyle = '#7a5a10'; c.stroke();
+    txt(c, 'R$', 0, 2.5, 7, '#ffffff', { stroke: 2 });
+    c.restore();
+  }
+  function drawLionBody(c, b, g) {
+    const L = b.data.lion; if (!L) return;
+    // sombra no chão (pendurado no Lule não tem chão)
+    if (L.st !== 'hold') {
+      c.save(); c.globalAlpha = 0.32; c.fillStyle = '#05060a';
+      c.beginPath(); c.ellipse(L.x, L.y + 25, 17, 5, 0, 0, TAU); c.fill();
+      c.restore();
+    }
+    const o = LION_O;
+    o.t = L.T; o.sx = L.sx; o.sy = L.sy; o.pounce = L.st === 'lunge' || L.st === 'hold';
+    o.bristle = L.bristle; o.eyesRed = L.eyes; o.lookX = L.look; o.mouth = L.mouth;
+    c.save(); c.translate(L.x, L.y); if (L.rot) c.rotate(L.rot);
+    const ea = G.EnemyArt;
+    if (ea && typeof ea.lion === 'function') G.call(ea, 'lion', c, 0, 0, o);
+    else {
+      // sem o enemies.js: bolinha laranja com contorno e "LEÃO"
+      c.scale(o.sx, o.sy);
+      c.beginPath(); c.arc(0, 0, 16, 0, TAU); inked(c, '#f08c1e', 1.6);
+      txt(c, 'LEÃO', 0, 0, 7, INK);
+    }
+    c.restore();
+    if (L.bag) moneyBag(c, L.x + 15, L.y + 10, L.T);
+  }
+  function drawLionOver(c, b, g) {
+    const d = b.data, L = d && d.lion;
+    if (!L || b.state !== 'fight') return;
+    const aiming = L.st === 'aim', lunging = L.st === 'lunge';
+    if (aiming || lunging) {
+      // linha de mira (tracejada, branca; DOURADA quando o bote vai pegar o Lule)
+      const gold = L.gold;
+      c.save();
+      c.globalAlpha = lunging ? 0.5 : 1;
+      c.lineCap = 'round';
+      c.setLineDash([10, 7]); c.lineDashOffset = -g.t * 40;
+      c.beginPath(); c.moveTo(L.x, L.y - 8); c.lineTo(L.ex, L.ey);
+      c.lineWidth = 5; c.strokeStyle = 'rgba(16,20,24,0.45)'; c.stroke();
+      c.lineWidth = 3; c.strokeStyle = gold ? '#ffd23f' : 'rgba(255,255,255,0.7)'; c.stroke();
+      c.setLineDash([]); c.lineDashOffset = 0;
+      // mira "R$" no Lule
+      if (gold && L.hit >= 0 && b.hitboxes && b.hitboxes[L.hit]) {
+        const h = b.hitboxes[L.hit], hx = b.x + h.dx, hy = b.y + h.dy, k = 1 + 0.1 * Math.sin(g.t * 14);
+        c.globalAlpha = lunging ? 0.6 : 0.85 + 0.15 * Math.sin(g.t * 14);
+        c.beginPath(); c.arc(hx, hy, 30 * k, 0, TAU);
+        c.lineWidth = 5; c.strokeStyle = 'rgba(16,20,24,0.6)'; c.stroke();
+        c.lineWidth = 2.6; c.strokeStyle = '#ffd23f'; c.stroke();
+        c.beginPath();
+        for (let i = 0; i < 8; i += 2) { const ax = RET_DIRS[i], ay = RET_DIRS[i + 1]; c.moveTo(hx + ax * 24 * k, hy + ay * 24 * k); c.lineTo(hx + ax * 36 * k, hy + ay * 36 * k); }
+        c.lineWidth = 2.6; c.stroke();
+        txt(c, 'R$', hx, hy, 12, '#ffd23f', { stroke: 3 });
+      }
+      c.restore();
+    }
+    // "SAI!": seta branca ao lado do Fusca, para o lado com mais espaço (da trava até o leão passar)
+    const p = pl();
+    if (p.alive && ((aiming && L.locked) || (lunging && !L.passed))) {
+      const s = L.s, ax = M.clamp(p.x + s * 26, 27, G.W - 27);
+      // carro lá embaixo à direita: a seta sobe (o botão da DELAÇÃO fica por cima do canvas nesse canto)
+      const ay = p.y > G.H - 120 && ax + s * 25 > G.W - 110 ? p.y - 44 : p.y;
+      c.save();
+      c.globalAlpha = 0.75 + 0.25 * Math.sin(g.t * 20);
+      c.translate(ax, ay); c.scale(s, 1);
+      c.beginPath(); c.moveTo(0, -4); c.lineTo(12, -4); c.lineTo(12, -10); c.lineTo(25, 0); c.lineTo(12, 10); c.lineTo(12, 4); c.lineTo(0, 4); c.closePath();
+      c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = INK; c.stroke(); c.fillStyle = WHITE; c.fill();
+      c.restore();
+      c.save(); c.globalAlpha = 0.85 + 0.15 * Math.sin(g.t * 20);
+      txt(c, 'SAI!', M.clamp(ax + s * 13, 18, G.W - 18), ay - 18, 12, WHITE, { stroke: 3 });
+      c.restore();
+    }
+  }
+
   function drawLule(ctx, b, g) {
     const d = b.data; if (!d || !d.cos) return;
     const c = ctx, t = b.t;
@@ -1256,6 +1670,7 @@
       const dt = M.clamp(g.t - (d.lastT == null ? g.t : d.lastT), 0, 0.05);
       updSmoke(d, b, dt, dying ? 1 : 0);
       d.slump = dying ? Math.min(0.45, b.t * 0.5) : leaving ? M.approach(d.slump, 0, dt * 2) : d.slump;
+      if (d.lion) updLion(b, dt, g); // o Leão termina de fugir
     }
     d.lastT = g.t;
 
@@ -1281,6 +1696,8 @@
     const sl = d.slump;
     if (sl > 0) { c.translate(0, 66); c.rotate(-0.42 * sl); c.translate(0, -66 + 22 * sl); }
     if (leaving) c.rotate(Math.sin(t * 6) * 0.08);
+    const stunned = d.stunT > 0 && b.state === 'fight';
+    if (stunned) c.rotate(Math.sin(t * 9) * 0.045); // tonto: balança no lugar
 
     // ----- mood / boca -----
     let mood = 'smug', mouth = 0, ps = d.pose || 'idle';
@@ -1306,6 +1723,7 @@
     // estrelinha pulsando (o "coração" voltando a bater)
     if (d.pinGlow > 0 && !fl) glow(c, -14.5 * PS / 100, PY + 19 * PS / 100, 22 + 8 * Math.sin(t * 14), 'rgba(255,60,80,0.9)', 1);
     if (d.life === 2) halo(c, t, fl, 1);
+    if (stunned) dizzy(c, 0, PY - (d.life === 2 ? 84 : 70), t, 30);
 
     // ----- churrasqueira na frente -----
     c.translate(0, GY);
@@ -1334,6 +1752,7 @@
     drawSkewerRods(c, d);
     drawLSweepHints(c, d, b);
     drawStamps(c, d);
+    drawLionBody(c, b, g);
     // CARNÊ 12x esvoaçando quando ele foge
     if (leaving) {
       c.save(); c.translate(b.x + 20, b.y + 66);
@@ -1345,6 +1764,8 @@
     }
     // balão de fala logo abaixo da barra de vida
     b.bubbleY = b.y - Math.max(104, b.y - 86);
+    // core sem a camada drawOver: mira e "SAI!" no fim do desenho (embaixo dos tiros)
+    if (!(G.coreHooks && G.coreHooks.drawOver)) { c.save(); drawLionOver(c, b, g); c.restore(); }
   }
 
   // ======================================================================
@@ -1365,7 +1786,11 @@
       d.hpMul = b.maxHp / HP1; // 2º mandato: o core já multiplicou o HP
       b.hitboxes = HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       b.phases = PH1.slice();
-      warmPoses(b, 'p1', SPEC, ['idle', 'wave', 'point']);
+      // manha (OLÉ): relógio do chefão, tonto, o Leão e os contadores
+      d.clk = 0; d.stunT = 0; d.stunMul = 1; d.stunTag = null; d.fat = 0;
+      d.lion = null; d.lionN = 0; d.lionT = LEAO.FIRST; d.lionOff = false; d.lionTut = false; d.oleN = 0;
+      mechInit(b, 'ole');
+      warmPoses(b, 'p1', SPEC, ['idle', 'wave', 'point', 'shrug']); // shrug: o tonto do olé
       d.warmQ = SHOTS.slice();
     },
     updateEnter(b) { warmShotsStep(b, 1); },
@@ -1378,10 +1803,13 @@
       d.slump = M.approach(d.slump, d.slumpTo, dt * 2.2);
       const heat = d.life === 2 ? 0.6 : M.clamp((0.5 - b.hp / b.maxHp) * 2, 0, 1);
       updSmoke(d, b, dt, heat);
-      if (d.reviving) { updateRevive(b, dt, g); return; }
+      if (d.reviving) { updLion(b, dt, g); updateRevive(b, dt, g); return; } // o Leão termina de fugir na cena
       // cansaço por vida: a luta de quem chega fraco não vira um moedor sem fim (bons jogadores nem percebem)
       const lf = b.ft - (d.lifeT0 || 0), fat = M.clamp((lf - (d.life === 1 ? FAT1 : FAT2)) / FAT_RAMP, 0, 1);
-      b.dmgMul = 1 + fat; d.fat = fat;
+      d.fat = fat;
+      // TONTO = PAUSA: sem corrotinas, relógio, movimento, ciranda nem companheiros voltando
+      const st = d.stunT > 0;
+      if (st) { d.stunT -= dt; if (d.stunT <= 0) luleStunEnd(b); }
       if (fat > 0 && d.fatSaid !== d.life) {
         d.fatSaid = d.life;
         say(b, d.life === 1 ? 'TÔ CANSADO, COMPANHEIRO...' : 'ESSE MANDATO TÁ PESADO...', 2.2);
@@ -1389,18 +1817,20 @@
       }
       const frac = b.hp / b.maxHp;
       d.dmg = d.life === 1 ? (frac < 0.25 ? 2 : frac < 0.5 ? 1 : 0) : 2;
-      // movimento suave
-      const f = 1 - Math.exp(-2.2 * dt);
-      b.x += (M.clamp(d.tx, 80, G.W - 80) - b.x) * f;
-      b.y += (d.ty - b.y) * f;
-      d.compA += dt * (L2() ? 1.05 : 0.85);
+      // movimento suave (parado no tonto)
+      if (!st) {
+        const f = 1 - Math.exp(-2.2 * dt);
+        b.x += (M.clamp(d.tx, 80, G.W - 80) - b.x) * f;
+        b.y += (d.ty - b.y) * f;
+        d.compA += dt * (L2() ? 1.05 : 0.85);
+      }
       // 4º mandato: faíscas vermelhas e douradas subindo em volta dele
       if (d.life === 2 && Math.random() < dt * 10 * decoK()) {
         const a = M.rand(0, TAU);
         G.part({ x: b.x + Math.cos(a) * 78, y: b.y - 10 + Math.sin(a) * 70, vx: 0, vy: M.rand(-70, -40), type: 'spark', size: 2.4, life: 0.55, color: Math.random() < 0.7 ? '#ff3b4e' : '#ffd23f', drag: 0.96 });
       }
       // companheiros que caíram voltam depois de um tempinho
-      if (d.wantComps) {
+      if (d.wantComps && !st) {
         for (let i = d.respawn.length - 1; i >= 0; i--) {
           d.respawn[i] -= dt;
           if (d.respawn[i] <= 0) {
@@ -1410,18 +1840,32 @@
           }
         }
       }
-      runCos(b, dt);
+      if (!st) { d.clk = (d.clk || 0) + dt; runCos(b, dt); }
       updSkewers(d, dt);
       updLanes(d, dt);
       updStamps(d, dt);
+      // o Leão da Receita: agenda (só com a luta "limpa": sem tonto, sem L aceso, sem carimbo, Zé vivo, fora do Faz o L)
+      // (carimbo "vivo" = ainda descendo; depois da batida só sobra a marca de tinta inofensiva sumindo)
+      if (!d.lion && !(d.stunT > 0) && !d.lionOff && !d.lsign && !stampLive(d) && pl().alive) {
+        d.lionT -= dt;
+        if (d.lionT <= 0) spawnLion(b);
+      }
+      updLion(b, dt, g);
+      luleGoal(b);
+      b.dmgMul = Math.min(4, (d.stunT > 0 ? d.stunMul : 1) * (1 + fat)); b.hudTag = d.stunT > 0 ? d.stunTag : null;
     },
     onPhase(b, idx) {
       const d = b.data;
       if (d.reviving) return;
       // o que vem a seguir: suado (HP < 50% e a 2ª vida inteira), a cena da volta e os espetinhos da 2ª vida
-      if (d.life === 1 && idx === 1) warmPoses(b, 'sw', SPEC_SWEAT, ['idle', 'point', 'up']);
+      if (d.life === 1 && idx === 1) warmPoses(b, 'sw', SPEC_SWEAT, ['idle', 'point', 'up', 'shrug']);
       if (d.life === 1 && idx === 3) warmPoses(b, 'sw2', SPEC_SWEAT, ['shrug', 'wave']);
       startPhase(b, idx);
+      // troca de fase no meio do tonto: as corrotinas novas começam quando ele acabar; o tonto fica ≤ 2 s
+      if (d.stunT > 0) {
+        d.stunT = Math.min(d.stunT, 2.0);
+        pose(b, 'shrug', d.stunT); d.moodT = d.stunT; d.moodOv = 'hurt';
+      }
     },
     onHit(b, dmg) {
       const d = b.data;
@@ -1440,10 +1884,14 @@
       d.lanes.length = 0; d.stamps.length = 0; d.skewers.length = 0; d.lsign = null; d.wantComps = false; d.respawn.length = 0;
       d.reviving = false; d.dim = 0; d.fire = 0; d.picanhao = null;
       for (const l of g.lasers) if (l.data && l.data.lt != null) { l.t = l.warn + l.life + 1; }
+      // manha: o Leão vai embora (com o saco, se estava mordendo), sem tonto nem alvo
+      lionFlee(b); stunClear(b); clearGoal(b); d.lionTut = false;
       say(b, 'TÁ BOM, TÁ BOM!', 2.4);
       d.slumpTo = 0.5;
     },
     draw(ctx, b, g) { drawLule(ctx, b, g); },
+    // por cima dos tiros: a mira do Leão, a mira "R$" no Lule e o "SAI!" ao lado do Fusca
+    drawOver(ctx, b, g) { drawLionOver(ctx, b, g); },
   });
 
   // ======================================================================

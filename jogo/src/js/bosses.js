@@ -218,7 +218,7 @@
     c.drawImage(cv, x - r, y - r, 2 * r, 2 * r);
     c.restore();
   }
-  // coração (ícone desenhado, nada de glifo ♥). Só ACRESCENTA o subcaminho (como E/O): chame beginPath antes.
+  // coração (ícone desenhado, nunca glifo de texto). Só ACRESCENTA o subcaminho (como E/O): chame beginPath antes.
   function heartPath(c, x, y, s) {
     const k = s / 2;
     c.moveTo(x, y + k * 0.85);
@@ -449,7 +449,7 @@
   const EM = {
     APEX_Y: 0.28, FALL: 50, FALL_L2: 62, FALL_TUT: 40, CATCH_R: 13, SWAY: 18, SWAY_HZ: 0.45,
     STUN: [3.0, 3.5, 4.0, 3.0], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
-    FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9,
+    FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9, RACE_DY: 100,
   };
   const SIDE = [
     { main: '#e63946', dark: '#9e1b28', acc: '#ffffff', name: 'vermelho' },
@@ -1263,12 +1263,13 @@
       if (e.st === 'done') L.splice(i, 1);
     }
   }
-  // fase 3: os 2 deputadinhos mais perto correm atrás da emenda de verdade que está caindo
+  // fase 3: os 2 deputadinhos mais perto correm atrás da emenda de verdade que está caindo. Só depois que ela
+  // desce bem abaixo do Centrão (senão pegam no pé dele e entregam na hora, sem chance de disputa)
   function cenRace(b, g) {
-    const d = b.data, ap = d._ap || (d._ap = []);
+    const d = b.data, ap = d._ap || (d._ap = []), y0 = b.y + EM.RACE_DY;
     ap.length = 0;
     let em = null;
-    if (b.phase === 2 && !stunning(b)) for (const e of d.emendas) if (e.real && e.st === 'para' && (!em || e.y > em.y)) em = e;
+    if (b.phase === 2 && !stunning(b)) for (const e of d.emendas) if (e.real && e.st === 'para' && e.y > y0 && (!em || e.y > em.y)) em = e;
     for (const e of g.enemies) {
       if (e.dead || e.kind !== 'bs_apoio' || e.data.traitor || e.data.carry) continue;
       e.data.chase = null;
@@ -1563,6 +1564,12 @@
   function sprPump(b, g) { if (sprQ.length && (b.state !== 'fight' || b.invulnT > 0 || g.eb.length < 120)) sprStep(); }
 
   const CEN_HB = [[0, -6, 46], [-46, 16, 28], [46, 16, 28], [0, 38, 30]];
+  // cabecinhas falando (boca 0,6 como em cenHead): só a cabeça (bust), brava e rindo
+  function cenTalkHeads(specs) {
+    const out = [];
+    for (const mood of ['angry', 'laugh']) for (const spec of specs) out.push({ spec, size: 34, mood, mouth: 0.6, bust: true });
+    return out;
+  }
   // todo (estilo, cor) que o Centrão atira (o reflexo usa violeta)
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold]];
   G.Bosses.define('centrao', {
@@ -1595,8 +1602,9 @@
       // sprites do 1º turno e do começo do 2º: pintados durante o aviso e a entrada
       sprReset(); cenPlan(b); sprWarm(b);
       haloSprite(26); // halo da emenda (pronto antes do 1º quadro que o usa)
-      // cabecinhas da 1ª fase (sorrisinho) e os tiros de todas as fases
+      // cabecinhas da 1ª fase (sorrisinho; e falando: brava ao subir, rindo depois) e os tiros de todas as fases
       warmPeople(b, 'heads', CEN_HEADS.map((spec) => ({ spec, size: 34, mood: 'smug' })));
+      warmPeople(b, 'headsTalk', cenTalkHeads(CEN_HEADS));
       warmShots(b, CEN_SHOTS);
     },
     updateEnter(b) { warmShotsStep(b, 1); },
@@ -1656,6 +1664,7 @@
       // próximas fases: cabecinhas suadas (HP < 66%) e os deputadinhos do apoio (fase 3, de gravata vermelha ou bege)
       if (idx === 1) {
         warmPeople(b, 'headsSw', CEN_HEADS_SW.map((spec) => ({ spec, size: 34, mood: 'smug' })));
+        warmPeople(b, 'headsSwTalk', cenTalkHeads(CEN_HEADS_SW));
         warmPeople(b, 'apoio', APOIO_SPECS.concat(APOIO_SPECS_G).map((spec) => ({ spec, size: 28, mood: 'laugh', pose: 'up' })));
       }
       for (let i = 0; i < 8; i++) { d.warn[i] = 0; d.hold[i] = 0; }
