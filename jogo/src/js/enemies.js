@@ -229,13 +229,13 @@
     assessor: ['ASSESSOR DA RACHADINHA', 'derrube e ele racha em dois!'],
     lobista: ['LOBISTA', 'derrube e a mala é sua'],
     marqueteiro: ['MARQUETEIRO', 'blinda os aliados: mire nele!'],
-    bot: ['BOT DE FAKE NEWS', 'vem em bando e mergulha'],
+    bot: ['BOT DE ENGAJAMENTO', 'curte em bando e mergulha'],
     carro_som: ['CARRO DE SOM', 'passe pela brecha da onda'],
     sindicalista: ['SINDICALISTA', 'atira em leque: GREVE!'],
     leao: ['LEÃO DA RECEITA', 'morde seu Pix! Derrube e ganhe a restituição'],
     ministro: ['MINISTRO', 'são 38. Por enquanto.'],
-    motoqueiro: ['MOTOCIATA', 'passa jogando tiro pra baixo'],
-    drone: ['DRONE DO GABINETE', 'piscou vermelho? Saia da mira'],
+    motoqueiro: ['MOTOBOY DA PICANHA', 'passa atirando e nunca entrega'],
+    drone: ['DRONE DA LIVE', 'o REC piscou? Saia da mira'],
   };
   // Uma etiqueta por vez: várias espécies novas entrando juntas (fases 3 e 4 pelo menu) se
   // cobriam umas às outras. A espécie que ficou na fila se apresenta num inimigo dela que ainda
@@ -410,10 +410,10 @@
   const CABO = [
     { skin: '#d9a273', hair: 'short', hairColor: '#2a1d14', body: 'tshirt', shirt: '#ffd23f', hat: 'cap', hatColor: '#1b3fa0', seed: 1 },
     { skin: '#f0c49c', hair: 'side', hairColor: '#4a3020', body: 'tshirt', shirt: '#e63946', hat: 'cap', hatColor: '#f4f1e8', seed: 2 },
-    { skin: '#9a6644', hair: 'curly', hairColor: '#1a1a1a', body: 'tshirt', shirt: '#00a651', hat: 'cap', hatColor: '#ffd23f', seed: 3 },
+    { skin: '#9a6644', hair: 'curly', hairColor: '#1a1a1a', body: 'tshirt', shirt: '#00a651', hat: 'cap', hatColor: '#f4f1e8', seed: 3 },
     { skin: '#e8b48a', hair: 'long', hairColor: '#6a3d22', body: 'tshirt', shirt: '#ff8c1a', seed: 4 },
   ];
-  const CABO_LINES = ['VOTE 171!', 'Pega um santinho!', 'Confirma! É 171!', 'Olha o santinho!', 'Vai um adesivo?', 'Meu candidato é honesto!', 'Tem sanduíche no comício!'];
+  const CABO_LINES = ['VOTE 171!', 'Pega um santinho!', 'Confirma! É 171!', 'Olha o santinho!', 'Vai um adesivo?', 'Meu candidato é honesto!', 'Tem sanduíche no comício!', 'Faz o L!', 'O amor venceu!'];
   function drawFlag(ctx, x, y, t, color, fl) {
     ctx.save();
     ctx.translate(x, y);
@@ -569,7 +569,7 @@
     { skin: '#f0c49c', hair: 'combover', hairColor: '#7a6a5a', body: 'suit', suit: '#4a4f5c', shirt: '#f2f2f2', tie: '#ffd23f', face: 'jowl', glasses: 'square', seed: 7 },
     { skin: '#c68a5e', hair: 'gray', hairColor: '#c9c9c9', body: 'suit', suit: '#6b6f7a', shirt: '#f2f2f2', tie: '#1b3fa0', face: 'round', mustache: true, seed: 8 },
   ];
-  const DEP_LINES = ['Sou base do governo!', 'Qual governo? Qualquer um!', 'Emenda liberada!', 'Toma lá, dá cá!', 'Meu voto tem preço!', 'Depende do cargo...', 'Vota comigo, ganha ponte!'];
+  const DEP_LINES = ['Sou base do governo!', 'Qual governo? Qualquer um!', 'Emenda liberada!', 'Toma lá, dá cá!', 'Meu voto tem preço!', 'Depende do cargo...', 'Vota comigo, ganha ponte!', 'Cadê minha emenda Pix?', 'Sou base aliada!'];
   function drawSack(ctx, x, y, fl) {
     ctx.save(); ctx.translate(x, y);
     ctx.beginPath();
@@ -704,7 +704,7 @@
   // LOBISTA — tanque com maleta; espirais de cédulas; deixa a mala
   // ======================================================================
   const LOB = { skin: '#e0a882', hair: 'slick', hairColor: '#1a1a1a', body: 'suit', suit: '#1d2333', shirt: '#f4f1e8', tie: '#ffd23f', glasses: 'dark', face: 'square', seed: 11 };
-  const LOB_LINES = ['Vamos fazer negócio?', 'Pra você, um precinho!', 'Nota fiscal? Precisa não.', 'É só um agrado!', 'Tô só de passagem...'];
+  const LOB_LINES = ['Vamos fazer negócio?', 'Pra você, um precinho!', 'Nota fiscal? Precisa não.', 'É só um agrado!', 'Tô só de passagem...', 'Tem emenda Pix aí?'];
   function drawBriefcase(ctx, x, y, w, h, open, t, fl, label) {
     ctx.save(); ctx.translate(x, y);
     // alça
@@ -779,7 +779,7 @@
   // MARQUETEIRO — blinda (shieldT) quem está perto; alvo prioritário; foge
   // ======================================================================
   const MKT = { skin: '#f0c49c', hair: 'pompadour', hairColor: '#2a2a2a', body: 'shirt', shirt: '#ff5d8f', glasses: 'square', beard: 'goatee', beardColor: '#2a2a2a', seed: 12 };
-  const MKT_LINES = ['É tudo narrativa!', 'Engajamento, gente!', 'Bora lacrar!', 'Isso aí é fake!', 'A culpa é do algoritmo!', 'Ângulo bom, sorri!'];
+  const MKT_LINES = ['É tudo narrativa!', 'Engajamento, gente!', 'Bora lacrar!', 'Isso aí é fake!', 'A culpa é do algoritmo!', 'Ângulo bom, sorri!', 'Faz o L, gente!', 'A culpa é da herança!'];
   define('marqueteiro', {
     hp: 14, r: 14, score: 800, pix: 6,
     init(e, o) {
@@ -838,9 +838,9 @@
   });
 
   // ======================================================================
-  // BOT DE FAKE NEWS — enxame em curvas; às vezes mergulha (com aviso)
+  // BOT DE ENGAJAMENTO — enxame em curvas; às vezes mergulha (com aviso)
   // ======================================================================
-  const BOT_LINES = ['FAKE!', 'Compartilha!', 'Vi no zap!', 'Repassa urgente!', 'FAKE!'];
+  const BOT_LINES = ['CURTI!', 'Compartilha!', 'Engaja!', 'Segue de volta!', 'Viralizou!'];
   define('bot', {
     hp: 1, r: 8, score: 60, pix: 0,
     init(e, o) {
@@ -992,7 +992,7 @@
   // SINDICALISTA — megafone; leques largos em rajadas, balão "GREVE!"
   // ======================================================================
   const SIND = { skin: '#c68a5e', hair: 'short', hairColor: '#222222', body: 'tshirt', shirt: '#e63946', hat: 'cap', hatColor: '#b81d2a', mustache: true, beard: 'stubble', face: 'round', brows: 'bushy', seed: 13 };
-  const SIND_LINES = ['GREVE!', 'GREVE GERAL!', 'Ninguém trabalha hoje!', 'É GREVE, companheiro!'];
+  const SIND_LINES = ['GREVE!', 'GREVE GERAL!', 'Ninguém trabalha hoje!', 'É GREVE, companheiro!', 'Volta o imposto sindical!'];
   function drawMegaphone(ctx, x, y, ang, k, fl) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(k, k);
     ctx.beginPath(); ctx.moveTo(-2, -3); ctx.lineTo(4, -3); ctx.lineTo(13, -7.5); ctx.lineTo(13, 7.5); ctx.lineTo(4, 3); ctx.lineTo(-2, 3); ctx.closePath();
@@ -1046,8 +1046,11 @@
   // LEÃO DA RECEITA — espreita, avisa e dá o bote: morde 15% do seu Pix
   // (contato não mata: harmless). Derrube enquanto ele foge = RESTITUIÇÃO.
   // ======================================================================
+  // Exportado como G.EnemyArt.lion (o Leão do Lule no lule.js usa o mesmo desenho).
+  // o = { t, flash, sx, sy, pounce, bristle, eyesRed, lookX, mouth }
   function drawLion(ctx, x, y, o) {
-    const fl = o.flash, C = (c) => fcol(c, fl), t = o.t;
+    o = o || {};
+    const fl = o.flash, C = (c) => fcol(c, fl), t = o.t || 0;
     ctx.save(); ctx.translate(x, y);
     ctx.scale(o.sx || 1, o.sy || 1);
     // rabo
@@ -1112,28 +1115,37 @@
     }
     ctx.restore();
   }
-  function lionBite(e) {
-    const g = G.game, run = G.run, p = g.player;
-    const d = e.data;
-    if (d.bit) return;
-    d.bit = true;
-    // 15% do Pix ganho NESTA fase, entre R$ 5 e R$ 40: dói, mas não leva um upgrade inteiro da Lojinha
+  // Mordida do Leão no Pix do Zé (exportada como G.EnemyArt.taxBite; o Leão do Lule também usa).
+  // 15% do Pix ganho NESTA fase, entre R$ 5 e R$ 40: dói, mas não leva um upgrade inteiro da Lojinha.
+  // Nunca tira vida. (x, y) = onde mostrar o texto (o carro). Devolve quanto levou.
+  function taxBite(x, y) {
+    const g = G.game, run = G.run;
+    if (!g || !run) return 0;
+    const pix = Math.max(0, run.pix || 0);
     let steal = M.clamp(Math.round((g.pixStage || 0) * 0.15), 5, 40);
-    steal = Math.min(steal, Math.max(0, run.pix));
-    run.pix = Math.max(0, run.pix - steal);
+    steal = Math.min(steal, pix);
+    run.pix = pix - steal;
     // tira também do que ainda não foi pro cofre (o save), sem ficar negativo
-    const unc = Math.max(0, g.pixStage - g.pixCommitted);
-    g.pixStage -= Math.min(unc, steal);
-    d.stolen = steal;
+    const unc = Math.max(0, (g.pixStage || 0) - (g.pixCommitted || 0));
+    if (g.pixStage != null) g.pixStage -= Math.min(unc, steal);
     if (steal > 0) {
-      G.text(p.x, p.y - 34, 'MORDIDA DO LEÃO -R$ ' + steal, { color: G.C.orange, size: 13, life: 1.7, vy: -22 });
-      G.burst(p.x, p.y - 8, 12, { colors: [G.C.pix, '#ffffff'], speed: 150, life: 0.5 });
+      G.text(x, y - 34, 'MORDIDA DO LEÃO -R$ ' + steal, { color: G.C.orange, size: 13, life: 1.7, vy: -22 });
+      G.burst(x, y - 8, 12, { colors: [G.C.pix, '#ffffff'], speed: 150, life: 0.5 });
     } else {
-      G.text(p.x, p.y - 34, 'MORDIDA DO LEÃO: ISENTO!', { color: G.C.orange, size: 12, life: 1.6, vy: -22 });
+      G.text(x, y - 34, 'MORDIDA DO LEÃO: ISENTO!', { color: G.C.orange, size: 12, life: 1.6, vy: -22 });
     }
     G.shake(4);
     G.vibrate(80);
     sfx('bite');
+    return steal;
+  }
+  function lionBite(e) {
+    const p = G.game.player;
+    const d = e.data;
+    if (d.bit) return;
+    d.bit = true;
+    const steal = taxBite(p.x, p.y);
+    d.stolen = steal;
     e.vx *= -0.15; e.vy = -110; // quica pra trás e foge com o dinheiro
     talk(e, steal > 0 ? ['NHAC! Imposto pago!', 'Mordida de 15%!', 'Leão agradece!', 'Caiu na malha fina!'] : 'Sem Pix? Que pena.', 1, 1.6, true);
     d.st = 'flee';
@@ -1168,7 +1180,7 @@
             if (okShot(e, 110)) { G.pat.aimedFan(e.x, e.y + 4, lvl() >= 3 ? 5 : 3, 0.5, spd(100), { style: 'en_imposto', color: COL.orange }); sfx('enemy_shot'); }
           }
           if (d.stT > d.prowlT && p && p.alive && !p.entering) {
-            if (d.pounces >= d.maxP) { d.st = 'flee'; talk(e, ['Até o próximo IR!', 'Volto em abril!'], 1, 1.6, true); break; }
+            if (d.pounces >= d.maxP) { d.st = 'flee'; talk(e, ['Até o próximo IR!', 'Volto em abril!', 'Depois é a vez do Lule!'], 1, 1.6, true); break; }
             d.st = 'aim'; d.stT = 0;
             d.lx = M.clamp(p.x, 20, G.W - 20); d.ly = M.clamp(p.y, e.y + 60, G.H - 40);
             sfx('shout');
@@ -1269,7 +1281,7 @@
     { skin: '#e0a882', hair: 'combover', hairColor: '#6b5a48', body: 'suit', suit: '#4a4f5c', shirt: '#f2f2f2', tie: '#ff8c1a', face: 'long', glasses: 'round', seed: 18 },
     { skin: '#f0c49c', hair: 'long', hairColor: '#c9a15a', body: 'suit', suit: '#1b3fa0', shirt: '#ffffff', face: 'oval', seed: 19 },
   ];
-  const MIN_LINES = ['Sou o 39º ministro!', 'Ministério do Puxadinho!', 'Ministro de quê? Sei lá!', 'Tô só de passagem!', 'Ministério da Picanha!', 'Reunião? Só se tiver café.'];
+  const MIN_LINES = ['Sou o 39º ministro!', 'Ministério do Puxadinho!', 'Ministro de quê? Sei lá!', 'Tô só de passagem!', 'Ministério da Picanha!', 'Reunião? Só se tiver café.', 'Já somos 39!', 'Vou de jatinho da FAB!'];
   define('ministro', {
     hp: 6, r: 12, score: 220, pix: 2,
     init(e, o) {
@@ -1297,14 +1309,43 @@
   });
 
   // ======================================================================
-  // MOTOQUEIRO DA MOTOCIATA — passagens rápidas pelas laterais soltando tiros pra baixo
-  // (o chefão Bolsonário pode usar este id como escolta: opts dir/vx/spd/ty)
+  // MOTOBOY DA PICANHA — passa pela lateral atirando pra baixo; a picanha nunca chega
   // ======================================================================
+  // jaqueta de entregador vermelha e branca (corpo 'suit' = jaqueta aberta por cima da camiseta)
+  // hatStripe: faixa do capacete (o art.js usa se tiver; senão fica a faixa padrão)
+  const MOTO_RED = '#e63946', MOTO_RED_D = '#a81e2b';
   const MOTO = [
-    { skin: '#e0a882', hair: 'none', body: 'tshirt', shirt: '#ffd23f', hat: 'helmet', hatColor: '#00a651', seed: 20 },
-    { skin: '#c68a5e', hair: 'none', body: 'tshirt', shirt: '#00a651', hat: 'helmet', hatColor: '#ffd23f', seed: 21 },
-    { skin: '#f0c49c', hair: 'none', body: 'tshirt', shirt: '#ffffff', hat: 'helmet', hatColor: '#1b3fa0', glasses: 'dark', seed: 22 },
+    { skin: '#e0a882', hair: 'none', body: 'suit', suit: MOTO_RED, shirt: '#ffffff', pants: '#2b3445', hat: 'helmet', hatColor: '#ffffff', hatStripe: MOTO_RED, seed: 20 },
+    { skin: '#c68a5e', hair: 'none', body: 'suit', suit: '#ffffff', shirt: MOTO_RED, pants: '#2b3445', hat: 'helmet', hatColor: MOTO_RED, hatStripe: '#ffffff', seed: 21 },
+    { skin: '#f0c49c', hair: 'none', body: 'suit', suit: MOTO_RED, shirt: '#ffffff', pants: '#2b3445', hat: 'helmet', hatColor: MOTO_RED, hatStripe: '#ffffff', glasses: 'dark', seed: 22 },
   ];
+  const MOTO_LINES = ['Picanha em breve!', 'Tá chegando!', 'Saiu pra entrega!'];
+  // baú térmico de entrega nas costas (coordenadas da moto virada para a direita; o texto nunca sai espelhado)
+  // (o texto encolhe na horizontal para caber: a Bungee é bem mais larga que a fonte reserva)
+  function fitText(ctx, str, y, maxW) {
+    const w = ctx.measureText(str).width;
+    if (w <= maxW) { ctx.fillText(str, 0, y); return; }
+    ctx.save(); ctx.scale(maxW / w, 1); ctx.fillText(str, 0, y); ctx.restore();
+  }
+  function drawDeliveryBox(ctx, x, y, mirror, fl) {
+    const w = 26, h = 18;
+    ctx.save(); ctx.translate(x, y);
+    // alças até o piloto
+    ctx.strokeStyle = fcol('#3a3f4b', fl); ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(w / 2 - 2, -h / 2 + 4); ctx.lineTo(w / 2 + 6, -h / 2 + 7); ctx.moveTo(w / 2 - 2, h / 2 - 5); ctx.lineTo(w / 2 + 6, h / 2 - 3); ctx.stroke();
+    // lateral (profundidade) + frente
+    ctx.beginPath(); ctx.moveTo(-w / 2, -h / 2); ctx.lineTo(-w / 2 + 4, -h / 2 - 4); ctx.lineTo(w / 2 + 4, -h / 2 - 4); ctx.lineTo(w / 2, -h / 2); ctx.closePath();
+    inked(ctx, fcol(MOTO_RED_D, fl), 1.2);
+    rrect(ctx, -w / 2, -h / 2, w, h, 2.5); inked(ctx, fcol(MOTO_RED, fl), 1.5);
+    if (!fl) {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(-w / 2 + 2, -h / 2 + 2, w - 4, 1.4);
+      if (mirror) ctx.scale(-1, 1);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
+      ctx.font = '6px ' + G.FONT_DISPLAY; fitText(ctx, 'PICANHA', -1.4, w - 4);
+      ctx.font = '4px ' + G.FONT_DISPLAY; fitText(ctx, 'EM BREVE', 5.2, w - 8);
+    }
+    ctx.restore();
+  }
   define('motoqueiro', {
     hp: 8, r: 14, score: 320, pix: 2,
     init(e, o) {
@@ -1335,6 +1376,7 @@
           const o = { style: 'rice', color: COL.orange, accel: 130, maxSpd: spd(170) };
           if (pair) { G.fire(e.x - d.dir * 6, e.y + 10, DOWN - 0.22, spd(55), o); G.fire(e.x - d.dir * 6, e.y + 10, DOWN + 0.22, spd(55), o); }
           else G.fire(e.x - d.dir * 6, e.y + 10, DOWN, spd(55), o);
+          talk(e, MOTO_LINES, 0.05, 1.4); // rara
         }
       }
       d.smoke -= dt;
@@ -1348,13 +1390,8 @@
       const d = e.data, fl = G.isFlash(e), C = (c) => fcol(c, fl);
       ctx.translate(e.x, e.y - d.bounce);
       if (d.dir < 0) ctx.scale(-1, 1);
-      // bandeira verde-amarela
-      ctx.strokeStyle = C('#5a4632'); ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.moveTo(-13, 2); ctx.lineTo(-15, -26); ctx.stroke();
-      const w = Math.sin(e.t * 14) * 2;
-      ctx.beginPath(); ctx.moveTo(-15, -26); ctx.quadraticCurveTo(-21, -27 + w, -28, -25 - w); ctx.lineTo(-27, -16 - w); ctx.quadraticCurveTo(-21, -18 + w, -15, -17); ctx.closePath();
-      inked(ctx, C('#00a651'), 1);
-      if (!fl) { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.moveTo(-17, -21.5); ctx.lineTo(-21, -24 + w * 0.5); ctx.lineTo(-25.5, -21 - w * 0.5); ctx.lineTo(-21, -18.5 + w * 0.5); ctx.closePath(); ctx.fill(); }
+      // baú da picanha nas costas (atrás do piloto)
+      drawDeliveryBox(ctx, -21, -7, d.dir < 0, fl);
       // piloto
       G.Art.person(ctx, -1, -12, 27, MOTO[d.v], { t: e.t, flash: fl, pose: 'drive', lookX: 0.8, lookY: 0.3, autoLook: false, mood: 'laugh' });
       // rodas
@@ -1365,8 +1402,8 @@
       }
       // quadro + tanque
       ctx.beginPath(); ctx.moveTo(-15, 6); ctx.lineTo(-8, 0); ctx.lineTo(9, -2); ctx.lineTo(14, 4); ctx.lineTo(6, 8); ctx.lineTo(-10, 8); ctx.closePath();
-      inked(ctx, C('#00a651'), 1.5);
-      if (!fl) { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.moveTo(-4, 1); ctx.lineTo(8, -0.5); ctx.lineTo(10, 2.5); ctx.lineTo(-3, 4); ctx.closePath(); ctx.fill(); }
+      inked(ctx, C(MOTO_RED), 1.5);
+      if (!fl) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(-4, 1); ctx.lineTo(8, -0.5); ctx.lineTo(10, 2.5); ctx.lineTo(-3, 4); ctx.closePath(); ctx.fill(); }
       // guidão, farol e escapamento
       ctx.strokeStyle = C('#c9d3e6'); ctx.lineWidth = 1.8;
       ctx.beginPath(); ctx.moveTo(12, 3); ctx.lineTo(15, -7); ctx.lineTo(11, -9); ctx.stroke();
@@ -1376,7 +1413,7 @@
   });
 
   // ======================================================================
-  // DRONE DO GABINETE — paira; pisca vermelho e solta rajada de agulhas mirada
+  // DRONE DA LIVE — paira filmando; o REC pisca vermelho e ele solta rajada de agulhas mirada
   // ======================================================================
   define('drone', {
     hp: 6, r: 12, score: 300, pix: 2,
@@ -1431,6 +1468,11 @@
       if (!fl) {
         ctx.fillStyle = warn ? '#ff8a9a' : '#4cc9f0'; ctx.beginPath(); ctx.arc(-1, 3, 1.1, 0, TAU); ctx.fill();
         ctx.fillStyle = '#ffd23f'; ctx.fillRect(-5, -4.5, 10, 2.4);
+        if (warn) { // "REC" ao lado da luz vermelha enquanto mira
+          ctx.font = '5px ' + G.FONT_DISPLAY; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.strokeText('REC', 5, 4.2);
+          ctx.fillStyle = '#ffffff'; ctx.fillText('REC', 5, 4.2);
+        }
       }
     },
   });
@@ -1567,7 +1609,7 @@
     G.Art.person(ctx, 0, -50 - Math.abs(Math.sin(t * 4.8)) * 3, 54, TRIO_C, { t, flash: fl, pose, mood: d.pat === 'santinhos' || d.pat === 'notas' ? 'laugh' : 'smug', mouth: d.beat, lookX: 0, autoLook: false });
     // carroceria
     rrect(ctx, -74, -8, 148, 42, 8); inked(ctx, C('#ffd23f'), 2.4);
-    ctx.fillStyle = C('#00a651'); ctx.fillRect(-73, 6, 146, 8);
+    ctx.fillStyle = C('#e63946'); ctx.fillRect(-73, 6, 146, 8);
     ctx.fillStyle = C('#1b3fa0'); ctx.fillRect(-73, 14, 146, 3);
     // cabine
     ctx.beginPath(); ctx.moveTo(-24, 33); ctx.lineTo(-20, 18); ctx.lineTo(20, 18); ctx.lineTo(24, 33); ctx.closePath(); inked(ctx, C('#1d3557'), 1.6);
@@ -1779,11 +1821,11 @@
   });
 
   // ----------------------------------------------------------------------
-  // SERVIDOR DO GABINETE (fase 3) — rack voador: solta bots, varre com lasers
-  // (com aviso) e levanta muralhas de "fake news" com brecha
+  // MINISTÉRIO DA VERDADE (fase 3) — rack voador: solta bots, varre com lasers
+  // (com aviso) e levanta muralhas de "censura" com brecha
   // ----------------------------------------------------------------------
   const SERV_DUR = { bots: 4.4, laser: 4.8, muro: 5.4 };
-  const SERV_LINES = ['Disparo em massa!', 'Isso é tudo verdade!', 'Compartilhe antes que apaguem!', 'Recebi de um amigo!'];
+  const SERV_LINES = ['Isso é desinformação!', 'Conteúdo removido!', 'Só vale a versão oficial!', 'Denunciado com sucesso!'];
   function drawServer(ctx, e, g) {
     const d = e.data, fl = G.isFlash(e), C = (c) => fcol(c, fl), t = e.t;
     ctx.save(); ctx.translate(e.x, e.y);
@@ -1804,7 +1846,7 @@
       ctx.fillStyle = on ? '#ff2a4a' : '#ffd23f'; ctx.beginPath(); ctx.arc(-28, -81, 3.5, 0, TAU); ctx.fill();
       ctx.fillStyle = on ? '#ffd23f' : '#ff2a4a'; ctx.beginPath(); ctx.arc(28, -81, 3.5, 0, TAU); ctx.fill();
     }
-    // gabinete (rack)
+    // rack
     rrect(ctx, -34, -54, 68, 96, 6); inked(ctx, C('#252a36'), 2.4);
     // emissores de laser nas laterais
     const lz = d.pat === 'laser' && d.st === 'fight';
@@ -1818,7 +1860,7 @@
       const angry = d.pat === 'laser' || d.pat === 'muro';
       ctx.fillStyle = angry ? '#ff2a4a' : '#3ddc84';
       ctx.font = '8px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      if (((t * 1.5) | 0) % 3 === 2) ctx.fillText('FAKE', 0, -31);
+      if (((t * 1.5) | 0) % 3 === 2) ctx.fillText('APAGA', 0, -31);
       else {
         // olhos de pixel
         for (const sx of [-1, 1]) {
@@ -1845,17 +1887,17 @@
     }
     if (!fl) {
       ctx.fillStyle = '#ffd23f'; ctx.font = '6px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('GABINETE', 0, 38);
+      ctx.fillText('VERDADE', 0, 38);
     }
     ctx.restore();
-    if (d.st === 'fight') mbBar(ctx, e.x, e.y - 98, 110, e.hp / e.maxHp, mbLabel(e, 'SERVIDOR DO GABINETE'));
+    if (d.st === 'fight') mbBar(ctx, e.x, e.y - 98, 110, e.hp / e.maxHp, mbLabel(e, 'MINISTÉRIO DA VERDADE'));
   }
   define('servidor', {
     hp: 1400, r: 44, score: 25000, pix: 55, big: true, keepOffscreen: true,
     init(e, o) {
       mbStart(e, o, 52, 168);
       e.data.gapI = 9;
-      G.banner('SERVIDOR DO GABINETE', 'FÁBRICA DE FAKE NEWS', { small: true, color: G.C.orange, dur: 2.2 });
+      G.banner('MINISTÉRIO DA VERDADE', 'CHECAGEM OFICIAL 24H', { small: true, color: G.C.orange, dur: 2.2 });
       sfx('charge');
     },
     update(e, dt, g) {
@@ -1869,7 +1911,7 @@
       d.fightT += dt;
       e.x = G.W / 2 + Math.sin(d.fightT * 0.4) * 50;
       e.y = d.homeY + Math.sin(d.fightT * 1.3) * 5;
-      if (d.fightT > d.dur) { mbFlee(e, 'Vou formatar tudo!'); return; }
+      if (d.fightT > d.dur) { mbFlee(e, 'Vou tirar do ar!'); return; }
       const late = e.hp / e.maxHp < 0.5;
       if (!d.pat || d.patT <= 0) { mbNext(e, ['bots', 'laser', 'muro'], SERV_DUR); if (Math.random() < 0.5) talk(e, SERV_LINES, 1, 1.8); }
       d.patT -= dt; d.pt -= dt;
@@ -1895,7 +1937,7 @@
         }
         d.pt = 99;
       } else if (d.pat === 'muro') {
-        if (d.pn === 0) G.text(G.W / 2, e.y + 70, 'FAKE NEWS!', { color: COL.red, size: 18, life: 1.2, vy: 30 });
+        if (d.pn === 0) G.text(G.W / 2, e.y + 70, 'CENSURADO!', { color: COL.red, size: 18, life: 1.2, vy: 30 });
         const rows = late ? 9 : 7;
         if (d.pn < rows) {
           const slots = 20, step = (G.W - 20) / (slots - 1);
@@ -1912,7 +1954,7 @@
     },
     draw(ctx, e, g) { drawServer(ctx, e, g); },
     onHit(e, dmg) { mbOnHit(e, dmg); },
-    onDeath(e) { if (!bossDying()) mbDeath(e, 'SERVIDOR DERRUBADO!'); },
+    onDeath(e) { if (!bossDying()) mbDeath(e, 'SAIU DO AR!'); },
   });
 
   // ----------------------------------------------------------------------
@@ -1922,7 +1964,7 @@
   // ----------------------------------------------------------------------
   const COMI_N = 37, COMI_SP = 15, COMI_V = 100, HIST = 460;
   const COMI_CHEF = { skin: '#e8b48a', hair: 'gray', hairColor: '#d6d6d6', body: 'suit', suit: '#141a28', shirt: '#f4f1e8', tie: '#e63946', sash: ['#ffd23f', '#e63946'], hat: 'tophat', hatColor: '#141a28', face: 'jowl', seed: 32 };
-  const COMI_LINES = ['Reunião ministerial!', 'Todo mundo atrás de mim!', 'Mais um ministério? Cria!', 'Viagem oficial, gente!'];
+  const COMI_LINES = ['Reunião ministerial!', 'Todo mundo atrás de mim!', 'Mais um ministério? Cria!', 'Viagem oficial, gente!', 'Já somos 39!', 'Vou de jatinho da FAB!'];
   function comiPath(tau, out) {
     out.x = G.W / 2 + Math.sin(tau * 0.9) * (G.W / 2 - 46);
     out.y = G.H * 0.3 + Math.sin(tau * 1.8 + 0.6) * G.H * 0.13;
@@ -2112,8 +2154,7 @@
   const PWQ = [], BWQ = [];   // pedidos esperando a vez
   const pwAsked = {};         // tipos já pedidos (por resolução do canvas)
   let pwRes = 0, pwTimer = 0;
-  // O art.js aceita ~400 tarefas na fila e descarta (marcando como feito) o que passar disso:
-  // entregamos aos poucos, com a fila dele abaixo de ~200 tarefas (17 por combinação pequena).
+  // O art.js recusa (sem marcar como feito) o que passar de ~400 tarefas na fila principal: entregamos aos poucos, com a fila abaixo de ~200 (17 por combinação pequena, 27 com braços erguidos).
   function pwPump() {
     pwTimer = 0;
     try {
@@ -2121,7 +2162,7 @@
       if (A && A.prewarm) {
         const st = A.cacheStats ? A.cacheStats() : null;
         let room = 200 - (st && st.warmQueue > 0 ? st.warmQueue : 0);
-        while (PWQ.length && room > 0) { const it = PWQ.shift(); A.prewarm([it]); room -= it.size >= 70 ? 10 : 17; }
+        while (PWQ.length && room > 0) { const it = PWQ.shift(); A.prewarm([it]); room -= it.size >= 70 ? 10 : (it.pose === 'wave' || it.pose === 'up' || it.pose === 'fist') ? 27 : 17; }
       } else PWQ.length = 0;
       // sprites de tiro: cada um custa 1-6 ms (shadowBlur); no máximo ~2 ms por vez
       const t0 = performance.now();
@@ -2145,5 +2186,6 @@
     }
     if (!pwTimer && (PWQ.length || BWQ.length)) pwTimer = setTimeout(pwPump, 0);
   }
-  G.EnemyArt = { prewarm, pending: () => PWQ.length + BWQ.length };
+  // lion / taxBite: consumidos pelo lule.js (o Leão da Receita no Planalto), com fallback local
+  G.EnemyArt = { prewarm, pending: () => PWQ.length + BWQ.length, lion: drawLion, taxBite };
 })();

@@ -327,7 +327,7 @@
     cars: ['#7a4652', '#46628a', '#7f8592', '#957f57', '#2e3138'],
     crowd: ['#7a6a5c', '#5a6a7a', '#8a6a6a', '#a08a5a'],
     marble: '#958c84', marble2: '#7a726b', glassDark: '#2c2a36', arch: '#bdb2a4', archD: '#8c8278', deck: '#3b3b45',
-    emu: '#6e6458',
+    capi: '#8a6446', capiD: '#5e4330',
     beams: '255,215,170', beamA: 0.06, light: '255,180,110', lightA: 0.08,
   };
   // Fase 4: noite, céu vermelho-alaranjado, churrasco do Lule
@@ -662,8 +662,8 @@
   // Alturas dos blocos múltiplas de 64 (faixas do gramado alternam a cada 32).
   // =================================================================
   const MINIS = ['MIN. DO TOMA LÁ DÁ CÁ', 'MIN. DA PICANHA', 'MIN. DO VENTO ESTOCADO', 'MIN. DA META DOBRADA', 'MIN. DAS EMENDAS',
-    'MIN. DO SIGILO (100 ANOS)', 'MIN. DO CAFEZINHO', 'MIN. DA RACHADINHA', 'MIN. DO PIX', 'MIN. DAS BLUSINHAS', 'MIN. DO MIMIMI',
-    'MIN. DO JET SKI', 'MIN. DO LEITE CONDENSADO', 'MIN. DA MANDIOCA', 'MIN. DO 171', 'MIN. DA MOTOCIATA', 'MIN. DA REUNIÃO INÚTIL',
+    'MIN. DA TAXAÇÃO', 'MIN. DO CAFEZINHO', 'MIN. DA RACHADINHA', 'MIN. DO PIX', 'MIN. DAS BLUSINHAS', 'MIN. DO JATINHO DA FAB',
+    'MIN. DO ARCABOUÇO FURADO', 'MIN. DO PIX VIGIADO', 'MIN. DA MANDIOCA', 'MIN. DO 171', 'MIN. Nº 39 (EM BREVE)', 'MIN. DA REUNIÃO INÚTIL',
     'MIN. DO FERIADÃO', 'MIN. DOS MINISTÉRIOS', 'MIN. DA CERVEJINHA', 'MIN. DO CARGO VAGO', 'MIN. DA FILA', 'MIN. DO ASSESSOR DO ASSESSOR',
     'MIN. DO PUXADINHO', 'MIN. DA PAUTA-BOMBA', 'MIN. DO RECESSO', 'MIN. DA SAUDADE', 'MIN. DO CARIMBO'];
   function base2(x, P, R, h, o) {
@@ -863,8 +863,10 @@
             seg(x, 'rgba(20,20,25,0.6)', 0.8, lx, fy, lx, fy - 9); F.flags.push({ x: lx, y: fy - 9, w: 7, h: 4.5, br: true });
             seg(x, 'rgba(20,20,25,0.6)', 0.8, rx, fy + 8, rx, fy - 1); F.flags.push({ x: rx, y: fy - 1, w: 7, h: 4.5, c: '#7a3636' });
           }
-          rect(x, P.board, 126, y0 - 14, 50, 9); txt(x, 'FORA TODOS', 151, y0 - 9.5, 5, P.ink, { maxW: 46 });
-          rect(x, P.board, 186, y0 - 14, 50, 9); txt(x, 'FORA TODOS', 211, y0 - 9.5, 5, P.ink, { maxW: 46 });
+          // faixas: o lado verde-amarelo quer menos imposto; o vermelho quer o imposto sindical de volta
+          rect(x, P.board, 126, y0 - 14, 50, 9); txt(x, 'MENOS IMPOSTO', 151, y0 - 9.5, 5, P.ink, { maxW: 46 });
+          rect(x, P.board, 186, y0 - 19, 50, 14);
+          txt(x, 'VOLTA O IMPOSTO', 211, y0 - 15.2, 4.6, P.ink, { maxW: 46 }); txt(x, 'SINDICAL', 211, y0 - 9.2, 4.6, P.ink, { maxW: 46 });
         },
       },
       // fila gigante para o protocolo (senha 171)
@@ -1185,7 +1187,7 @@
           }
         },
       },
-      // Chefão: Palácio da Alvorada na margem (com as emas no gramado)
+      // Chefona: Palácio da Alvorada na margem (com as capivaras no gramado)
       alvorada: {
         h: 704, park: { local: 262, screen: 150 }, lanes: [[430, 704]],
         paint(x, P, R, h, F) {
@@ -1220,7 +1222,8 @@
           for (let i = 0; i < 10; i++) treeC(x, P, R, R.r(16, 344), R.r(20, 120), 9, R.i(3, 5));
           for (let i = 0; i < 6; i++) { treeC(x, P, R, R.r(14, 70), R.r(150, 380), 8, 3); treeC(x, P, R, R.r(290, 346), R.r(290, 380), 8, 3); }
           box(x, P, 162, 40, 10, 8, 6, { roof: '#5e4a48', win: false });
-          F.emus.push({ x: 120, y: 350, p: 0 }, { x: 140, y: 362, p: 2 }, { x: 250, y: 352, p: 4 });
+          // capivaras pastando (uma com filhote atrás)
+          F.capis.push({ x: 120, y: 350, p: 0 }, { x: 140, y: 362, p: 2, cub: true }, { x: 250, y: 352, p: 4 });
           glints(R, F, h, xl, xr, 50, 440, h);
         },
       },
@@ -1245,13 +1248,14 @@
     upper: 'sunset', sun: { x: 0.5, y: -0.02, r: 0.75, rgb: '255,150,70', a: 0.22 },
     tint: [0, 'rgba(255,120,70,0.16)', 0.3, 'rgba(255,100,90,0.06)', 0.65, 'rgba(120,60,120,0.05)', 1, 'rgba(30,15,50,0.24)'],
   };
-  // Jet skis em zigue-zague e lanchas, com esteira (só onde há água)
+  // Lanchas e pedalinhos em zigue-zague, com esteira (só onde há água).
+  // ped: pedalinho (cisne branco de pedal: lento, esteira curta, pescoço do cisne na proa)
   const LAKE_BOATS = [
-    { x: 175, amp: 60, w: 0.55, v: 70, ofs: 120, jet: true, c: '#a8842e' },
-    { x: 200, amp: 46, w: 0.8, v: -55, ofs: 520, jet: true, c: '#93403c' },
-    { x: 150, amp: 30, w: 0.3, v: 95, ofs: 820, jet: true, c: '#3a5688' },
-    { x: 222, amp: 10, w: 0.15, v: -30, ofs: 300, jet: false, c: '#aaa49a' },
-    { x: 140, amp: 8, w: 0.12, v: 38, ofs: 660, jet: false, c: '#9a948a' },
+    { x: 175, amp: 60, w: 0.55, v: 70, ofs: 120, c: '#a8842e' },
+    { x: 200, amp: 22, w: 0.5, v: -16, ofs: 520, ped: true, c: '#e8e4da' },
+    { x: 150, amp: 30, w: 0.3, v: 95, ofs: 820, c: '#3a5688' },
+    { x: 222, amp: 10, w: 0.15, v: -30, ofs: 300, c: '#aaa49a' },
+    { x: 140, amp: 14, w: 0.4, v: 12, ofs: 660, ped: true, c: '#f0d27a' },
   ];
   function animLake(ctx, st, W, H, t) {
     const r = laneRanges(st, H), L = 1000;
@@ -1272,11 +1276,11 @@
       for (let k = 1; k <= 5; k++) {
         const q = posAt(b, t - k * 0.09);
         if (Math.abs(q[1] - qy) > 60) break;
-        ctx.strokeStyle = 'rgba(215,220,240,' + (0.17 - k * 0.028).toFixed(3) + ')'; ctx.lineWidth = (b.jet ? 3.2 : 4.4) - k * 0.35;
+        ctx.strokeStyle = 'rgba(215,220,240,' + ((b.ped ? 0.12 : 0.17) - k * 0.028).toFixed(3) + ')'; ctx.lineWidth = (b.ped ? 3 : 4.4) - k * 0.35;
         ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(q[0], q[1]); ctx.stroke();
         qx = q[0]; qy = q[1];
       }
-      const back = ang + Math.PI, len = b.jet ? 22 : 30;
+      const back = ang + Math.PI, len = b.ped ? 12 : 30;
       ctx.strokeStyle = 'rgba(215,220,240,0.1)'; ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(back - 0.38) * len, y + Math.sin(back - 0.38) * len);
@@ -1284,10 +1288,20 @@
       ctx.stroke();
       // casco
       ctx.save(); ctx.translate(x, y); ctx.rotate(ang);
-      const l = b.jet ? 7 : 13, w = b.jet ? 2.6 : 4.4;
-      ctx.fillStyle = 'rgba(10,10,30,0.3)'; ctx.fillRect(-l / 2 + 1.5, -w / 2 + 1.5, l, w);
-      ctx.fillStyle = b.c; ctx.beginPath(); ctx.moveTo(l / 2 + 1.5, 0); ctx.lineTo(l / 4, -w / 2); ctx.lineTo(-l / 2, -w / 2); ctx.lineTo(-l / 2, w / 2); ctx.lineTo(l / 4, w / 2); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = 'rgba(30,24,30,0.7)'; ctx.fillRect(-l * 0.2, -w * 0.3, l * 0.3, w * 0.6);
+      if (b.ped) {
+        // pedalinho: casco oval, dois assentos e o pescoço do cisne na proa
+        ctx.fillStyle = 'rgba(10,10,30,0.3)'; ctx.beginPath(); ctx.ellipse(1.5, 1.5, 5, 3.6, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = b.c; ctx.beginPath(); ctx.ellipse(0, 0, 5, 3.6, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(60,50,60,0.55)'; ctx.fillRect(-2.6, -2.2, 2.2, 4.4);
+        ctx.fillStyle = 'rgba(200,70,60,0.85)'; ctx.fillRect(0.2, -1.8, 1.6, 1.4); ctx.fillRect(0.2, 0.4, 1.6, 1.4);
+        ctx.fillStyle = b.c; ctx.fillRect(3.6, -0.9, 3.2, 1.8);
+        ctx.fillStyle = '#e8963a'; ctx.fillRect(6.6, -0.6, 1.3, 1.2);
+      } else {
+        const l = 13, w = 4.4;
+        ctx.fillStyle = 'rgba(10,10,30,0.3)'; ctx.fillRect(-l / 2 + 1.5, -w / 2 + 1.5, l, w);
+        ctx.fillStyle = b.c; ctx.beginPath(); ctx.moveTo(l / 2 + 1.5, 0); ctx.lineTo(l / 4, -w / 2); ctx.lineTo(-l / 2, -w / 2); ctx.lineTo(-l / 2, w / 2); ctx.lineTo(l / 4, w / 2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(30,24,30,0.7)'; ctx.fillRect(-l * 0.2, -w * 0.3, l * 0.3, w * 0.6);
+      }
       ctx.restore();
     }
   }
@@ -1719,7 +1733,7 @@
     const kd = st.def.kinds[name];
     const res = st.res, h = kd.h;
     const s = surface(WW, h, res);
-    const F = { glints: [], flags: [], fount: [], smoke: [], emus: [] };
+    const F = { glints: [], flags: [], fount: [], smoke: [], capis: [] };
     const R = rng(hashStr(st.id + ':' + name));
     try { kd.paint(s.x, st.P, R, h, F); } catch (err) { G.reportError(err, 'bg.paint ' + st.id + '/' + name); }
     sealRow(s.c, h * res);
@@ -2079,7 +2093,7 @@
   }
 
   // =================================================================
-  // Detalhes animados dos blocos (brilhos d'água, bandeiras, fonte, emas, bandeirão)
+  // Detalhes animados dos blocos (brilhos d'água, bandeiras, fonte, capivaras, bandeirão)
   // =================================================================
   function buildFlagImg(st) {
     const P = st.P, s = surface(56, 38, st.res), x = s.x;
@@ -2088,6 +2102,23 @@
     circ(x, P.flagB, 28, 19, 9.5);
     x.strokeStyle = P.flagW || '#bdb8ae'; x.lineWidth = 1.6; x.beginPath(); x.arc(28, 27, 12, -2.2, -0.95); x.stroke();
     return bake(s.c);
+  }
+  // capivara vista de cima/de lado (~9 px): corpo de barril, cabeça quadrada, orelhinha e 4 patas
+  // curtas; graze = cabeça baixa no capim, senão anda (as patas alternam); s = escala (filhote 0,6)
+  function capi(ctx, P, x, y, dir, graze, t, s) {
+    const step = graze ? 0 : Math.sin(t * 5) * 0.8 * s;
+    ctx.fillStyle = 'rgba(20,10,20,0.3)'; ctx.fillRect(x - 3.5 * s, y + 2.2 * s, 8 * s, 1.5 * s);
+    ctx.fillStyle = P.capiD || '#5e4330';
+    ctx.fillRect(x - 2.8 * s + step, y + 1.4 * s, 1 * s, 1.8 * s); ctx.fillRect(x - 1.2 * s - step, y + 1.4 * s, 1 * s, 1.8 * s);
+    ctx.fillRect(x + 1.4 * s - step, y + 1.4 * s, 1 * s, 1.8 * s); ctx.fillRect(x + 2.8 * s + step, y + 1.4 * s, 1 * s, 1.8 * s);
+    ctx.fillStyle = P.capi || '#8a6446';
+    ctx.beginPath(); ctx.ellipse(x, y, 4.4 * s, 2.5 * s, 0, 0, TAU); ctx.fill();
+    const hx = x + dir * 4 * s, hy = y + (graze ? 1 : -1.3) * s;
+    ctx.fillRect(hx - (dir > 0 ? 0.6 : 2.6) * s, hy - 1.2 * s, 3.2 * s, 2.4 * s);
+    ctx.fillStyle = P.capiD || '#5e4330';
+    ctx.fillRect(hx + (dir > 0 ? 1.8 : -2.6) * s, hy - 0.6 * s, 0.8 * s, 1.6 * s); // focinho
+    ctx.fillRect(hx - (dir > 0 ? 0.6 : -1) * s, hy - 1.9 * s, 0.9 * s, 0.9 * s);      // orelha
+    ctx.fillStyle = 'rgba(255,225,190,0.16)'; ctx.fillRect(x - 3 * s, y - 2 * s, 5.5 * s, 0.9 * s); // luz do pôr do sol no lombo
   }
   function drawFeats(ctx, st, W, H, t) {
     for (const ch of st.seq) {
@@ -2130,19 +2161,15 @@
         }
         ctx.globalAlpha = 1;
       }
-      // emas do Alvorada andando e bicando
-      for (const e of F.emus) {
-        const ex = e.x + Math.sin(t * 0.25 + e.p) * 16, y = top + e.y + Math.cos(t * 0.2 + e.p) * 4;
-        if (y < -10 || y > H + 10) continue;
-        const dir = Math.cos(t * 0.25 + e.p) >= 0 ? 1 : -1;
-        const peck = Math.max(0, Math.sin(t * 2.2 + e.p * 3)) > 0.85;
-        ctx.fillStyle = 'rgba(20,10,20,0.3)'; ctx.fillRect(ex - 2, y + 2, 6, 1.5);
-        ctx.fillStyle = st.P.emu || '#6e6458';
-        ctx.beginPath(); ctx.ellipse(ex, y, 3.2, 2.2, 0, 0, TAU); ctx.fill();
-        ctx.fillRect(ex + dir * 2, peck ? y - 1 : y - 5, 1, peck ? 2 : 5);
-        ctx.fillRect(ex + dir * 2 - (dir < 0 ? 1 : 0), peck ? y + 1 : y - 6, 2, 1.4);
-        const step = Math.sin(t * 6 + e.p) * 1.2;
-        ctx.fillRect(ex - 1 + step, y + 2, 0.8, 2); ctx.fillRect(ex + 1 - step, y + 2, 0.8, 2);
+      // capivaras do Alvorada: andam devagar e param para pastar (cabeça baixa)
+      for (const e of F.capis) {
+        const y = top + e.y + Math.cos(t * 0.2 + e.p) * 4;
+        if (y < -12 || y > H + 12) continue;
+        const ex = e.x + Math.sin(t * 0.18 + e.p) * 16;
+        const dir = Math.cos(t * 0.18 + e.p) >= 0 ? 1 : -1;
+        const graze = Math.sin(t * 1.1 + e.p * 3) > 0.35;
+        capi(ctx, st.P, ex, y, dir, graze, t + e.p, 1);
+        if (e.cub) capi(ctx, st.P, ex - dir * 7, y + 1.5, dir, !graze, t + e.p + 0.7, 0.6);
       }
       // bandeirão do Brasil no mastro da Praça (fatias com onda)
       if (F.bigflag) {

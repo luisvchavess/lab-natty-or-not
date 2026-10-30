@@ -20,7 +20,8 @@
    Exemplos:
      node tools/humanbot.js --profile casual --stage 0 --runs 4
      node tools/humanbot.js --profile good --stage 0 --through 1 --runs 3 --weapon voto
-     node tools/humanbot.js --mode ttk --bosses centrao,dilmae,bolsonario,lule --weapons voto,boca,panela,jato --levels 1,3,5
+     node tools/humanbot.js --mode ttk --bosses centrao,dilmae,erika,lule --weapons voto,boca,panela,jato --levels 1,3,5
+     node tools/humanbot.js --mode ttk --bosses centrao,dilmae --weapons voto --levels 3 --mech 0
      node tools/humanbot.js --mode dps
      node tools/humanbot.js --mode mid --levels 1,3,5
    Opções gerais: --page dev|index  --ts 12 (escala de tempo; passo fixo de 1/60, não muda o resultado)
@@ -29,6 +30,10 @@
      --weapon voto|boca|panela|jato|any (arma preferida do perfil good; casual pega qualquer cor)
      --bossOnly 1 --startLv 4 --startW voto (pula direto ao chefão com essa arma)
      --shots 1 (salva desenho da cena 0,3 s antes de cada morte, em PNG; precisa --fast 0 para o print real)
+     --mech 1|0 (padrão 1) faz a "manha" de cada chefão seguindo b.autoGoal (pegar a emenda, ficar na meta,
+       cortar os fios, olé no Leão) com reação humana: o perfil nota cada objeto novo com chance mechNotice e
+       vai até ele mechDelay s depois. --mech 0 ignora a manha e põe mech=0 na URL (o autopiloto também ignora).
+       As tabelas e o summary.json trazem a manha do chefão: ok/miss/stuns (+ objetos vistos/notados no modo run).
    Saída: <out>/summary.json, uma linha por partida e uma tabela agregada no stdout.
    ============================================================ */
 const { chromium } = require('playwright');
@@ -39,7 +44,7 @@ const argv = process.argv.slice(2);
 const opt = {
   mode: 'run', profile: 'casual', stage: 0, through: 0, runs: 1, seed: 1, ts: 12, page: 'dev', out: '/tmp/humanbot',
   fast: 1, weapon: 'any', upg: '', continues: 99, timeout: 1200, w: 195, h: 422, loop: 1, parallel: 3, shots: 0,
-  bosses: 'centrao,dilmae,bolsonario,lule', weapons: 'voto,boca,panela,jato', levels: '1,3,5', maxgt: 2400, ty: 0.8,
+  bosses: 'centrao,dilmae,erika,lule', weapons: 'voto,boca,panela,jato', levels: '1,3,5', maxgt: 2400, ty: 0.8, mech: 1,
 };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -62,6 +67,9 @@ const PROFILES = {
     itemGreed: 0.6, itemRange: 110, bombTrap: 0.35, bombLast: 0.6, bombWorry: 0.35, worryN: 7, colorPicky: false, upper: 0.55,
     lapseRate: 0.2, lapseMin: 0.25, lapseMax: 0.5, endErr: 0.1,
     stratEvery: 0.4, stratLook: 1.2, stratNotice: 0.8, stratW: 0.8,
+    // manha do chefão: nota 60% dos objetos novos (emenda, meta, fio, Leão) e vai até eles 0,45 s depois;
+    // aí o dedo vai direto (mechLag s, em vez do followLag) e, numa zona para ficar (META), o objetivo pesa mechHoldW×
+    mechNotice: 0.6, mechDelay: 0.45, mechLag: 0.2, mechHoldW: 4,
   },
   // jogador bom (já jogou umas vezes): ~190 ms, olha 165 px, raramente deixa passar bala, dedo 700 px/s,
   // fica embaixo do alvo, espera o "P" virar a cor da arma dele, solta bomba quando vê que não tem saída
@@ -72,6 +80,7 @@ const PROFILES = {
     itemGreed: 0.95, itemRange: 170, bombTrap: 0.8, bombLast: 0.95, bombWorry: 0.9, worryN: 5, colorPicky: true, upper: 0.45,
     lapseRate: 0.06, lapseMin: 0.15, lapseMax: 0.3, endErr: 0.05,
     stratEvery: 0.25, stratLook: 1.8, stratNotice: 0.95, stratW: 1.0,
+    mechNotice: 0.92, mechDelay: 0.25, mechLag: 0.12, mechHoldW: 3,
   },
 };
 
@@ -98,7 +107,7 @@ function pageMain(cfg) {
 
   const P = cfg.prof;
   const HB = (window.__hb = {
-    cfg: { profile: cfg.profile, seed: cfg.seed, stage: cfg.stage, mode: cfg.mode, weapon: cfg.weapon, upgrades: cfg.upgrades, loop: cfg.loop },
+    cfg: { profile: cfg.profile, seed: cfg.seed, stage: cfg.stage, mode: cfg.mode, weapon: cfg.weapon, upgrades: cfg.upgrades, loop: cfg.loop, mech: cfg.mech },
     stages: [], deaths: [], bombs: [], continues: [], levels: [], cheap: { near: 0, nearList: [], low: 0, lowList: [], offscreen: 0, enemyLow: [] },
     ttk: [], mids: [], dps: null, done: false, err: null, steps: 0, gtTotal: 0, snaps: [],
   });
@@ -206,10 +215,16 @@ function pageMain(cfg) {
     for (const id in G.Bosses.defs) {
       const def = G.Bosses.defs[id];
       const w2 = (name, fn) => { const orig = def[name]; def[name] = function () { const r = orig ? orig.apply(this, arguments) : undefined; try { fn.apply(this, arguments); } catch (e) { HB.err = 'bosswrap: ' + e.stack; } return r; }; };
-      w2('start', (b) => { const st = curStage(); if (!st) return; st.boss = { id, start: +G.game.t.toFixed(1), lv: G.run.level, w: G.run.weapon, lives: G.run.lives, bombs: G.run.bombs, phases: [{ idx: 0, ft: 0 }], deaths: 0, deathsBy: {}, end: null, fat: 0, cont0: G.run.continues }; });
+      w2('start', (b) => { const st = curStage(); if (!st) return; st.boss = { id, start: +G.game.t.toFixed(1), lv: G.run.level, w: G.run.weapon, lives: G.run.lives, bombs: G.run.bombs, phases: [{ idx: 0, ft: 0 }], deaths: 0, deathsBy: {}, end: null, fat: 0, cont0: G.run.continues, mech: null, goals: 0, noticed: 0, takeT: 0, inT: 0 }; snapMech(st.boss, b); });
       w2('onPhase', (b, idx) => { const st = curStage(); if (st && st.boss) st.boss.phases.push({ idx, ft: +b.ft.toFixed(1), life: b.data && b.data.life }); });
-      w2('onDeath', (b) => { const st = curStage(); if (st && st.boss) { st.boss.end = +b.ft.toFixed(1); st.boss.fat = +((b.data && b.data.fat) || 0).toFixed(2); st.boss.contUsed = G.run.continues - st.boss.cont0; } });
+      w2('onDeath', (b) => { const st = curStage(); if (st && st.boss) { snapMech(st.boss, b); st.boss.end = +b.ft.toFixed(1); st.boss.fat = +((b.data && b.data.fat) || 0).toFixed(2); st.boss.contUsed = G.run.continues - st.boss.cont0; } });
     }
+  }
+  // cópia de b.mech ({ kind, ok, miss, stuns }) no registro (sem alocar a cada quadro)
+  function snapMech(rec, b) {
+    const m = b && b.mech; if (!rec || !m) return;
+    const o = rec.mech || (rec.mech = { kind: m.kind, ok: 0, miss: 0, stuns: 0 });
+    o.kind = m.kind; o.ok = m.ok | 0; o.miss = m.miss | 0; o.stuns = m.stuns | 0;
   }
   function noteBullet(b) {
     const g = G.game; if (!g) return;
@@ -383,6 +398,7 @@ function pageMain(cfg) {
       if (it.type === 'power') it._rec.color = it.wtype;
     }
     const st = curStage();
+    if (st && st.boss && g.boss && g.boss.id === st.boss.id) snapMech(st.boss, g.boss);
     if (st && st.mid && st.mid.alive && st.mid.ref.dead) {
       st.mid.alive = false; st.mid.end = +g.t.toFixed(1); st.mid.fled = !!st.mid.ref.escaped || st.mid.ref.hp > 0; st.mid.dur = +(st.mid.end - st.mid.t0).toFixed(1); delete st.mid.ref;
       if (cfg.mode === 'mid') HB.done = 'mid';
@@ -427,6 +443,9 @@ function pageMain(cfg) {
     else if (rnd() < (P.lapseRate || 0) / 60) { S.lapseT = P.lapseMin + rnd() * (P.lapseMax - P.lapseMin); HB.lapses = (HB.lapses || 0) + 1; }
     if (--S.planLeft <= 0 && !(S.lapseT > 0)) { plan(g, p, run); S.planLeft = P.planEvery; }
     moveFinger(g, p, P.vmax, P.amax, P.jitter);
+    // tempo fazendo a manha / dentro do raio do objetivo (diagnóstico da manha no modo run)
+    const B = g.boss, AG = S.take && B && B.state === 'fight' ? B.autoGoal : null, st = curStage();
+    if (AG && st && st.boss && AG.why !== 'stun') { st.boss.takeT += 1 / 60; if ((p.x - AG.x) ** 2 + (p.y - AG.y) ** 2 < Math.max(8, AG.r) ** 2) st.boss.inT += 1 / 60; }
   }
   function wantWeapon(run) { return cfg.weapon && cfg.weapon !== 'any' ? cfg.weapon : run.weapon; }
   function computeGoal(g, p, run) {
@@ -445,15 +464,32 @@ function pageMain(cfg) {
       }
       if (best) gx = best.x;
     }
-    gx = W / 2 + (gx - W / 2) * P.follow;
+    // manha do chefão (b.autoGoal): cada objeto novo (id novo) é notado com chance mechNotice e,
+    // se notado, vira o objetivo mechDelay s depois (tempo de "entender" o que é); o desvio continua valendo
+    const AG = cfg.mech !== 0 && B && B.state === 'fight' ? B.autoGoal : null;
+    if (AG) {
+      const key = B.id + ':' + AG.id;
+      if (S.mechKey !== key) {
+        S.mechKey = key; S.mechTake = rnd() < P.mechNotice; S.mechAt = g.t + P.mechDelay;
+        const st = curStage();
+        if (st && st.boss && AG.why !== 'stun') { st.boss.goals++; if (S.mechTake) st.boss.noticed++; }
+      }
+    }
+    const take = (S.take = !!(AG && S.mechTake && g.t >= S.mechAt));
+    S.takeR = take ? AG.r || 0 : 0;
+    if (take) { gx = AG.x; gy = clamp(AG.y, H * 0.42, H - 40); }
+    else gx = W / 2 + (gx - W / 2) * P.follow;
     // camada estratégica: "procurar a brecha" — olha a tela inteira (cortinas, colunas, o L girando)
     // e puxa o objetivo para a faixa da linha do carro que vai ficar livre nos próximos ~1,5 s
+    // (fazendo a manha, só larga o objetivo quando a faixa está bem pior)
     if (g.t >= (S.stratT || 0)) { S.stratT = g.t + P.stratEvery; S.strat = strategy(g, p); }
-    if (S.strat && S.strat.danger > 1.2) gx = M_lerp(gx, S.strat.x, Math.min(1, P.stratW * (S.strat.danger - 1.2) / 2 + 0.5));
-    // itens
-    const it = pickItem(g, p, run);
+    const dz = take ? 2.2 : 1.2;
+    if (S.strat && S.strat.danger > dz) gx = M_lerp(gx, S.strat.x, Math.min(1, P.stratW * (S.strat.danger - dz) / 2 + 0.5));
+    // itens (não durante a manha)
+    const it = take ? null : pickItem(g, p, run);
     if (it) { gx = it.x; gy = clamp(it.y + 26, H * P.upper, H - 40); }
-    const k = 1 - Math.exp(-(P.planEvery / 60) / P.followLag);
+    // fazendo a manha o dedo vai direto (mechLag): seguir o chefão "pela metade" (followLag) não vale para um alvo que se mexe
+    const k = 1 - Math.exp(-(P.planEvery / 60) / (take ? Math.min(P.followLag, P.mechLag != null ? P.mechLag : P.followLag) : P.followLag));
     S.goalX += (gx - S.goalX) * k; S.goalY += (gy - S.goalY) * k;
   }
   const M_lerp = (a, b, t) => a + (b - a) * t;
@@ -583,6 +619,10 @@ function pageMain(cfg) {
     const off = rnd() * TAU / P.dirs;
     for (let i = 0; i < P.dirs; i++) { const a = off + (i * TAU) / P.dirs, ca = Math.cos(a), sa = Math.sin(a); for (const r of P.dists) C.push(p.x + ca * r, p.y + sa * r); }
     const Hh = P.horizon, K = P.samples, vmax = P.vmax;
+    // manha de FICAR numa zona (objetivo com r >= 20: a META, embaixo do chefão tonto): o objetivo pesa mechHoldW
+    // vezes mais ("fico dentro do anel"), senão o ruído de avaliação do casual o tira do anel; o desvio continua valendo.
+    // Alvos de passagem (emenda, fio, Leão: r < 20) mantêm o peso normal.
+    const wG = P.wGoal * (S.take && S.takeR >= 20 ? P.mechHoldW || 1 : 1);
     let bx = p.x, by = p.y, bc = 1e18, bHit = 9;
     for (let c = 0; c < C.length; c += 2) {
       const cx = clamp(C[c], 12, W - 12), cy = clamp(C[c + 1], 50, H - 24);
@@ -606,7 +646,7 @@ function pageMain(cfg) {
           if (G.m.segDist2(qx, qy, lx, ly, ex, ey) < R * R) { cost += 1000 * (1.3 - tau / Hh); if (tau < first) first = tau; }
         }
       }
-      cost += P.wGoal * Math.hypot(cx - S.goalX, (cy - S.goalY) * 0.7) / 40;
+      cost += wG * Math.hypot(cx - S.goalX, (cy - S.goalY) * 0.7) / 40;
       cost += P.wMove * dist / 40;
       if (cx < 22 || cx > W - 22) cost += 3;
       if (cy > H - 34) cost += 3;
@@ -640,16 +680,18 @@ function pageMain(cfg) {
     if (cfg.forceWeapon) { run.weapon = cfg.forceWeapon; run.level = cfg.forceLevel; }
     const W = G.W, H = G.H;
     let gx = W / 2;
+    let gy = H * cfg.ty;
     if (cfg.mode === 'ttk' && g.boss && g.boss.state === 'fight') {
       gx = g.boss.x;
-      // chefão invulnerável (Sigilo de 100 anos): vai nos cadeados, como uma pessoa faria
-      if (g.boss.invuln) { let best = null; for (const e of g.enemies) if (!e.dead && e.kind === 'bs_cadeado' && (!best || Math.abs(e.x - p.x) < Math.abs(best.x - p.x))) best = e; if (best) gx = best.x; }
+      // manha do chefão: vai no b.autoGoal (emenda, meta, fio, Leão, embaixo do chefão tonto)
+      const goal = cfg.mech !== 0 ? g.boss.autoGoal : null;
+      if (goal && goal.x != null) { gx = goal.x; if (goal.y != null) gy = goal.y; }
     }
     if (cfg.mode === 'mid') { const st = curStage(); const e = st && st.mid && st.mid.ref; if (e && !e.dead) gx = e.x; }
     if (cfg.mode === 'dps') gx = W / 2;
     const k = 1 - Math.exp(-(1 / 60) / (cfg.mode === 'dps' ? 0.01 : 0.25));
     S.goalX += (gx - S.goalX) * k;
-    S.tgtX = S.goalX; S.tgtY = H * cfg.ty;
+    S.tgtX = S.goalX; S.tgtY = gy;
     moveFinger(g, p, cfg.mode === 'dps' ? 2000 : 350, 4000, 0);
     if (cfg.mode === 'ttk') ttkTrack(g);
     if (cfg.mode === 'dps') dpsTrack(g);
@@ -658,6 +700,7 @@ function pageMain(cfg) {
   function ttkTrack(g) {
     const b = g.boss;
     if (b && b.state === 'fight' && !ttkRec) ttkRec = { id: b.id, w: cfg.forceWeapon, lv: cfg.forceLevel, start: g.t, phases: [], hp: b.maxHp };
+    if (ttkRec && !ttkRec.done && b && b.mech) snapMech(ttkRec, b);
     if (ttkRec && b && b.state === 'fight') { if (ttkRec.lastPh !== b.phase + '/' + (b.data && b.data.life)) { ttkRec.lastPh = b.phase + '/' + (b.data && b.data.life); ttkRec.phases.push(+b.ft.toFixed(1)); } ttkRec.ft = b.ft; ttkRec.fat = (b.data && b.data.fat) || 0; }
     if (ttkRec && !ttkRec.done && (!b || b.state === 'dying' || b.state === 'leaving')) { ttkRec.done = true; ttkRec.time = +((ttkRec.ft || 0)).toFixed(1); HB.ttk.push(ttkRec); HB.done = 'ttk'; }
     if (ttkRec && !ttkRec.done && b && b.ft > cfg.maxFight) { ttkRec.done = true; ttkRec.time = null; ttkRec.hpLeft = +(b.hp / b.maxHp).toFixed(2); HB.ttk.push(ttkRec); HB.done = 'ttk-timeout'; }
@@ -698,7 +741,8 @@ function pageMain(cfg) {
 // ------------------------------------------------------------------
 // Runner
 // ------------------------------------------------------------------
-const STAGE_OF = { centrao: 0, dilmae: 1, bolsonario: 2, lule: 3 };
+const STAGE_OF = { centrao: 0, dilmae: 1, erika: 2, lule: 3 };
+const MECH = opt.mech === 0 || opt.mech === '0' || opt.mech === 'false' ? 0 : 1;
 const MID_STAGE = { trio: 0, lobista_mor: 1, servidor: 2, comitiva: 3 };
 function parseUpg(s) { const o = {}; if (!s) return o; for (const kv of String(s).split(',')) { const [k, v] = kv.split(':'); if (k) o[k.trim()] = +v || 1; } return o; }
 
@@ -708,11 +752,12 @@ async function runOne(browser, job) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(String(e.stack || e.message).slice(0, 400)));
-  const cfg = Object.assign({ prof: PROFILES[job.profile] || PROFILES.casual, fast: opt.fast, shots: opt.shots, continues: opt.continues, ty: opt.ty, maxFight: 300 }, job);
+  const cfg = Object.assign({ prof: PROFILES[job.profile] || PROFILES.casual, fast: opt.fast, shots: opt.shots, continues: opt.continues, ty: opt.ty, maxFight: 300, mech: MECH }, job);
   await page.addInitScript({ content: '(' + pageMain.toString() + ')(' + JSON.stringify(cfg) + ');' });
   const q = new URLSearchParams({ stage: String(job.stage), loop: String(job.loop || 1), skipui: '1', autocontinue: '1', ts: String(opt.ts), quality: String(opt.quality || 'high') });
   if (job.mode !== 'run') q.set('god', '1');
   if (job.mode === 'ttk' || job.bossOnly) q.set('boss', '1');
+  if (cfg.mech === 0) q.set('mech', '0'); // o autopiloto do core também ignora a manha
   const file = path.resolve(__dirname, '..', (opt.page === 'index' ? 'index' : 'dev') + '.html');
   await page.goto('file://' + file + '?' + q.toString());
   const t0 = Date.now();
@@ -793,10 +838,11 @@ function summarizeRuns(results) {
     for (const st of r.hb.stages) {
       if (!r.job.through && st.idx !== r.job.stage) continue;
       const k = st.idx;
-      const S = byStage[k] || (byStage[k] = { runs: 0, deaths: [], bossDeaths: [], midDeaths: [], bombs: [], bossTime: [], midTime: [], midFled: 0, cleared: 0, pix: [], score: [], ranks: {}, lvBoss: [], lvStart: [], cont: [], killers: {}, bossSecs: {}, unavoidable: 0, deathsTotal: 0, pDrops: [], pGot: [], lifeDrops: 0, bombDrops: 0, stolen: [] });
+      const S = byStage[k] || (byStage[k] = { runs: 0, deaths: [], bossDeaths: [], midDeaths: [], bombs: [], bossTime: [], midTime: [], midFled: 0, cleared: 0, pix: [], score: [], ranks: {}, lvBoss: [], lvStart: [], cont: [], killers: {}, bossSecs: {}, unavoidable: 0, deathsTotal: 0, pDrops: [], pGot: [], lifeDrops: 0, bombDrops: 0, stolen: [], mOk: [], mMiss: [], mStuns: [], mGoals: [], mNoticed: [], mTake: [], mIn: [], mKind: null });
       S.runs++;
       S.deaths.push(st.deaths); S.bombs.push(st.bombs);
       S.lvStart.push(st.lvStart);
+      if (st.boss && st.boss.mech) { S.mKind = st.boss.mech.kind; S.mOk.push(st.boss.mech.ok); S.mMiss.push(st.boss.mech.miss); S.mStuns.push(st.boss.mech.stuns); S.mGoals.push(st.boss.goals || 0); S.mNoticed.push(st.boss.noticed || 0); S.mTake.push(st.boss.takeT || 0); S.mIn.push(st.boss.inT || 0); }
       if (st.boss) { S.bossDeaths.push(st.boss.deaths); if (st.boss.end != null) S.bossTime.push(st.boss.end); S.lvBoss.push(st.boss.lv); for (const k2 in st.boss.deathsBy) S.bossSecs[k2] = (S.bossSecs[k2] || 0) + st.boss.deathsBy[k2]; }
       if (st.mid) { S.midDeaths.push(st.mid.deaths); if (st.mid.dur != null) S.midTime.push(st.mid.dur); if (st.mid.fled) S.midFled++; }
       if (st.clear) { S.cleared++; S.pix.push(st.clear.pixStage); S.score.push(st.clear.score); S.ranks[st.clear.rank] = (S.ranks[st.clear.rank] || 0) + 1; S.cont.push(st.clear.continues - st.contStart); }
@@ -807,6 +853,11 @@ function summarizeRuns(results) {
       S.stolen.push(st.pixStolen);
     }
     for (const d of r.hb.deaths) { const S = byStage[d.stage]; if (S) { S.deathsTotal++; if (d.unavoidable) S.unavoidable++; } }
+  }
+  // manha: acerto = ok / (ok + miss) somando as partidas
+  for (const k in byStage) {
+    const S = byStage[k], ok = S.mOk.reduce((a, v) => a + v, 0), miss = S.mMiss.reduce((a, v) => a + v, 0);
+    S.mechRate = ok + miss ? +(ok / (ok + miss)).toFixed(2) : null;
   }
   return byStage;
 }
@@ -819,6 +870,11 @@ function printRunTable(byStage, label) {
       f1(mean(S.bossTime)), f1(mean(S.midTime)) + ' ' + S.midFled, f1(mean(S.lvStart)) + '/' + f1(mean(S.lvBoss)), f1(mean(S.pix)), Math.round(mean(S.score)) || '-', JSON.stringify(S.ranks), f1(mean(S.cont)),
       f1(mean(S.pDrops)) + '/' + f1(mean(S.pGot)), S.unavoidable + '/' + S.deathsTotal].join(' | '));
     console.log('     mortes por causa: ' + JSON.stringify(S.killers) + '  | chefe por fase: ' + JSON.stringify(S.bossSecs));
+    if (S.mOk.length) {
+      console.log('     manha ' + S.mKind + ': ok/miss/stuns méd ' + f1(mean(S.mOk)) + '/' + f1(mean(S.mMiss)) + '/' + f1(mean(S.mStuns)) +
+        ' | acerto ' + (S.mechRate != null ? Math.round(S.mechRate * 100) + '%' : '-') + ' | objetos vistos/notados méd ' + f1(mean(S.mGoals)) + '/' + f1(mean(S.mNoticed)) + ' | s na manha/no alvo ' + f1(mean(S.mTake)) + '/' + f1(mean(S.mIn)) +
+        ' | por partida ' + S.mOk.map((v, i) => v + '/' + S.mMiss[i] + '/' + S.mStuns[i]).join(' '));
+    }
   }
 }
 
@@ -862,8 +918,14 @@ function printRunTable(byStage, label) {
     summary.byProfile = {};
     for (const pf of profs) { const bs = summarizeRuns(results.filter((r) => r && r.job && r.job.profile === pf)); summary.byProfile[pf] = bs; printRunTable(bs, pf); }
   } else if (opt.mode === 'ttk') {
-    console.log('\nchefe | arma | nv | tempo (s) | fases (ft) | cansaço');
-    for (const r of results) { const t = r.hb && r.hb.ttk[0]; console.log([r.job.bossId, r.job.forceWeapon, r.job.forceLevel, t ? (t.time != null ? t.time : '>' + 300 + ' (sobra ' + t.hpLeft + ')') : 'ERR', t ? t.phases.join(',') : '', t ? t.fat.toFixed(2) : ''].join(' | ')); }
+    summary.ttk = results.map((r) => { const t = r.hb && r.hb.ttk[0]; return { boss: r.job.bossId, w: r.job.forceWeapon, lv: r.job.forceLevel, mech: MECH, time: t ? t.time : null, hpLeft: t && t.hpLeft, fat: t && t.fat, phases: t && t.phases, ok: t && t.mech ? t.mech.ok : null, miss: t && t.mech ? t.mech.miss : null, stuns: t && t.mech ? t.mech.stuns : null, errors: r.gErrors ? r.gErrors.length : null, pageErrors: r.pageErrors ? r.pageErrors.length : null }; });
+    console.log('\nmanha: ' + (MECH ? 'faz (--mech 1)' : 'ignora (--mech 0, mech=0 na URL)'));
+    console.log('chefe | arma | nv | tempo (s) | fases (ft) | cansaço | manha ok/miss/stuns');
+    for (const r of results) {
+      const t = r.hb && r.hb.ttk[0], m = t && t.mech;
+      console.log([r.job.bossId, r.job.forceWeapon, r.job.forceLevel, t ? (t.time != null ? t.time : '>' + 300 + ' (sobra ' + t.hpLeft + ')') : 'ERR', t ? t.phases.join(',') : '', t ? t.fat.toFixed(2) : '',
+        m ? m.kind + ' ' + m.ok + '/' + m.miss + '/' + m.stuns : '-'].join(' | '));
+    }
   } else if (opt.mode === 'dps') {
     console.log('\nlayout | arma | nv | dps');
     for (const r of results) console.log([r.job.layout, r.job.forceWeapon, r.job.forceLevel, r.hb && r.hb.dps ? r.hb.dps.dps : 'ERR'].join(' | '));

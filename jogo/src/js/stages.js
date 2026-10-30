@@ -2,7 +2,7 @@
    FUSCA A JATO — stages.js
    As 4 fases e seus roteiros de ondas (geradores).
    Ordem e chefões fixos: rodoviaria→centrao, esplanada→dilmae,
-   paranoa→bolsonario, planalto→lule. Contrato: docs/ENGINE.md §6.
+   paranoa→erika, planalto→lule. Contrato: docs/ENGINE.md §6.
    ============================================================ */
 (function () {
   'use strict';
@@ -105,7 +105,7 @@
     let i = 0;
     while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every; }
   }
-  // bando de motoqueiros passando pela lateral (alturas escalonadas)
+  // bando de motoboys da picanha passando pela lateral (alturas escalonadas)
   function* moto(n, fromLeft, y0, dy, gap, o) {
     for (let i = 0; i < n; i++) {
       sp('motoqueiro', fromLeft ? -30 : W() + 30, y0 + i * dy, Object.assign({ dir: fromLeft ? 1 : -1 }, opt(o, i)));
@@ -457,12 +457,12 @@
 
   // ======================================================================
   // FASE 3 — LAGO PARANOÁ
-  // novos: bot → motoqueiro → drone; meio: Servidor do Gabinete
+  // novos: bot → motoqueiro (motoboy da picanha) → drone; meio: Ministério da Verdade
   // ======================================================================
   const once = (fn) => (function* () { fn(); })();
   G.Stages.add({
-    id: 'paranoa', name: 'Lago Paranoá', subtitle: 'Motociata, drones e fake news',
-    bg: 'paranoa', music: 'stage3', bossMusic: 'boss', boss: 'bolsonario', scrollSpeed: 54,
+    id: 'paranoa', name: 'Lago Paranoá', subtitle: 'Lives, bots e trending topics',
+    bg: 'paranoa', music: 'stage3', bossMusic: 'boss', boss: 'erika', scrollSpeed: 54,
     script: function* (S) {
       const L2 = S.g.loop > 1;
       const T0 = now();
@@ -477,7 +477,7 @@
           after(1.5, once(() => { sp('deputado', 80, -30, { ty: 160 }); sp('deputado', W() - 80, -30, { ty: 160 }); })),
           after(3, swarm('cabo', 6, 0.36, path('uL'), 6, { fire: 1 })));
         yield T(10);
-        // --- BOT DE FAKE NEWS ---
+        // --- BOT DE ENGAJAMENTO ---
         mark(0.08);
         yield* bots(8, true, 70);
         yield T(15);
@@ -488,7 +488,7 @@
         yield* par(botRain(10, W() * 0.3, { dive: 0.3 }), after(0.8, botRain(10, W() * 0.7, { dive: 0.3 })), after(1, once(() => sp('lobista', W() / 2, -34, { ty: 120 }))));
         yield T(30);
         yield S.clear(4);
-        // --- MOTOCIATA ---
+        // --- MOTOBOYS DA PICANHA ---
         mark(0.18);
         yield* moto(3, true, 120, 40, 0.45);
         yield 2.4;
@@ -504,7 +504,7 @@
         yield T(55);
         yield S.clear(4);
         carrier('assessor', W() / 2, -24, 'shield', { vy: 60, amp: 40, hp: 12 });
-        // --- DRONE DO GABINETE ---
+        // --- DRONE DA LIVE ---
         mark(0.3);
         yield 0.8;
         sp('drone', W() / 2, -24, { ty: 150, hold: 7 });
@@ -526,15 +526,15 @@
         yield 1.2;
         sp('marqueteiro', W() / 2, -30, { ty: 95 });
         sp('drone', 60, -24, { ty: 150 });
-        // a Ponte JK entra na tela junto com o desfile da motociata (T 90)
+        // a Ponte JK entra na tela junto com o comboio da picanha (T 90)
         yield T(84);
         mark(0.42, 'jk');
         pre('servidor');
         yield T(87);
         carrier('cabo', W() * 0.7, -22, 'power', { ty: 140, hold: 3.5, hp: 10 });
-        // --- MOTOCIATA NO LAGO: o desfile ---
+        // --- A PICANHA TÁ CHEGANDO: o comboio ---
         yield T(90);
-        S.text(W() / 2, H() * 0.3, 'MOTOCIATA!', { color: G.C.yellow, size: 22, life: 1.6, vy: -10 });
+        S.text(W() / 2, H() * 0.3, 'A PICANHA TÁ CHEGANDO!', { color: G.C.yellow, size: 20, life: 1.6, vy: -10 });
         G.call(G.Audio, 'sfx', 'motor');
         yield* par(
           moto(4, true, 90, 30, 0.35),
@@ -547,7 +547,7 @@
         yield T(103);
         carrier('deputado', W() / 2, -30, 'power', { ty: 120, hp: 18, hold: 3.5 });
         yield S.clear(7);
-        // --- CHEFE INTERMEDIÁRIO: SERVIDOR DO GABINETE ---
+        // --- CHEFE INTERMEDIÁRIO: MINISTÉRIO DA VERDADE ---
         mark(0.55);
         yield 0.5;
         yield* midboss('servidor', W() / 2, -100);
@@ -589,7 +589,7 @@
       yield S.clear(6);
       yield 1;
       mark(1);
-      yield S.boss('bolsonario');
+      yield S.boss('erika');
     },
   });
 

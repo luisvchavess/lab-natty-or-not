@@ -1108,7 +1108,7 @@
     if (!first) for (const e of WARM.live.values()) if (rafN - e.f <= 90) live.push(e);
     live.sort((a, b) => b.f - a.f);
     clearWarmQueue(); WARM.seen.clear(); WARM.live.clear();
-    for (const e of live) if (queueWarm(e.sk, e.sz, e.spec, e.mood, e.pose, e.big)) { WARM.seen.set(e.id, 2); WARM.live.set(e.id, e); }
+    for (const e of live) if (queueWarm(e.sk, e.sz, e.spec, e.mood, e.pose, e.big, e.mq)) { WARM.seen.set(e.id, 2); WARM.live.set(e.id, e); }
   }
   // resOver: resolução própria (arte do título, fora do canvas do jogo)
   function personCached(ctx, x, y, size, spec, o, mood, face, lookX, lookY, resOver) {
@@ -1273,14 +1273,17 @@
     if (n === 1 && queueWarm(sk, sz, spec, mood, pose, big)) markWarm(id, sk, sz, spec, mood, pose, big, rafN);
     else WARM.seen.set(id, 1);
   }
-  function markWarm(id, sk, sz, spec, mood, pose, big, f) {
+  function markWarm(id, sk, sz, spec, mood, pose, big, f, mq) {
     WARM.seen.set(id, 2);
-    WARM.live.set(id, { id, sk, sz, spec, mood, pose, big, f });
+    WARM.live.set(id, { id, sk, sz, spec, mood, pose, big, f, mq: mq || 0 });
   }
   // Põe na fila as variações de uma combinação (spec × tamanho × humor × pose). false = fila cheia.
   // Ordem: sem flash (corpo nos 5 balanços, braços erguidos nas 5 fases, cabeça em 6 olhares),
   // flash (corpo, braços, cabeça); as cabeças piscando (~4% do tempo) vão para a fila q2.
-  function queueWarm(sk, sz, spec, mood, pose, big) {
+  // mq: abertura da boca já quantizada (0, 1/3, 2/3, 1) das cabeças sem flash (quem fala muito,
+  // como o Centrão bravo/rindo, aquece também a boca aberta: ver prewarm); o flash não tem rosto.
+  function queueWarm(sk, sz, spec, mood, pose, big, mq) {
+    mq = mq || 0;
     if (WARM.q.length > WARM_CAP) return false;
     const body = spec.body || 'suit';
     const raised = pose === 'up' || pose === 'wave' || pose === 'fist';
@@ -1290,15 +1293,19 @@
     const head = (flash, skin, blink, L) => (blink ? WARM.q2 : WARM.q).push(() => {
       if (res !== pRes) return;
       setScale(sz, flash);
-      partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|' + (blink ? 1 : 0) + '|0|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
+      const m = flash ? 0 : mq;
+      partSprite(sk + '|' + sz + '|' + (flash ? 1 : 0) + '|h|' + mood + '|' + (blink ? 1 : 0) + '|' + m + '|' + L[0] + '|' + L[1], BOX_HEAD, s, res, (c) => {
         BLINK = blink; NO_EMOTES = true;
-        drawHead(c, spec, { mouth: 0 }, mood, -14, 0, skin, L[0], L[1]);
+        drawHead(c, spec, { mouth: m }, mood, -14, 0, skin, L[0], L[1]);
         BLINK = null; NO_EMOTES = false;
       }, true);
     });
+    // com a boca aberta só as cabeças mudam: corpo, braços e flash são os da boca fechada
+    const onlyHeads = mq > 0 && (WARM.seen.get(sk + '|' + sz + '|' + mood + '|' + pose) || 0) >= 2;
     for (const flash of [false, true]) {
+      if (onlyHeads && flash) break;
       const skin = flash ? WHITE : spec.skin || '#e8b48a';
-      if (body !== 'none') for (const sw of SWAYS) {
+      if (body !== 'none' && !onlyHeads) for (const sw of SWAYS) {
         J(() => {
           if (res !== pRes) return;
           setScale(sz, flash);
@@ -1311,7 +1318,7 @@
       }
       if (big) continue;
       // braços erguidos (aceno, punho, mãos para cima): uma imagem por fase da oscilação
-      if (arms && raised) for (const fq of SWAYS) {
+      if (arms && raised && !onlyHeads) for (const fq of SWAYS) {
         J(() => {
           if (res !== pRes) return;
           setScale(sz, flash);
@@ -1339,8 +1346,9 @@
     }
     if (left()) WARM.timer = setTimeout(pumpWarm, 4);
   }
-  // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose? }] — pinta antes de o personagem
-  // aparecer. Sem lista: aquece os sprites dos itens (ver warmItems).
+  // G.Art.prewarm(lista): lista = [{ spec, size, mood?, pose?, mouth? }] — pinta antes de o personagem
+  // aparecer. mouth (0..1, quantizada como no jogo) aquece as cabeças falando (ex.: { mood: 'angry',
+  // mouth: 0.6 }); sem mouth, a boca fechada. Sem lista: aquece os sprites dos itens (ver warmItems).
   function prewarm(list) {
     if (!list) { warmItems(); return; }
     const res = gameRes();
@@ -1350,11 +1358,13 @@
       const sk = specKey(it.spec);
       if (sk === null) continue;
       const sz = Math.round(it.size), pose = it.pose || it.spec.pose || 'idle', mood = it.mood || 'normal';
-      const id = sk + '|' + sz + '|' + mood + '|' + pose;
+      // mesma quantização de personCached (a chave da cabeça tem que bater)
+      const mq = it.mouth != null && sz < 70 ? Math.round(clamp(+it.mouth || 0, 0, 1) * 3) / 3 : 0;
+      const id = sk + '|' + sz + '|' + mood + '|' + pose + (mq ? '|m' + mq : '');
       if ((WARM.seen.get(id) || 0) >= 2) continue;
       // só marca como feito o que entrou na fila (fila cheia: fica para a 2ª aparição no jogo)
       if (WARM.seen.size > 1500) { WARM.seen.clear(); WARM.live.clear(); }
-      if (queueWarm(sk, sz, it.spec, mood, pose, sz >= 70)) markWarm(id, sk, sz, it.spec, mood, pose, sz >= 70, -1e9);
+      if (queueWarm(sk, sz, it.spec, mood, pose, sz >= 70, mq)) markWarm(id, sk, sz, it.spec, mood, pose, sz >= 70, -1e9, mq);
     }
   }
 
@@ -2345,6 +2355,23 @@
     confettiRain(c, L, t, 46, 46, 3);
   };
 
+  // Ombros de terno (com camisa, gravata e broche de spec) cortados embaixo por fiapos de nuvem:
+  // um busto para pôr sob a cabeça de person(..., { bust: true }) nas ilustrações.
+  function bustFromCloud(c, x, y, size, spec, cloud) {
+    const s = size / 100;
+    setScale(size, false);
+    c.save();
+    c.translate(x, y); c.scale(s, s);
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    c.save();
+    c.beginPath(); c.rect(-32, 0, 64, 36); c.clip();
+    drawBody(c, spec, 'suit', 0, spec.skin || '#e8b48a');
+    c.restore();
+    c.beginPath(); for (let i = 0; i < 4; i++) O(c, -19.5 + i * 13, 37 + (i % 2) * 2, 8);
+    strokeP(c, INK, 6); fillP(c, cloud);
+    c.restore();
+  }
+
   SC.briga = function (c, L, t) {
     c.fillStyle = '#e63946'; c.fillRect(L.x, L.y, L.w, L.h);
     rays(c, 180, 124, 16, 520, -t * 0.25, '#ff8c1a');
@@ -2372,9 +2399,12 @@
     strokeP(c, INK, 7); fillP(c, '#f4f1e8');
     c.beginPath(); for (let i = 0; i < puffs.length; i++) O(c, cx + puffs[i][0] + jx(i) + 6, cy + puffs[i][1] + jy(i) + 7, puffs[i][2] * 0.72); fillP(c, 'rgba(154,165,184,0.45)');
     c.beginPath(); for (let i = 0; i < puffs.length; i += 2) O(c, cx + puffs[i][0] + jx(i) - puffs[i][2] * 0.35, cy + puffs[i][1] + jy(i) - puffs[i][2] * 0.35, puffs[i][2] * 0.22); fillP(c, '#ffffff');
-    // cabeças brigando
+    // cabeças brigando (a da esquerda: um deputado qualquer da base, de terno, gravata vermelha e
+    // broche de estrela; o busto sai da nuvem)
     const pop = (i) => Math.max(0, Math.sin(t * 2.2 + i * 2.1)) * 6;
-    person(c, 118 + jx(1), 96 - pop(0), 74, { skin: '#e0a882', hair: 'side', hairColor: '#3a2a20', templeColor: '#9aa0a6', body: 'none', seed: 1 }, { t, mood: 'angry', mouth: 0.6 + Math.sin(t * 14) * 0.3, bust: true, lookX: 1 });
+    const dpx = 118 + jx(1), dpy = 96 - pop(0);
+    bustFromCloud(c, dpx, dpy, 74, { suit: '#2b3445', shirt: '#f2f2f2', tie: '#e63946', pin: '#e63946', pinShape: 'star' }, '#f4f1e8');
+    person(c, dpx, dpy, 74, { skin: '#e0a882', hair: 'slick', hairColor: '#2a2a2a', body: 'none', seed: 1 }, { t, mood: 'angry', mouth: 0.6 + Math.sin(t * 14) * 0.3, bust: true, lookX: 1 });
     person(c, 246 + jx(2), 94 - pop(1), 70, { skin: '#f0c49c', hair: 'bald', hairColor: '#7a6a5a', mustache: true, glasses: 'square', body: 'none', seed: 2 }, { t, mood: 'hurt', bust: true, lookX: -1 });
     person(c, 182 + jx(3), 70 - pop(2), 64, { skin: '#b9825a', hair: 'bob', hairColor: '#1d1d1d', body: 'none', seed: 4 }, { t, mood: 'shock', bust: true });
     person(c, 222 + jx(4), 172 - pop(3) * 0.5, 54, { skin: '#e8b48a', hair: 'combover', hairColor: '#5a4632', body: 'none', seed: 7 }, { t, mood: 'laugh', bust: true, lookX: -0.6 });
@@ -2861,7 +2891,7 @@
     const ant = mood === 'hurt' ? 0.9 : 0.35 + Math.sin(t * 2) * 0.05;
     c.beginPath(); c.moveTo(16, -26); c.lineTo(16 + Math.sin(ant) * 34, -26 - Math.cos(ant) * 34); strokeP(c, INK, 4.4); strokeP(c, '#c9d3e6', 2.2);
     c.beginPath(); O(c, 16 + Math.sin(ant) * 34, -26 - Math.cos(ant) * 34, 3); inked(c, mood === 'angry' ? '#e63946' : '#ffd23f', 1.2);
-    // gabinete de madeira (topo arredondado)
+    // armário de madeira (topo arredondado)
     c.beginPath(); c.moveTo(-40, 34); c.lineTo(-40, -6); c.bezierCurveTo(-40, -34, 40, -34, 40, -6); c.lineTo(40, 34); c.closePath();
     inked(c, '#9a5b2e', 2.4);
     c.beginPath(); c.moveTo(-40, 34); c.lineTo(40, 34); c.lineTo(40, 26); c.lineTo(-40, 26); c.closePath(); fillP(c, SHADE_RGBA);

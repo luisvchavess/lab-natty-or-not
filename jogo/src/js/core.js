@@ -218,6 +218,10 @@
   G.Bosses = { defs: {}, define(id, def) { def.__tag = 'boss:' + id; this.defs[id] = def; } };
   G.Stages = { list: [], add(stage) { this.list.push(stage); }, byId(id) { return this.list.find((s) => s.id === id); } };
   G.Portraits = { defs: {}, define(id, fn) { this.defs[id] = fn; } };
+  // Ganchos do motor para as mecânicas de chefão (os módulos testam antes de usar):
+  //  autoGoal: o piloto automático segue b.autoGoal; hudTag: b.hudTag no meio da barra do chefão;
+  //  drawOver: def.drawOver(ctx, b, g) desenha por cima dos tiros e lasers; mech: b.mech + G.debug.mech().
+  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true };
 
   // ===================== Estilos de tiro inimigo (sprites em cache) =====================
   // def: { r: raio de colisão, size: tamanho do sprite em px lógicos, rotate: gira na direção do tiro,
@@ -976,6 +980,8 @@
       hp: (def.hp || 2000) * hpMul, t: 0, ft: 0, state: 'warning', flash: 0, invuln: true, invulnT: 0,
       phase: 0, phases: def.phases || [{ at: 1, name: '' }], dead: false, data: {}, mood: 'normal', mouth: 0,
       sayText: null, sayT: 0, dmgMul: 1, o: o || {},
+      // mecânica do chefão (o módulo preenche): alvo do piloto automático, etiqueta da barra, contadores
+      autoGoal: null, hudTag: null, mech: null,
     };
     b.maxHp = b.hp;
     g.boss = b;
@@ -1051,7 +1057,7 @@
       G.shake(5);
       G.flash(0.35, '#fff');
       const ph = b.phases[idx];
-      // "º TURNO" (e não "FASE", que é o nome das etapas do jogo): ninguém aceita o resultado mesmo
+      // "º TURNO" (e não "FASE", que é o nome das etapas do jogo)
       if (ph && ph.name) G.banner((idx + 1) + 'º TURNO', ph.name, { color: G.C.yellow, dur: 1.8, small: true });
       call(G.Audio, 'sfx', 'phase');
       if (b.def.onPhase) call(b.def, 'onPhase', b, idx, G.game);
@@ -1323,20 +1329,25 @@
       }
     }
   }
-  // Piloto automático simples (debug/testes): fica embaixo do alvo e foge de tiros próximos
+  // Piloto automático simples (debug/testes): fica embaixo do alvo e foge de tiros próximos.
+  // Se o chefão declarar uma manha (b.autoGoal = { x, y, r }), vai até ela com mais firmeza e
+  // desvia menos perto dela. Sem alvo (ou com ?mech=0) o comportamento é o de sempre.
   function autopilot(p) {
-    const g = G.game;
-    let tx = G.W / 2;
-    const tgt = g.boss && g.boss.state === 'fight' ? g.boss : nearestTarget(p.x, p.y);
-    if (tgt) tx = tgt.x;
-    let ty = G.H * 0.82;
+    const g = G.game, B = g.boss;
+    const goal = B && B.state === 'fight' && !G.debug.noMech && B.autoGoal && B.autoGoal.x != null ? B.autoGoal : null;
+    let tx = G.W / 2, ty = G.H * 0.82;
+    if (goal) { tx = goal.x; if (goal.y != null) ty = goal.y; }
+    else { const tgt = B && B.state === 'fight' ? B : nearestTarget(p.x, p.y); if (tgt) tx = tgt.x; }
     let fx = 0, fy = 0;
     for (const b of g.eb) {
       const dx = p.x - b.x, dy = p.y - b.y, d2 = dx * dx + dy * dy;
       if (d2 < 3600 && d2 > 0.01) { const d = Math.sqrt(d2); fx += (dx / d) * (60 - d); fy += (dy / d) * (60 - d); }
     }
-    p.tx = M.clamp(M.lerp(p.x, tx, 0.08) + fx * 0.5, 12, G.W - 12);
-    p.ty = M.clamp(M.lerp(p.y, ty, 0.08) + fy * 0.3, 50, G.H - 24);
+    const rr = ((goal && goal.r) || 24) + 30;
+    const near = goal && M.dist2(p.x, p.y, goal.x, goal.y) < rr * rr;
+    const lk = goal ? 0.16 : 0.08, rk = goal ? (near ? 0.2 : 0.4) : 0.5;
+    p.tx = M.clamp(M.lerp(p.x, tx, lk) + fx * rk, 12, G.W - 12);
+    p.ty = M.clamp(M.lerp(p.y, ty, lk) + fy * rk * 0.6, 50, G.H - 24);
   }
 
   function hurtPlayer() {
@@ -1767,6 +1778,8 @@
     ctx.setTransform(k, 0, 0, k, ox * k, oy * k);
     // lasers
     for (const l of g.lasers) drawLaser(l, g);
+    // camada do chefão por cima dos tiros (anéis, rótulos e miras da manha: bala nenhuma esconde)
+    if (b && b.state !== 'warning' && b.def.drawOver) { ctx.save(); call(b.def, 'drawOver', ctx, b, g); ctx.restore(); }
     // textos flutuantes
     for (const tx of g.texts) {
       const a = M.clamp(1 - (tx.t / tx.life) * (tx.t / tx.life), 0, 1);
@@ -2020,6 +2033,14 @@
     if (g.boss) for (const hb of bossBoxes(g.boss)) { ctx.beginPath(); ctx.arc(g.boss.x + hb.dx, g.boss.y + hb.dy, hb.r, 0, TAU); ctx.stroke(); }
     ctx.strokeStyle = '#f0f';
     for (const b of g.eb) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.8, 0, TAU); ctx.stroke(); }
+    // alvo da manha do chefão (b.autoGoal): cruz ciano + círculo de raio goal.r
+    const ag = g.boss && g.boss.autoGoal;
+    if (ag && ag.x != null) {
+      const gy = ag.y != null ? ag.y : G.H * 0.82;
+      ctx.strokeStyle = '#0ff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ag.x - 8, gy); ctx.lineTo(ag.x + 8, gy); ctx.moveTo(ag.x, gy - 8); ctx.lineTo(ag.x, gy + 8); ctx.stroke();
+      if (ag.r > 0) { ctx.beginPath(); ctx.arc(ag.x, gy, ag.r, 0, TAU); ctx.stroke(); }
+    }
   }
 
   // ---------- HUD ----------
@@ -2099,6 +2120,18 @@
       if (b.phases[b.phase] && b.phases[b.phase].name) {
         ctx.textAlign = 'right'; ctx.font = '700 10px ' + G.FONT_BODY; ctx.fillStyle = '#ffd23f';
         ctx.fillText(b.phases[b.phase].name.toUpperCase(), bx + bw, by + 7);
+      }
+      // etiqueta da manha (ex.: 'BRECHA ×2,2', 'EM ALTA ×0,8'), piscando no meio da barra
+      const tag = b.hudTag;
+      if (tag && tag.text && b.state === 'fight') {
+        ctx.save();
+        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(g.t * 10);
+        ctx.textAlign = 'center'; ctx.font = '10px ' + G.FONT_DISPLAY;
+        ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(8,12,22,0.9)';
+        ctx.strokeText(tag.text, bx + bw / 2, by + 7);
+        ctx.fillStyle = tag.color || '#ffd23f';
+        ctx.fillText(tag.text, bx + bw / 2, by + 7);
+        ctx.restore();
       }
     }
     // arma (canto inferior esquerdo); fica transparente quando o Fusca passa por baixo
@@ -2429,6 +2462,7 @@
   // ===================== Debug / testes =====================
   G.debug = {
     god: false, auto: false, timeScale: 1, hitboxes: false, skipUI: false, skipDialogue: false, skipStory: false, autoContinue: false,
+    noMech: false, // ?mech=0: o piloto automático ignora b.autoGoal (testa o caminho "ignorar a manha")
     qualityForced: null, // ?quality=high|mid|low (testes): fixa a qualidade e desliga o modo automático
     qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN, failed: Object.keys(QM.failed) }; },
     // pula direto para o chefão da fase atual
@@ -2454,7 +2488,12 @@
     weapon(w, lv) { if (G.run) { G.run.weapon = w; G.run.level = lv || G.run.level; } },
     stats() {
       const g = G.game;
-      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase } : null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length } : { state: G.state, quality: G.quality, errors: G.errors.length };
+      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length } : { state: G.state, quality: G.quality, errors: G.errors.length };
+    },
+    // estado da manha do chefão (testes / humanbot): null sem chefão
+    mech() {
+      const g = G.game, b = g && g.boss;
+      return b ? { id: b.id, state: b.state, phase: b.phase, goal: b.autoGoal, mech: b.mech, hudTag: b.hudTag, stunT: (b.data && b.data.stunT) || 0 } : null;
     },
   };
   function readParams() {
@@ -2545,6 +2584,7 @@
     if (P.skipui) { G.debug.skipUI = true; G.debug.skipDialogue = true; G.debug.skipStory = true; }
     if (P.hitboxes) G.debug.hitboxes = true;
     if (P.autocontinue) G.debug.autoContinue = true;
+    if (P.mech === '0' || P.mech === 'false') G.debug.noMech = true;
     if (P.mods) G.debug.isolated = true;
     if (P.quality && Q_DPR[P.quality]) { G.debug.qualityForced = P.quality; applyQuality(); }
     G.state = 'menu';

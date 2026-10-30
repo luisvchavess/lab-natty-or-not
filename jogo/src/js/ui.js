@@ -18,24 +18,29 @@
   // Textos da UI (piadas, slogans) — PT-BR
   // ==================================================================
   const TICKER = [
-    'URGENTE: Centrão anuncia apoio a quem estiver ganhando',
+    'URGENTE: Centrão anuncia apoio a quem estiver pagando',
     'Dilmãe promete dobrar a meta assim que encontrar a meta',
-    'Capitão Bolsonário decreta sigilo de 100 anos sobre o próprio sigilo',
+    'Erika Viralton faz live de 6 horas contra a escala 6x1. O Zé assistiu trabalhando',
     'Lule garante que a picanha está chegando. De novo',
     'Leão da Receita é visto rondando a Esplanada. Está com fome',
-    'Fusca 78 com motor a jato é multado por excesso de patriotismo',
+    'Fusca 78 com motor a jato é taxado como item de luxo',
     'Vó Dirce termina o terceiro cachecol da semana',
     'Taxa das blusinhas agora também vale para santinho',
     'Deputado jura que a mala era de roupa suja',
     'Plenário aprova recesso para descansar do recesso',
     'Pesquisa: 171% dos políticos dizem que vão baixar impostos',
+    'Ministro Taxad anuncia imposto sobre o imposto',
+    'Secom paga influencer para elogiar a Secom',
+    'Governo cria o 39º ministério: o dos ministérios',
+    'Nunca antes na história deste país se cobrou tanto imposto',
+    'Receita estuda taxar o vento estocado da Dilmãe',
   ];
-  const STICKERS = ['NÃO É FAKE NEWS!', 'SEM SIGILO DE 100 ANOS', 'PICANHA NÃO INCLUSA', 'CONTÉM IMPOSTO', 'APROVADO PELO POVO'];
+  const STICKERS = ['NÃO É FAKE NEWS!', 'AQUI NÃO SE FAZ O L', 'PICANHA NÃO INCLUSA', 'CONTÉM IMPOSTO', 'APROVADO PELO POVO'];
   const SHOP_QUIPS = [
     'Tudo no Pix. Fiado só pra político.',
     'Preço com imposto incluso. Metade é do governo.',
     'Melhoria de verdade, não promessa de campanha.',
-    'Nota fiscal? Aqui tem, viu, Capitão?',
+    'Nota fiscal? Aqui tem, viu, companheiro?',
     'Parcelo em 12x sem juros. Mentira: é à vista.',
   ];
   const BUY_QUIPS = [
@@ -56,13 +61,15 @@
     'O Leão da Receita mandou lembranças.',
     'Não foi derrota. Foi "vitória adiada".',
     'Calma: em Brasília ninguém perde de verdade.',
-    'Pede recontagem. Todo mundo pede.',
+    'Recontagem liberada. Só não vale pedalada.',
+    'Faz o L de Lamentável.',
   ];
   const PAUSE_JOKES = [
     'Os deputados foram tomar um cafezinho.',
     'Recesso parlamentar. Com auxílio-paletó.',
     'Ninguém trabalha, mas o salário cai.',
     'A sessão volta assim que alguém achar o quórum.',
+    'O ministro foi buscar a picanha. Volta em breve.',
   ];
   const RANKS = {
     // frase do boletim (rankLine): lineHit quando perdeu vida, lineBomb quando usou Delação.
@@ -77,7 +84,7 @@
   const STAGE_FALLBACK = [
     { id: 'rodoviaria', name: 'Rodoviária do Plano', subtitle: 'A campanha começou', boss: 'centrao' },
     { id: 'esplanada', name: 'Esplanada dos Ministérios', subtitle: 'Cada ministério, mil assessores', boss: 'dilmae' },
-    { id: 'paranoa', name: 'Lago Paranoá', subtitle: 'Motociata, drones e fake news', boss: 'bolsonario' },
+    { id: 'paranoa', name: 'Lago Paranoá', subtitle: 'Lives, bots e trending topics', boss: 'erika' },
     { id: 'planalto', name: 'Palácio do Planalto', subtitle: 'A conta chegou', boss: 'lule' },
   ];
   const STAGE_LOOK = {
@@ -86,17 +93,28 @@
     paranoa: { c: '#0b7f95', c2: '#7be0f2' },
     planalto: { c: '#d62f3c', c2: '#ffd23f' },
   };
-  const BOSS_FALLBACK_NAME = { centrao: 'O Centrão', dilmae: 'Dilmãe', bolsonario: 'Capitão Bolsonário', lule: 'Lule' };
+  const BOSS_FALLBACK_NAME = { centrao: 'O Centrão', dilmae: 'Dilmãe', erika: 'Erika Viralton', lule: 'Lule' };
   const BOSS_SLOGAN = {
     centrao: 'Apoio quem estiver ganhando',
     dilmae: 'Atingiu a meta? Dobra a meta',
-    bolsonario: 'Sigilo de 100 anos, talkey?',
+    erika: 'Segue o fio!',
     lule: 'A picanha tá chegando',
   };
+  // abertura de fase: "CHEFONA" para elas, "CHEFÃO" para o resto
+  const BOSS_FEM = { dilmae: 1, erika: 1 };
+  // a manha de cada chefão (abertura de fase, linha "MANHA:")
+  const BOSS_MECH = { centrao: 'pegue a emenda', dilmae: 'fique na META', erika: 'corte os fios da live', lule: 'olé no Leão' };
+  // cartão "CADA CHEFÃO TEM UMA MANHA" do Como Jogar (chefão ainda não visto = '???')
+  const BOSS_MANHA = [
+    ['centrao', 'Centrão:', ' pegue a EMENDA com o Fusca'],
+    ['dilmae', 'Dilmãe:', ' fique dentro da META até encher'],
+    ['erika', 'Erika:', ' passe nos FIOS da live'],
+    ['lule', 'Lule:', ' deixe o LEÃO passar e morder o bolso dele'],
+  ];
   const STAGE_GAG = {
     rodoviaria: 'Todo candidato desta fase é o nº 171. Coincidência?',
     esplanada: '38 ministérios. Um número só: 171.',
-    paranoa: 'Na motociata, até a placa da moto é 171.',
+    paranoa: 'Todo post aqui tem 171 mil curtidas. Compradas.',
     planalto: 'Para Presidente da Conta, digite 171 e CONFIRMA.',
   };
   const ALLIES = { ze: 1, vo: 1, radio: 1 };
@@ -107,11 +125,11 @@
     ['Zé Contribuinte', 'ele mesmo, pagando tudo'],
     ['Vó Dirce', 'no rádio e no crochê'],
     ['Rádio Planalto', 'notícias de procedência duvidosa'],
-    ['O Centrão', 'todos os partidos ao mesmo tempo'],
+    ['O Centrão', 'base aliada de quem pagar'],
     ['Dilmãe', 'estocando vento'],
-    ['Capitão Bolsonário', 'de moto e de jet ski'],
+    ['Erika Viralton', 'ao vivo, seguindo o fio'],
     ['Lule', 'com picanha (prometida)'],
-    ['Leão da Receita', 'mordendo a sua parte'],
+    ['Leão da Receita', 'mordendo a sua parte (e a do Lule)'],
     ['Fusca 78', 'motor a jato, freio na fé'],
   ];
 
@@ -149,6 +167,24 @@
     return { id, name: src.name || fb.name, subtitle: src.subtitle || fb.subtitle, boss: src.boss || fb.boss, look: STAGE_LOOK[id] || STAGE_LOOK.rodoviaria };
   }
   function bossTitle(id) { const d = G.Bosses.defs[id]; return (d && d.title) || BOSS_SLOGAN[id] || ''; }
+  // Chefão já visto: falou com o Zé num diálogo (G.save.ui.met), já foi derrotado
+  // (conquista com o id dele ou a fase seguinte liberada) ou o jogo já foi zerado.
+  function bossReached(id) {
+    const S = G.save;
+    if (S.cleared || (S.achievements && S.achievements[id]) || (uiSave().met || {})[id]) return true;
+    for (let i = 0; i < 4; i++) if (stageInfo(i).boss === id) return i < (S.unlocked || 1) - 1;
+    return false;
+  }
+  function markMet(lines) {
+    const u = uiSave();
+    let changed = false;
+    for (const l of lines) {
+      if (!BOSS_MECH[l.who]) continue;
+      u.met = u.met || {};
+      if (!u.met[l.who]) { u.met[l.who] = 1; changed = true; }
+    }
+    if (changed) G.saveGame();
+  }
 
   // ==================================================================
   // Gerenciador de telas
@@ -432,7 +468,7 @@
     const size = o.size || Math.min(w, h * 1.05);
     G.drawPortrait(ctx, who, w / 2, o.cy != null ? o.cy : h - size / 2, size, { t, mouth: o.mouth || 0, mood: o.mood });
   }
-  // silhueta (fases sob sigilo): desenha num canvas à parte e pinta de preto
+  // silhueta (fases com pedido de vista): desenha num canvas à parte e pinta de preto
   function drawSilhouette(ctx, w, h, who) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const off = document.createElement('canvas');
@@ -642,7 +678,7 @@
         '<span class="sant-boss">' + esc(castName(s.boss)) + '</span>' +
         '<span class="sant-name">' + esc(s.name) + '</span>' +
         '<span class="sant-sub">' + esc(open_ ? s.subtitle : 'Vença a fase anterior') + '</span>' +
-        (open_ ? '' : '<span class="sigilo">SIGILO DE 100 ANOS</span>') +
+        (open_ ? '' : '<span class="sigilo">PEDIDO DE VISTA</span>') +
         '</button>';
     }
     const scr = pageShell('stages', {
@@ -658,7 +694,7 @@
       if (b.classList.contains('locked')) {
         sfx('denied');
         b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
-        msg.textContent = 'Fase sob sigilo de 100 anos. Vença a anterior para liberar.';
+        msg.textContent = 'Fase com pedido de vista. Vença a anterior para liberar.';
         msg.classList.add('alert');
         return;
       }
@@ -765,6 +801,7 @@
     const fin = once(done);
     lines = (lines || []).filter((l) => l && l.text);
     if (!lines.length) { close(); fin(); return; }
+    G.safe(markMet, 'ui.markMet', lines);
     const scr = open('dlg');
     scr.root.innerHTML =
       '<div class="dlg">' +
@@ -841,7 +878,8 @@
       '<div class="in-photo"><canvas aria-hidden="true"></canvas><div class="in-num"><small>Nº</small>171</div></div>' +
       '<h2 class="in-name">' + esc(s.name) + '</h2>' +
       '<p class="in-sub">' + esc(s.subtitle) + '</p>' +
-      '<div class="in-boss"><small>CHEFÃO</small><b>' + esc(castName(s.boss)) + '</b><em>“' + esc(bossTitle(s.boss)) + '”</em></div>' +
+      '<div class="in-boss"><small>' + (BOSS_FEM[s.boss] ? 'CHEFONA' : 'CHEFÃO') + '</small><b>' + esc(castName(s.boss)) + '</b><em>“' + esc(bossTitle(s.boss)) + '”</em>' +
+      (BOSS_MECH[s.boss] ? '<span class="in-manha">' + esc('MANHA: ' + BOSS_MECH[s.boss]) + '</span>' : '') + '</div>' +
       '<p class="in-gag">' + esc(STAGE_GAG[s.id] || 'Todo político aqui é o nº 171.') + '</p>' +
       '</div>' +
       '<div class="in-hint">toque para começar</div>';
@@ -1130,7 +1168,7 @@
   // GAME OVER
   // ==================================================================
   // "Faltou pouco": quanto do chefão faltava quando o Fusca caiu
-  const BOSS_ART = { centrao: 'o Centrão', dilmae: 'a Dilmãe', bolsonario: 'o Capitão Bolsonário', lule: 'o Lule' };
+  const BOSS_ART = { centrao: 'o Centrão', dilmae: 'a Dilmãe', erika: 'a Erika Viralton', lule: 'o Lule' };
   function nearMiss() {
     const g = G.game, b = g && g.boss;
     if (!b || b.state !== 'fight' || !(b.maxHp > 0)) return '';
@@ -1436,7 +1474,7 @@
       let prog = '';
       if (!got && a.counter && a.goal) {
         const v = Math.min(a.goal, G.save.counters[a.counter] || 0);
-        prog = '<span class="ach-bar"><i style="width:' + ((v / a.goal) * 100).toFixed(1) + '%"></i></span><span class="ach-num">' + fmt(v) + ' / ' + fmt(a.goal) + '</span>';
+        prog = '<span class="ach-prog"><span class="ach-bar"><i style="width:' + ((v / a.goal) * 100).toFixed(1) + '%"></i></span><span class="ach-num">' + fmt(v) + ' / ' + fmt(a.goal) + '</span></span>';
       }
       list += '<div class="ach' + (got ? ' got' : '') + '"><i class="seal" aria-hidden="true"></i><span class="ach-txt"><b>' + esc(a.name) + '</b><small>' + esc(a.desc) + '</small>' + prog + '</span>' +
         (got ? '<em class="ach-ok">ELEITA</em>' : '') + '</div>';
@@ -1471,6 +1509,107 @@
       '<b>Todo P deixa a arma mais forte</b> (' + listPT(powerNeeds()) + ' P por nível). ' +
       'Perdeu uma vida? O nível perdido cai como um P "de volta".';
   }
+  // Cartão das manhas: lista só os chefões que o jogador já viu (os outros ficam '???')
+  function howtoManha() {
+    const items = BOSS_MANHA.map(([id, who, what]) => (bossReached(id)
+      ? '<span class="mh"><b>' + esc(who) + '</b>' + esc(what) + '</span>'
+      : '<span class="mh unk">???</span>')).join('');
+    return 'Só atirar demora. <b>O que tem anel verde-água você encosta.</b> Acertou a manha? O chefão fica tonto e <b>leva dano dobrado</b>.' +
+      '<span class="mh-list">' + items + '</span>';
+  }
+  // ---- mini-demos do cartão das manhas (uma por chefão: pegar, meta, fio, olé) ----
+  // Regra do verde-água: o que o Fusca encosta tem anel tracejado teal + rótulo branco.
+  const MH = { SEG: 2.8, TEAL: '#32bcad', TEAL_L: '#7ff0e2', INK: '#121519', GOLD: '#ffd23f' };
+  const MH_SUIT = ['#1b3fa0', '#00a651', '#0b7f95', '#d62f3c']; // cores das fases
+  const smooth = (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
+  const lerp = (a, b, k) => a + (b - a) * k;
+  function mhLabel(c, s, x, y, col, size) {
+    c.font = (size || 6.5) + 'px ' + G.FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.lineJoin = 'round'; c.lineWidth = 2.4; c.strokeStyle = MH.INK; c.strokeText(s, x, y);
+    c.fillStyle = col || '#ffffff'; c.fillText(s, x, y);
+  }
+  function mhRing(c, x, y, r, t, o) {
+    o = o || {};
+    c.save();
+    c.fillStyle = 'rgba(50,188,173,0.16)';
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+    c.lineWidth = 1.7; c.strokeStyle = MH.TEAL;
+    if (o.solid) c.globalAlpha = 0.75 + 0.25 * Math.sin(t * 10);
+    else { c.setLineDash([4, 3]); c.lineDashOffset = -t * 12; }
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke();
+    c.setLineDash([]); c.globalAlpha = 1;
+    if (o.prog > 0) { c.strokeStyle = MH.GOLD; c.lineWidth = 2.4; c.beginPath(); c.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, o.prog)); c.stroke(); }
+    c.restore();
+  }
+  function mhStar(c, x, y, r, a) { // estrela de 4 pontas (caminho, sem glifo)
+    c.beginPath();
+    for (let i = 0; i < 8; i++) { const rr = i % 2 ? r * 0.38 : r, aa = a + (i * Math.PI) / 4; c.lineTo(x + Math.cos(aa) * rr, y + Math.sin(aa) * rr); }
+    c.closePath(); c.fill();
+  }
+  // mala da EMENDA (contorno branco) com paraquedas vermelho e branco
+  function mhCase(c, x, y, rot, chute) {
+    c.save(); c.translate(x, y); c.rotate(rot || 0);
+    if (chute) {
+      c.strokeStyle = 'rgba(255,255,255,0.85)'; c.lineWidth = 0.7;
+      c.beginPath();
+      for (const sx of [-6, -2, 2, 6]) { c.moveTo(sx, -4); c.lineTo(sx * 1.5, -12); }
+      c.stroke();
+      for (let i = 0; i < 4; i++) {
+        c.fillStyle = i % 2 ? '#ffffff' : '#e63946';
+        c.beginPath(); c.moveTo(0, -12); c.arc(0, -12, 10, Math.PI + (i * Math.PI) / 4, Math.PI + ((i + 1) * Math.PI) / 4); c.closePath(); c.fill();
+      }
+      c.strokeStyle = MH.INK; c.lineWidth = 1; c.beginPath(); c.arc(0, -12, 10, Math.PI, TAU); c.closePath(); c.stroke();
+    }
+    c.strokeStyle = '#ffffff'; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(-2.5, -4); c.lineTo(-2.5, -6); c.lineTo(2.5, -6); c.lineTo(2.5, -4); c.stroke();
+    c.fillStyle = '#8b5a2b'; c.fillRect(-6.5, -4, 13, 9); c.strokeRect(-6.5, -4, 13, 9);
+    c.fillStyle = MH.GOLD; c.fillRect(-1.2, -1, 2.4, 2.4);
+    c.restore();
+  }
+  // "×2" que pula no chefão + estrelinhas de tonto (k = tempo desde o acerto)
+  function mhPop(c, bx, by, k, t) {
+    if (k < 0) return;
+    c.fillStyle = MH.GOLD;
+    for (let i = 0; i < 3; i++) { const a = t * 4 + (i * TAU) / 3; mhStar(c, bx + Math.cos(a) * 11, by - 9 + Math.sin(a) * 3, 2.6, t * 3); }
+    const s = k < 0.18 ? 1.7 - (k / 0.18) * 0.7 : 1;
+    c.save(); c.translate(bx + 22, by - 2 - Math.min(k, 0.6) * 6); c.scale(s, s);
+    mhLabel(c, '×2', 0, 0, MH.GOLD, 13);
+    c.restore();
+  }
+  function mhBoss(c, i, x, y, t, hurt) {
+    G.call(G.Art, 'person', c, x, y, 24, { suit: MH_SUIT[i], tie: '#ffd23f', hair: 'side', hairColor: '#3b2a1a' },
+      { t, flash: hurt && hurt < 0.12, mood: hurt ? 'hurt' : 'normal' });
+  }
+  function mhLion(c, x, y, k, t, o) {
+    if (G.EnemyArt && typeof G.EnemyArt.lion === 'function') {
+      try { G.EnemyArt.lion(c, x, y, Object.assign({ t, sx: k, sy: k }, o)); return; } catch (e) { /* desenho simples abaixo */ }
+    }
+    drawLeao(c, x, y + 2, t, k * 0.9);
+  }
+  function mhCable(c, pts, from, to) {
+    if (to - from < 1) return;
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (const [col, lw] of [[MH.INK, 3], [MH.TEAL, 1.7]]) {
+      c.strokeStyle = col; c.lineWidth = lw;
+      c.beginPath();
+      for (let i = from; i <= to; i++) { if (i === from) c.moveTo(pts[i * 2], pts[i * 2 + 1]); else c.lineTo(pts[i * 2], pts[i * 2 + 1]); }
+      c.stroke();
+    }
+  }
+  function mhPhone(c, x, y, dead) {
+    c.strokeStyle = MH.INK; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x, y + 6); c.lineTo(x - 5, y + 14); c.moveTo(x, y + 6); c.lineTo(x + 5, y + 14); c.moveTo(x, y + 6); c.lineTo(x, y + 14); c.stroke();
+    c.save(); c.translate(x, y); if (dead) c.rotate(0.3);
+    c.fillStyle = MH.INK; c.fillRect(-4.5, -7, 9, 14);
+    c.fillStyle = dead ? '#6b717b' : '#2a3350'; c.fillRect(-3.5, -6, 7, 12);
+    if (!dead) {
+      c.strokeStyle = '#ffffff'; c.lineWidth = 0.8; c.beginPath(); c.arc(0, 0, 2.6, 0, TAU); c.stroke();
+      c.fillStyle = '#e63946'; c.fillRect(-2.6, -5, 1.8, 1.8);
+    }
+    c.restore();
+  }
+  const mhQuad = (a, b, cc, s) => (1 - s) * (1 - s) * a + 2 * s * (1 - s) * cc + s * s * b;
+  const mhCablePts = new Float32Array(22);
   // Uma linha por arma no cartão do P (o que cada uma faz de verdade no core)
   const WEAPON_TIP = {
     voto: 'Tiro reto e rápido. Mais tiros a cada nível.',
@@ -1481,14 +1620,15 @@
   // Cartões ilustrados do "Como jogar" (d pode ser função: texto montado com as regras do core)
   const HOWTO = [
     { t: 'ARRASTE EM QUALQUER LUGAR', d: 'O Fusca segue o <b>movimento</b> do dedo, sem ficar embaixo dele. Dá pra pilotar com o dedão lá embaixo.', draw: 'drag' },
-    { t: 'TIRO AUTOMÁTICO', d: 'O Fusca atira sozinho. Sua única preocupação é desviar.', draw: 'fire' },
+    { t: 'TIRO AUTOMÁTICO', d: 'O Fusca atira sozinho. Você pilota: desvia dos tiros e faz a manha de cada chefão.', draw: 'fire' },
+    { t: 'CADA CHEFÃO TEM UMA MANHA', d: howtoManha, draw: 'manha' },
     { t: 'SÓ O PONTO BRANCO CONTA', d: 'O <b>ponto branco</b> no meio do Fusca é o único ponto vulnerável. O resto é lataria: o tiro passa.', draw: 'hitbox' },
     { t: 'RASPÃO DÁ VOTO', d: 'Passar <b>raspando</b> nos tiros dá pontos e carrega a Delação Premiada. Cheio = delação de graça.', draw: 'graze' },
     { t: 'O ITEM P MUDA DE COR', d: howtoPower, draw: 'power', weapons: true },
     { t: 'DELAÇÃO PREMIADA', d: 'Um <b>toque rápido</b> no botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Arrastar a partir dele só pilota, não gasta.', draw: 'bomb' },
     { t: 'APROVAÇÃO', d: 'Derrube políticos sem parar e a aprovação sobe, <b>multiplicando os votos</b> (até ×5). Levar tiro derruba ela.', draw: 'approval' },
     { t: 'PIX E LOJINHA', d: 'Político derrubado solta <b>Pix</b>. Junte e gaste em melhorias permanentes na Lojinha do Zé.', draw: 'pix' },
-    { t: 'O LEÃO DA RECEITA', d: 'Ele dá o bote no Fusca e <b>morde parte do seu Pix</b>. Fique de olho na linha laranja e derrube-o antes.', draw: 'leao' },
+    { t: 'O LEÃO DA RECEITA', d: 'Ele dá o bote no Fusca e <b>morde parte do seu Pix</b>. Fique de olho na linha laranja e derrube-o antes. No Planalto, use isso a seu favor...', draw: 'leao' },
   ];
   const HOWTO_DRAW = {
     drag(c, w, h, t) {
@@ -1603,6 +1743,120 @@
       drawLeao(c, lx, ly, t, 1.05);
       c.fillStyle = '#ff8c1a'; c.font = '10px ' + G.FONT_DISPLAY; c.textAlign = 'center';
       if (ph > 0.75) c.fillText('NHAC! −15%', w / 2, h * 0.92);
+    },
+    // CADA CHEFÃO TEM UMA MANHA: 4 cenas de MH.SEG s em sequência; no acerto o chefão fica tonto e pula um "×2"
+    manha(c, w, h, t) {
+      tileBG(c, w, h);
+      const seg = Math.floor(t / MH.SEG) % 4, u = t % MH.SEG;
+      const bx = w / 2, by = h * 0.2;
+      let hit = -1; // tempo desde o acerto (-1 = ainda não)
+      if (seg === 0) {
+        // PEGAR: a EMENDA desce de paraquedas e o Fusca encosta nela
+        const CATCH = 1.5, fy = h * 0.8, cx0 = w * 0.3;
+        const fx = lerp(w * 0.74, cx0, smooth(u / 1.1));
+        if (u >= CATCH) hit = u - CATCH;
+        mhBoss(c, seg, bx, by, t, hit >= 0 ? hit + 0.001 : 0);
+        let cx = 0, cy = 0;
+        if (hit < 0) {
+          const sw = Math.sin(u * 3.4);
+          cx = cx0 + sw * 4; cy = lerp(by + 16, fy - 10, u / CATCH);
+          mhCase(c, cx, cy, sw * 0.15, true);
+        }
+        drawPlayer(c, fx, fy, 0.6, { t, weapon: 'voto', level: 1, tilt: u < 1.1 ? -0.7 : 0 });
+        if (hit < 0) { mhRing(c, cx, cy, 10, t); mhLabel(c, 'EMENDA', cx + 24, cy); }
+        else if (hit < 0.35) { c.strokeStyle = 'rgba(127,240,226,' + (1 - hit / 0.35) + ')'; c.lineWidth = 2; c.beginPath(); c.arc(fx, fy - 8, 10 + hit * 40, 0, TAU); c.stroke(); }
+      } else if (seg === 1) {
+        // FICAR: o Fusca para dentro do anel da META até a barra dourada encher
+        const rx = w * 0.64, ry = h * 0.64, r = 13, IN = 0.8, FULL = 1.9;
+        const kk = smooth(u / IN);
+        const fx = lerp(w * 0.2, rx, kk), fy = lerp(h * 0.9, ry + 3, kk);
+        if (u >= FULL) hit = u - FULL;
+        mhBoss(c, seg, bx, by, t, hit >= 0 ? hit + 0.001 : 0);
+        drawPlayer(c, fx, fy, 0.6, { t, weapon: 'voto', level: 1, tilt: u < IN ? 0.6 : 0 });
+        if (hit < 0) {
+          mhRing(c, rx, ry, r, t, { solid: u >= IN, prog: clamp((u - IN) / (FULL - IN), 0, 1) });
+          mhLabel(c, 'META', rx, ry - r - 5);
+        } else if (hit < 0.35) {
+          c.strokeStyle = 'rgba(255,210,63,' + (1 - hit / 0.35) + ')'; c.lineWidth = 2.5;
+          c.beginPath(); c.arc(rx, ry, r + hit * 30, 0, TAU); c.stroke();
+        }
+      } else if (seg === 2) {
+        // CORTAR: o fio da live sai do chefão até o celular; o Fusca passa por cima e o sinal cai
+        const hx = bx, hy = by + 13, px = w * 0.85, py = h * 0.6, ptx = px, pty = py - 7;
+        const ccx = (hx + ptx) / 2 + (ptx - hx) * 0.15, ccy = Math.max(hy, pty) + 12;
+        const P = mhCablePts;
+        for (let i = 0; i <= 10; i++) { const s = i / 10; P[i * 2] = mhQuad(hx, ptx, ccx, s); P[i * 2 + 1] = mhQuad(hy, pty, ccy, s); }
+        // o Fusca sobe quase reto e atravessa o fio no trecho cortável (longe do chefão e do celular)
+        const SC = 4, cutx = (P[SC * 2] + P[SC * 2 + 2]) / 2, cuty = (P[SC * 2 + 1] + P[SC * 2 + 3]) / 2;
+        const CUT = 1.25, k = Math.min(1.15, u / CUT), ax = cutx - 14, ay = h * 0.97;
+        const fx = lerp(ax, cutx, k), fy = lerp(ay, cuty + 5, k);
+        if (u >= CUT) hit = u - CUT;
+        mhBoss(c, seg, bx, by, t, hit >= 0 ? hit + 0.001 : 0);
+        mhPhone(c, px, py, hit >= 0);
+        if (hit < 0) {
+          mhCable(c, P, 0, 10);
+          mhLabel(c, 'FIO', P[6] - 7, P[7] + 9);
+        } else {
+          // as duas pontas recuam com um pouco de mola
+          const sp = 1 - Math.exp(-hit * 8) * Math.cos(hit * 18);
+          P[SC * 2] -= 3 * sp; P[SC * 2 + 1] += 6 * sp; P[SC * 2 - 1] += 2 * sp;
+          P[SC * 2 + 2] += 3 * sp; P[SC * 2 + 3] += 8 * sp; P[SC * 2 + 5] += 3 * sp;
+          mhCable(c, P, 0, SC); mhCable(c, P, SC + 1, 10);
+          if (hit < 0.3) {
+            c.lineWidth = 1.2;
+            for (let i = 0; i < 10; i++) {
+              const a = i * 0.63 + 0.4, d0 = 3 + hit * 20, d1 = d0 + 4;
+              c.strokeStyle = i < 6 ? MH.TEAL_L : '#ffffff';
+              c.beginPath(); c.moveTo(cutx + Math.cos(a) * d0, cuty + Math.sin(a) * d0); c.lineTo(cutx + Math.cos(a) * d1, cuty + Math.sin(a) * d1); c.stroke();
+            }
+          }
+        }
+        // caixinha de Wi-Fi onde o fio liga
+        c.fillStyle = '#ffffff'; c.strokeStyle = MH.INK; c.lineWidth = 0.8;
+        c.fillRect(hx - 5, hy - 3, 10, 5); c.strokeRect(hx - 5, hy - 3, 10, 5);
+        c.fillStyle = hit >= 0 ? '#9aa5b8' : MH.TEAL; c.fillRect(hx - 3, hy - 1.5, 2, 2); c.fillRect(hx + 1, hy - 1.5, 2, 2);
+        drawPlayer(c, fx, fy, 0.6, { t, weapon: 'voto', level: 1, tilt: u < CUT * 1.3 ? 0.5 : 0 });
+      } else {
+        // OLÉ: fique embaixo do chefão enquanto o Leão mira (linha dourada) e saia na hora: ele morde o bolso do chefão
+        const ENTER = 0.6, GOLD = 0.8, SIDE = 1.15, LUNGE = 1.45, BITE = 1.75, ly0 = h * 0.86, fy = h * 0.6;
+        let fx = lerp(w * 0.22, bx, smooth(u / 0.5));
+        if (u > SIDE) fx = lerp(bx, w * 0.84, smooth((u - SIDE) / 0.3));
+        let lx = lerp(w * 0.94, bx, smooth(u / ENTER)), ly = ly0;
+        if (u >= BITE) hit = u - BITE;
+        mhBoss(c, seg, bx, by, t, hit >= 0 ? hit + 0.001 : 0);
+        if (u >= ENTER && u < LUNGE) {
+          c.strokeStyle = u >= GOLD ? MH.GOLD : 'rgba(255,255,255,0.75)'; c.lineWidth = 1.5;
+          c.setLineDash([4, 3]); c.lineDashOffset = -t * 14;
+          c.beginPath(); c.moveTo(lx, ly - 9); c.lineTo(lx, 6); c.stroke(); c.setLineDash([]);
+        }
+        if (u >= LUNGE && hit < 0) ly = lerp(ly0, by + 14, smooth((u - LUNGE) / (BITE - LUNGE)));
+        if (hit >= 0) { lx = bx + 9; ly = by + 14; }
+        drawPlayer(c, fx, fy, 0.6, { t, weapon: 'voto', level: 1, tilt: u > SIDE && u < SIDE + 0.3 ? 0.8 : 0 });
+        mhLion(c, lx, ly, 0.42, t, { pounce: u >= LUNGE, eyesRed: u >= GOLD && hit < 0, bristle: u >= ENTER ? 1 : 0, mouth: hit >= 0 ? (Math.sin(t * 16) + 1) / 2 : 0 });
+        if (u < ENTER + 0.3) mhLabel(c, 'LEÃO', lx, ly - 13, '#ffb02e');
+        if (u >= GOLD && u < SIDE + 0.25) {
+          // seta "SAI!" ao lado do Fusca
+          const ax = bx + 13, ay = fy;
+          c.fillStyle = '#ffffff'; c.strokeStyle = MH.INK; c.lineWidth = 1;
+          c.beginPath(); c.moveTo(ax, ay - 2); c.lineTo(ax + 7, ay - 2); c.lineTo(ax + 7, ay - 5); c.lineTo(ax + 12, ay); c.lineTo(ax + 7, ay + 5); c.lineTo(ax + 7, ay + 2); c.lineTo(ax, ay + 2); c.closePath(); c.fill(); c.stroke();
+          mhLabel(c, 'SAI!', ax + 7, ay - 10);
+        }
+        if (hit >= 0 && hit < 0.9) {
+          // moedas pulando do bolso (círculos com contorno, não pontos brilhantes)
+          for (let i = 0; i < 4; i++) {
+            const q2 = (hit * 1.4 + i * 0.22) % 1, cx = bx + 12 + (i - 1.5) * 5 * q2 * 2, cy = by + 12 - Math.sin(q2 * Math.PI) * 12;
+            c.fillStyle = MH.GOLD; c.strokeStyle = '#a06b00'; c.lineWidth = 0.8;
+            c.beginPath(); c.ellipse(cx, cy, 2.4, 2.4 * Math.abs(Math.cos(t * 8 + i)) + 0.5, 0, 0, TAU); c.fill(); c.stroke();
+          }
+        }
+      }
+      if (hit >= 0) mhPop(c, bx, by, hit, t);
+      // qual manha está passando (verbo no canto + 4 casinhas)
+      c.textAlign = 'left'; c.textBaseline = 'middle'; c.font = '6.5px ' + G.FONT_DISPLAY;
+      c.lineWidth = 2.4; c.strokeStyle = MH.INK; c.lineJoin = 'round';
+      const verb = ['PEGAR', 'FICAR', 'CORTAR', 'OLÉ'][seg];
+      c.strokeText(verb, 4, 7); c.fillStyle = MH.TEAL_L; c.fillText(verb, 4, 7);
+      for (let i = 0; i < 4; i++) { c.fillStyle = i === seg ? MH.TEAL_L : 'rgba(255,255,255,0.22)'; c.fillRect(w - 27 + i * 6, h - 6, 4, 3); }
     },
   };
   function showHowTo() {

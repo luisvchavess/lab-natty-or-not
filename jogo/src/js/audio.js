@@ -1,7 +1,7 @@
 /* ============================================================
    FUSCA A JATO — audio.js
    Som 100% sintetizado com WebAudio: todos os efeitos (SFX) e a
-   trilha procedural (bossa, valsinha, baião, samba, rock-sertanejo,
+   trilha procedural (bossa, valsinha, baião, samba, rock da live,
    frevo, funk carioca e marchinha). Nenhum arquivo de áudio.
 
    - O AudioContext só nasce no primeiro toque/tecla (unlock()); o motor
@@ -210,7 +210,8 @@
       return ac.createPeriodicWave(re, im);
     }
     let p25 = null;
-    Object.defineProperty(E, 'pulse25', { get() { return p25 || (p25 = pulseWave(0.25)); } });
+    // (sem PeriodicWave no navegador: a sanfona toca com a quadrada embutida)
+    Object.defineProperty(E, 'pulse25', { get() { if (!p25) { try { p25 = pulseWave(0.25); } catch (e) { p25 = 'square'; } } return p25; } });
     // cada contexto monta a tabela de onda de um tipo de oscilador no 1º uso (5–10 ms a 4×):
     // warm() faz isso fora da hora de tocar
     E.warm = function (type) {
@@ -329,7 +330,7 @@
     return E;
   }
 
-  // pedal de distorção por faixa (guitarras do rock-sertanejo)
+  // pedal de distorção por faixa (guitarras do rock da fase 3)
   function makeDist(E, out, kind) {
     const lead = kind === 'lead';
     const pre = E.gain(lead ? 2.2 : 2.2, null), hp = E.filt('highpass', 110, 0.7, null);
@@ -696,6 +697,47 @@
       E.tone('square', 1400, 900, t + dt, 0.012, 0.05 * k, o);
     }
     return 0.55;
+  });
+  // --- manhas dos chefões (bosses.js, erika.js, lule.js) ---
+  S('snap', 3, 0.05, (E, t, o) => { // fio da live cortado: estalo de ruído + beliscão agudo
+    const k = rnd(0.95, 1.05);
+    E.hiss(t, 0.03, 0.42, o, 'highpass', 2600, 0, 0.7, 0.001);
+    E.hiss(t, 0.05, 0.2, o, 'bandpass', 5200 * k, 1800, 2, 0.001);
+    E.tone('triangle', 1760 * k, 1320 * k, t + 0.004, 0.15, 0.26, o, 0.002, 0.05);
+    E.tone('sine', 3520 * k, 0, t + 0.004, 0.05, 0.08, o, 0.002);
+    return 0.19;
+  });
+  S('roar', 3, 0.4, (E, t, o) => { // Leão da Receita chegando: rugido grave (serra 90 -> 60 Hz) + bafo
+    const end = t + 0.56, lp = E.filt('lowpass', 1300, 1.2, o), g = E.gain(0, lp), am = E.gain(0.6, g);
+    lp.frequency.setValueAtTime(1300, t); lp.frequency.exponentialRampToValueAtTime(420, t + 0.5);
+    const sh = E.ac.createWaveShaper(); sh.curve = DIST_SOFT; sh.connect(am);
+    const a = E.osc('sawtooth', 90, t, end, sh), b = E.osc('sawtooth', 93, t, end, E.gain(0.7, sh));
+    a.frequency.exponentialRampToValueAtTime(60, t + 0.5); b.frequency.exponentialRampToValueAtTime(61.5, t + 0.5);
+    E.osc('sine', 23, t, end, E.gain(0.4, am.gain)); // tremor do rosnado
+    E.adsr(g, t, 0.05, 0.5, 0.12, 0.75, 0.36, 0.12);
+    E.hiss(t, 0.45, 0.2, o, 'bandpass', 700, 380, 1.1, 0.06);
+    return 0.56;
+  });
+  S('meta', 3, 0.3, (E, t, o) => { // anel da META aparecendo: dois senos (880 e 1320 Hz)
+    E.tone('sine', 880, 0, t, 0.19, 0.2, o, 0.006);
+    E.tone('sine', 1320, 0, t + 0.06, 0.17, 0.17, o, 0.006);
+    E.tone('triangle', 2640, 0, t + 0.06, 0.06, 0.03, o);
+    return 0.27;
+  });
+  S('mech_ok', 4, 0.25, (E, t, o) => { // manha acertada (o chefão ficou tonto): arpejo de 3 notas subindo + moeda
+    arp(E, t, E.filt('lowpass', 5000, 0.7, o), [72, 76, 79], 0.07, 0.07, 0.18, 'square', 0.16);
+    E.tone('sine', 1975.5, 0, t + 0.25, 0.05, 0.16, o, 0.002); // moeda: B6 -> E7
+    E.tone('sine', 2637, 0, t + 0.3, 0.19, 0.16, o, 0.002);
+    E.tone('triangle', 5274, 0, t + 0.3, 0.06, 0.03, o);
+    return 0.52;
+  });
+  S('buffer', 3, 0.3, (E, t, o) => { // a live caiu: 3 bipes tristes descendo (carregando...)
+    const lp = E.filt('lowpass', 2600, 0.7, o);
+    [[659.3, 0], [523.3, 0.12], [392, 0.24]].forEach(([f, dt], i) => {
+      E.tone('square', f, f * 0.94, t + dt, 0.07 + i * 0.03, 0.12, lp, 0.004);
+      E.tone('sine', f / 2, 0, t + dt, 0.08 + i * 0.03, 0.1, o, 0.004);
+    });
+    return 0.42;
   });
   S('siren', 3, 0.5, (E, t, o) => { // carro de som / sirene
     const g = E.gain(0, E.filt('lowpass', 3200, 0.7, o));
@@ -1092,7 +1134,7 @@
       else { g2.gain.linearRampToValueAtTime(0.3 * v, t + 0.02); g2.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
       E.fin(s, g);
     },
-    // acelerada de moto (motociata)
+    // acelerada de moto (motoboy)
     rev(E, t, c, v, dest) { const g = E.nv(dest, 1); motorSynth(E, t, g, 0.35 * v, 0.9); endMarker(E, g, t + 1.1); },
     // grito "ê!" (vocal chop)
     vox(E, t, c, v, dest) { const g = E.nv(dest, 1); shoutSynth(E, t, g, 0.4 * v); endMarker(E, g, t + 0.5); },
@@ -1323,7 +1365,7 @@
     order: ['A', 'B', 'A2', 'C'],
   };
 
-  // ---------- FASE 3 — Lago Paranoá/motociata: rock-sertanejo ----------
+  // ---------- FASE 3 — Lago Paranoá: rock da live ----------
   const ROCK_A = [
     'B4 - E5 - - - G5 - - - F#5 - E5 - D5 -',
     'E5 - - - - - - - . . G4 - A4 - B4 -',
@@ -1814,7 +1856,7 @@
       if (c === '.' || c === undefined) continue;
       const vn = (c >= 'A' && c <= 'Z' ? 1 : 0.68) * D.vol, vr = 0.92 + Math.random() * 0.12, td = tt + Math.random() * 0.004;
       // golpe pré-renderizado (ao vivo) ou sintetizado
-      if (!(E.hit && E.hit(E, D.nm, c, vn, vr, td, out))) D.fn(E, td, c, vn * vr, out, sd);
+      if (!(E.hit && E.hit(E, D.nm, c, vn, vr, td, out, sd))) D.fn(E, td, c, vn * vr, out, sd);
     }
     // baixo
     const B = sec.bass;
@@ -1904,9 +1946,9 @@
 
   // ===================== Sons pré-renderizados =====================
   // Os SFX que tocam o tempo todo e os golpes de bateria da trilha são renderizados uma vez num
-  // OfflineAudioContext (em outra thread) e depois tocam como 1 BufferSource + 1 ganho: 2 nós e
-  // nenhuma automação, contra 5–10 nós com envelopes por disparo. Até o buffer ficar pronto (ou se
-  // o navegador não tiver OfflineAudioContext), toca o sintetizador de sempre.
+  // OfflineAudioContext (em outra thread) e depois tocam como 1 BufferSource (SFX) ou BufferSource +
+  // ganho da velocidade (bateria), sem automação, contra 5–10 nós com envelopes por disparo. Até o
+  // buffer ficar pronto (ou se o navegador não tiver OfflineAudioContext), toca o sintetizador de sempre.
   // nº de variações: a variação i fixa o rnd() em (i + 0,5) / n da faixa original (os tons sorteados
   // viram n tons espalhados pela mesma faixa, tocados em ordem aleatória); o ruído de cada uma é outro.
   // (Mexer no playbackRate a cada disparo custaria quase o mesmo que um nó a mais.)
@@ -1938,7 +1980,7 @@
 
   // ===================== Controle ao vivo (G.Audio) =====================
   const L = { E: null, ac: null, building: false, pend: [], cur: null, wanted: null, fading: [], last: {}, timer: 0, mOn: null, sOn: null, duck: false, susByUs: false, first: true, pixStreak: 0, pixT: -9, inited: false, errs: 0,
-    musicOk: false, bank: {}, bq: [], bqKeys: {}, bakeT: 0, baking: false, bakeOff: !OAC, bakeKB: 0, revWant: false, revAt: 0 };
+    E0: null, noise: null, noiseFail: false, musicOk: false, bank: {}, bq: [], bqKeys: {}, bakeT: 0, baking: false, bakeOff: !OAC, bakeKB: 0, revWant: false, revAt: 0 };
   const musicOn = () => { const s = G.save && G.save.settings; return !s || s.music !== false; };
   const sfxOn = () => { const s = G.save && G.save.settings; return !s || s.sfx !== false; };
   function report(err, where) {
@@ -1956,10 +1998,10 @@
     L.ac = ac;
     return ac;
   }
-  // O motor nasce em fatias curtas, cada uma uma tarefa própria: barramentos, ruído (em blocos, até
-  // ~4 ms por fatia) e as tabelas de onda dos sons de interface -> SFX prontos (tocam os sons pedidos
-  // no meio tempo, como o clique do próprio toque); depois as outras tabelas e a partitura pedida ->
-  // trilha pronta. A pré-renderização começa aí e o reverb vem ≥ 1,5 s depois (ver tick).
+  // O motor nasce em fatias curtas, cada uma uma tarefa própria: barramentos (e o ruído pedido ao
+  // decodificador, ver noiseWav) e as tabelas de onda dos sons de interface -> SFX prontos (tocam os
+  // sons pedidos no meio tempo, como o clique do próprio toque); depois as outras tabelas e a partitura
+  // pedida -> trilha pronta. A pré-renderização começa aí e o reverb vem ≥ 1,5 s depois (ver tick).
   // Uma fatia só emenda o passo seguinte se ainda não gastou 2 ms (aparelho rápido: menos fatias;
   // lento: 1 passo de ≤ ~10 ms a 4× por fatia). Passo que devolve false continua na próxima fatia.
   const BOOT = [
@@ -1976,6 +2018,8 @@
       return true;
     },
     sfxReady,
+    // sons pedidos enquanto o motor nascia (ex.: o clique do próprio toque), numa fatia própria
+    () => { const pend = L.pend.splice(0); for (const nm of pend) api.sfx(nm); },
     () => { L.E.warm('triangle'); },
     () => { L.E.warm('sawtooth'); },
     () => { L.E.warm('pulse'); },
@@ -1992,11 +2036,13 @@
       do { r = BOOT[i](); if (r !== false && r !== WAIT) i++; } while (r !== WAIT && i < BOOT.length && performance.now() - t0 < 2);
     } catch (err) {
       report(err, 'engine');
-      L.building = false; L.E0 = null; L.pend.length = 0;
-      if (L.E) { clearInterval(L.timer); L.E = null; }
-      try { L.ac.close(); } catch (e) { /* nada */ }
-      L.ac = null;
-      return;
+      if (L.E) i++; // com os SFX já prontos, um passo que falhou (tabela de onda...) só é pulado
+      else {
+        L.building = false; L.E0 = null; L.pend.length = 0;
+        try { L.ac.close(); } catch (e) { /* nada */ }
+        L.ac = null;
+        return;
+      }
     }
     if (i < BOOT.length) setTimeout(bootStep, r === WAIT ? 10 : 0, i);
   }
@@ -2028,9 +2074,6 @@
     LOWQ = G.quality === 'low';
     applySettings(true);
     L.timer = setInterval(tick, TICK_MS);
-    // sons pedidos enquanto o motor nascia (ex.: o clique do próprio toque)
-    const pend = L.pend.splice(0);
-    for (const nm of pend) api.sfx(nm);
   }
   function musicReady() {
     const E = L.E;
@@ -2064,13 +2107,12 @@
     if (!L.bqKeys[key] && vq > 0) wantBake({ key, n: 1, v: vq, run: (E, t, o) => DRUM[nm](E, t, c, vq, o, 0.1) });
     return null;
   }
-  function bakedDrum(E, nm, c, vn, vr, t, dest) {
+  function bakedDrum(E, nm, c, vn, vr, t, dest, sd) {
     if (DRUM_SYNTH[nm] || L.bakeOff) return false;
     const roll = c === 'r' && ROLL[nm];
     if (roll) {
       const a = drumEntry(nm, 'x', vn * roll[0]), b = drumEntry(nm, 'x', vn * roll[1]);
       if (!a || !b) return false;
-      const sd = L.cur ? L.cur.sd : 0.11;
       bakedHit(E, a, vn * roll[0] * vr, t, dest);
       bakedHit(E, b, vn * roll[1] * vr, t + sd / 2, dest);
       return true;

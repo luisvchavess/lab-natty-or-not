@@ -663,6 +663,7 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .in-boss small { font: 800 1rem/1 var(--font-body); letter-spacing: .16em; color: var(--u-yel); }
 #ui .in-boss b { font: 900 1.65rem/1 var(--font-display); }
 #ui .in-boss em { width: 100%; margin-top: .25rem; font: italic 600 1.25rem/1.2 var(--font-body); color: rgba(255, 255, 255, .75); }
+#ui .in-manha { width: 100%; margin-top: .45rem; padding-top: .45rem; border-top: .1rem dashed rgba(127, 240, 226, .35); font: 800 1.15rem/1.2 var(--font-body); letter-spacing: .03em; color: #7ff0e2; }
 #ui .in-gag { margin: .9rem 1.2rem 1.1rem; padding-top: .7rem; border-top: .15rem dashed rgba(0, 0, 0, .25); font: 700 1.25rem/1.25 var(--font-body); color: #646a73; }
 #ui .in-hint { margin-top: 2.4rem; font: 800 1.2rem/1 var(--font-body); letter-spacing: .2em; color: rgba(255, 255, 255, .65); text-transform: uppercase; animation: u-blink 1.4s ease-in-out infinite; }
 
@@ -1013,6 +1014,24 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .ach-num { margin-top: .3rem; font: 700 1.05rem/1 var(--font-body); color: var(--u-lcd-dim); }
 #ui .ach:not(.got) .ach-txt b { padding-right: 0; color: #3a463d; }
 #ui .ach-ok { position: absolute; right: .8rem; top: .7rem; padding: .25rem .45rem .2rem; border: .2rem solid #0c9a45; border-radius: .3rem; color: #0c9a45; font: 900 .95rem/1 var(--font-display); font-style: normal; transform: rotate(8deg); }
+/* barra + número na mesma linha (economiza uma linha nas conquistas com contador) */
+#ui .ach-prog { display: flex; align-items: center; gap: .6rem; margin-top: .4rem; }
+#ui .ach-prog .ach-bar { flex: 1; min-width: 0; margin-top: 0; }
+#ui .ach-prog .ach-num { flex: none; margin-top: 0; }
+/* a 1ª linha da descrição de quem já ganhou desvia do carimbo ELEITA (as outras usam a largura toda) */
+#ui .ach.got .ach-txt small::before { content: ''; float: right; width: 5.4rem; height: 1rem; }
+/* 17 conquistas: em telas baixas (360x640) a lista fica mais compacta, menos rolagem */
+#ui .short .ach-top { margin-bottom: .7rem; }
+#ui .short .ach-list { gap: .45rem; }
+#ui .short .ach { gap: .8rem; padding: .5rem .7rem; }
+#ui .short .seal { width: 3.2rem; height: 3.2rem; }
+#ui .short .seal::after { font-size: 1.4rem; }
+#ui .short .ach.got .seal::after { inset: .62rem; }
+#ui .short .ach-txt b { font-size: 1.35rem; }
+#ui .short .ach-txt small { font-size: 1.12rem; line-height: 1.15; }
+#ui .short .ach-prog { margin-top: .3rem; }
+#ui .short .ach-prog .ach-bar { height: .6rem; }
+#ui .short .ach-ok { top: .45rem; }
 
 /* ============================================================
    COMO JOGAR
@@ -1032,6 +1051,12 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .how-weap em { font: 800 1.1rem/1 var(--font-body); font-style: normal; letter-spacing: .04em; }
 #ui .how-weap .hw-t { display: flex; flex-direction: column; gap: .3rem; min-width: 0; padding-top: .2rem; }
 #ui .how-weap .hw-t small { font: 600 1.05rem/1.2 var(--font-body); color: rgba(255, 255, 255, .8); }
+/* cartão das manhas: lista dos chefões (anel tracejado verde-água = o que o Fusca encosta) */
+#ui .mh-list { display: flex; flex-direction: column; gap: .3rem; margin-top: .55rem; }
+#ui .mh { position: relative; display: block; padding-left: 1.4rem; font: 600 1.2rem/1.22 var(--font-body); }
+#ui .mh::before { content: ''; position: absolute; left: .1rem; top: .3rem; width: .7rem; height: .7rem; border: .18rem dashed #1f8f83; border-radius: 50%; }
+#ui .mh.unk { color: rgba(44, 58, 48, .55); letter-spacing: .12em; }
+#ui .mh.unk::before { border-color: rgba(44, 58, 48, .35); }
 
 /* ============================================================
    TOASTS
