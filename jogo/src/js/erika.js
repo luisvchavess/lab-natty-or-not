@@ -65,9 +65,10 @@
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
   // ======================================================================
-  const ERIKA = { skin: '#8d5a3b', face: 'oval', nose: 'small', hair: 'long', hairColor: '#17110f',
-    browColor: '#17110f', body: 'suit', suit: '#ffc531', shirt: '#d7191c', tie: null, seed: 41 };
+  const ERIKA = { skin: '#8d5a3b', face: 'oval', nose: 'small', hair: 'long', hairColor: '#f2d98e',
+    browColor: '#8a6436', body: 'suit', suit: '#ffc531', shirt: '#d7191c', tie: null, seed: 41 };
   const ERIKA_SWEAT = Object.assign({}, ERIKA, { sweat: true });
+  const HAIR_BACK = '#d9b65f'; // loira, igual na vida real: a parte de trás do cabelo, um tom abaixo do da frente
   const ERK_SIZE = 112, SC = ERK_SIZE / 100;
   const PY = -20;                          // a pessoa fica centrada em (0, PY): cabeça em -36, como ERK_HB
   const HY = PY - 14 * SC, HR = 27 * SC;   // centro e raio da cabeça (G.Art.personAnchors)
@@ -136,7 +137,7 @@
     paintHair(c, false);
   }
   function paintHair(c, fl) {
-    c.beginPath(); K.E(c, 0, HY + 6 * SC, HR * 1.28, HR * 1.38); K.inked(c, fl ? WHITE : ERIKA.hairColor, 3.2);
+    c.beginPath(); K.E(c, 0, HY + 6 * SC, HR * 1.28, HR * 1.38); K.inked(c, fl ? WHITE : HAIR_BACK, 2.2); // volume de trás num loiro um tom mais escuro (dá profundidade)
     if (fl) return;
     c.beginPath(); K.E(c, -HR * 0.62, HY - HR * 0.35, HR * 0.18, HR * 0.55, 0.5); c.fillStyle = 'rgba(255,255,255,0.16)'; c.fill();
   }
