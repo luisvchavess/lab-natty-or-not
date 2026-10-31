@@ -448,7 +448,7 @@
   // APEX_Y = altura do paraquedas (× H); STUN = tonto por turno; HEAL = cura de emenda perdida (× HP máx).
   const EM = {
     APEX_Y: 0.28, FALL: 50, FALL_L2: 62, FALL_TUT: 40, CATCH_R: 13, SWAY: 18, SWAY_HZ: 0.45,
-    STUN: [3.0, 3.5, 4.0, 3.0], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
+    STUN: [3.5, 4.0, 4.0, 3.5], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
     FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9, RACE_DY: 100,
   };
   const SIDE = [
@@ -1574,8 +1574,9 @@
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold]];
   G.Bosses.define('centrao', {
     // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
-    // HP afinado com a manha (humanbot ttk voto nv3: ~70 s pegando a emenda, ~85 s ignorando)
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3300, r: 46, homeY: 165, fatStart: 85,
+    // HP afinado com a manha (humanbot ttk nv3, mediana das 4 armas: ~69 s pegando a emenda, ~81 s ignorando;
+    // boss-only nv3, 24 partidas: casual ~84 s fazendo a manha / ~97 s ignorando, good ~72 s / ~87 s)
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3500, r: 46, homeY: 165, fatStart: 85,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -1741,6 +1742,9 @@
         if (!e.real) { ctx.save(); ctx.globalAlpha = 0.9; txt(ctx, 'REFLEXO', e.x, e.y + 21, 9, COL.violet, { stroke: 3 }); ctx.restore(); continue; }
         tealHalo(ctx, e.x, e.y + 2, 26, t);
         mechRing(ctx, e.x, e.y + 2, 20, t, {});
+        // rótulo branco legível em toda emenda (§2.2): embaixo do anel (o paraquedas fica em cima); levada por
+        // um deputadinho, vai por cima do anel (embaixo dele está o deputadinho), a não ser que a seta PEGUE! esteja lá
+        txt(ctx, 'EMENDA', e.x, e.st === 'carried' && !e.arrow ? e.y - 28 : e.y + 32, 9, '#ffffff', { stroke: 3 });
         if (e.arrow) pegueArrow(ctx, e.x, e.y - (e.st === 'para' ? 58 : 26), t);
       }
     },
@@ -1793,7 +1797,7 @@
     FIRST: 3.0, P4_SPD: 55, P4_JUMP: 120, P4_EVERY: 3.0,
     R0_L2: 35, DEMO: 2, P2_R: 36, P2_NEED: 2.4, STUN_L3: 4.0, MUL_L3: 2.3, P4_R: 40, P4_LIFE: 9,
     // 3º turno (META DOBRADA): nível 1 / 2 / 3
-    LVL: [{ r: 38, need: 1.6, life: 8, ax: 46, ay: 18 }, { r: 32, need: 1.2, life: 8, ax: 24, ay: 10, gap: 120 }, { r: 28, need: 0.8, life: 9, ax: 12, ay: 6 }],
+    LVL: [{ r: 38, need: 1.3, life: 8, ax: 46, ay: 18 }, { r: 32, need: 1.0, life: 8, ax: 24, ay: 10, gap: 120 }, { r: 28, need: 0.7, life: 9, ax: 12, ay: 6 }],
   };
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
@@ -2623,8 +2627,9 @@
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
-    // HP afinado com a manha (humanbot ttk voto nv3: ~78 s enchendo as metas, ~103 s ignorando com a META ABERTA)
-    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3000, r: 40, homeY: 168, spdK: 1.12,
+    // HP afinado com a manha (humanbot ttk nv3, mediana das 4 armas: ~76 s enchendo as metas, ~99 s ignorando com a
+    // META ABERTA; boss-only nv3, 24 partidas: casual ~117 s / ~134 s, good ~86 s / ~108 s)
+    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 2900, r: 40, homeY: 168, spdK: 1.12,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },

@@ -579,7 +579,7 @@
     p.tx = p.x; p.ty = p.y;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
   }
-  // O dedo que continuou na tela (morte, entrada do carro, recontagem, volta da pausa)
+  // O dedo que continuou na tela (morte, entrada do carro, recurso depois do fim de jogo, volta da pausa)
   // passa a pilotar a partir de onde o carro está agora, sem pulo.
   function reanchor() {
     const g = G.game; if (!g || !input.active) return;
@@ -587,12 +587,22 @@
     input.fx = input.lx; input.fy = input.ly; input.ax = p.x; input.ay = p.y;
     p.tx = p.x; p.ty = p.y;
   }
+  // Outro dedo já pilota? O dedo que pilota continua valendo na pausa e no fim de jogo (ao sair da tela,
+  // o pointerup chega ao canvas pela captura). Se mesmo assim o id ficou velho (o canvas não tem mais a
+  // captura dele: o dedo saiu sem o evento chegar), libera para o dedo novo pilotar.
+  function steeringElsewhere(id) {
+    if (!input.active || input.id === id) return false;
+    try {
+      if (canvas.hasPointerCapture && !canvas.hasPointerCapture(input.id)) { input.active = false; input.id = null; return false; }
+    } catch (err) { /* nada */ }
+    return true;
+  }
   function setupInput() {
     canvas.addEventListener('pointerdown', (e) => {
       call(G.Audio, 'unlock');
       if (G.state !== 'play' || !G.game) return;
       e.preventDefault();
-      if (input.active && input.id !== e.pointerId) return; // um dedo pilota
+      if (steeringElsewhere(e.pointerId)) return; // um dedo pilota
       anchorTouch(e);
     }, { passive: false });
     const move = (e) => {
@@ -637,7 +647,7 @@
     // App para o fundo: pausa e grava o Pix da fase (o sistema do celular pode matar a aba lá atrás).
     // Ao voltar: se o jogo entrou em 'play' escondido (cartão da fase avança sozinho), pausa também.
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { if (G.state === 'play') G.pause(); saveProgress(); }
+      if (document.hidden) { input.active = false; if (G.state === 'play') G.pause(); saveProgress(); }
       else if (G.state === 'play') G.pause();
     });
     window.addEventListener('pagehide', () => { if (G.state === 'play') G.pause(); saveProgress(); });
@@ -648,7 +658,7 @@
         e.preventDefault(); e.stopPropagation(); call(G.Audio, 'unlock');
         if (G.state !== 'play' || !G.game) return;
         // segundo dedo (o outro já pilota) ou mouse: intenção clara, solta na hora
-        if ((input.active && input.id !== e.pointerId) || e.pointerType === 'mouse') { G.bomb(); return; }
+        if (steeringElsewhere(e.pointerId) || e.pointerType === 'mouse') { G.bomb(); return; }
         // dedão que voltou à tela em cima do botão: começa a pilotar; vira bomba no pointerup se foi um toque
         anchorTouch(e);
         bombTap = { id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY };
@@ -682,6 +692,7 @@
       kills: 0, hits: 0, bombsUsed: 0, bombsUsedBoss: 0, grazes: 0, pixStage: 0, pixCommitted: 0,
       script: null, cleared: false, canFire: false, introT: 0, beam: null, grazeSfxT: 0, inDialogue: false,
       resumeT: 0, rank: null,
+      pixQ: [], // moedas de tiros convertidos esperando para sair (G.clearBullets)
     };
     return g;
   }
@@ -847,7 +858,9 @@
       ctx.font = f0;
       x = hw * 2 >= W ? W / 2 : M.clamp(x, hw, W - hw);
     }
-    g.texts.push({ x, y, str, color: o.color || '#fff', size, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font, stroke: o.stroke !== false && (G.quality !== 'low' || size >= 16) });
+    // contorno: no 'low' só some nos textos pequenos que não pediram (stroke: true = dica da manha, sempre legível)
+    g.texts.push({ x, y, str, color: o.color || '#fff', size, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font, f: size + 'px ' + font,
+      stroke: o.stroke === true || (o.stroke !== false && (G.quality !== 'low' || size >= 16)) });
   };
   G.shake = function (m) { const g = G.game; if (g && G.save.settings.shake) g.shake = Math.min(14, Math.max(g.shake, m)); };
   G.flash = function (a, c) { const g = G.game; if (g) { g.flashA = Math.max(g.flashA, a); g.flashC = c || '#fff'; } };
@@ -862,24 +875,51 @@
   G.isFlash = (ent) => !!(ent && ent.flash > 0);
   G.say = function (ent, text, dur) { if (!ent) return; ent.sayText = text; ent.sayT = dur || 2.2; };
 
-  // Converte tiros inimigos em brilho (opcionalmente em Pix)
+  // Converte tiros inimigos em brilho (opcionalmente em Pix).
+  // toPix: vale 1 Pix por tiro, até PIX_CLEAR_MAX por chamada (o valor de sempre), mas em poucas moedas:
+  // no máximo PIX_CLEAR_COINS, cada uma valendo vários Pix (it.v), espalhadas por onde os tiros estavam e
+  // saindo aos poucos (PIX_CLEAR_STEP por passo). Cada tiro vira só um brilho. Antes eram até 35 moedas
+  // novas no mesmo quadro (tonto do chefão com a tela cheia), puxadas e desenhadas uma a uma por ~1 s.
+  const PIX_CLEAR_MAX = 35, PIX_CLEAR_COINS = 12, PIX_CLEAR_STEP = 4;
+  const clearXY = new Float32Array(PIX_CLEAR_MAX * 2);
   G.clearBullets = function (toPix) {
     const g = G.game; if (!g) return;
-    let n = 0;
+    let n = 0, v = 0;
+    const maxDots = toPix ? 70 : 140; // brilhos: no máximo 70 (+ até 12 moedas), como os 35 + 70 de antes
     for (const b of g.eb) {
       if (b.dead) continue;
       b.dead = true;
-      if (toPix && n < 70) { G.drop('pix', b.x, b.y, { vx: 0, vy: -30, magnet: true }); n++; }
-      else if (n < 140) G.part({ x: b.x, y: b.y, type: 'dot', size: 2.5, life: 0.35, color: b.color, vy: -30 });
+      if (toPix && v < PIX_CLEAR_MAX) { clearXY[v * 2] = b.x; clearXY[v * 2 + 1] = b.y; v++; }
+      if (n < maxDots) G.part({ x: b.x, y: b.y, type: 'dot', size: 2.5, life: 0.35, color: b.color, vy: -30 });
       n++;
+    }
+    if (v > 0) {
+      const q = g.pixQ || (g.pixQ = []);
+      const c = Math.min(v, PIX_CLEAR_COINS), base = Math.floor(v / c), extra = v - base * c;
+      for (let i = 0; i < c; i++) {
+        const j = Math.min(v - 1, Math.floor(((i + 0.5) * v) / c));
+        q.push({ x: clearXY[j * 2], y: clearXY[j * 2 + 1], v: base + (i < extra ? 1 : 0) });
+      }
+      spawnPixQ(g, PIX_CLEAR_STEP);
     }
     // laser ainda avisando some; laser já ativo encerra logo
     for (const l of g.lasers) { if (l.t < l.warn) l.dead = true; else if (l.t < l.warn + l.life - 0.25) l.t = l.warn + l.life - 0.25; }
   };
+  // solta até max moedas da fila (max omitido = todas: fim da fase)
+  function spawnPixQ(g, max) {
+    const q = g.pixQ; if (!q || !q.length) return;
+    const n = max == null ? q.length : Math.min(max, q.length);
+    for (let i = 0; i < n; i++) {
+      const e = q[i];
+      const it = G.drop('pix', e.x, e.y, { vx: 0, vy: -30, magnet: true });
+      if (it) it.v = e.v;
+    }
+    q.splice(0, n);
+  }
 
   // ===================== Placar / aprovação =====================
   G.mult = function () { const g = G.game; return g ? 1 + g.approval / 25 : 1; };
-  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que a recontagem
+  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que o recurso
   // NÃO zera: cada marca só dá vida uma vez por partida.
   const EXTENDS = [500000, 1500000, 3000000, 6000000];
   function checkExtends(run) {
@@ -987,7 +1027,8 @@
     g.boss = b;
     g.bombsUsedBoss = 0;
     if (def.init) call(def, 'init', b, g);
-    G.banner('ALERTA!', 'CHEFÃO SE APROXIMANDO', { color: G.C.red, dur: 2.4 });
+    // def.fem (Dilmãe, Erika): sempre no feminino, como o cartão da fase (CHEFONA)
+    G.banner('ALERTA!', def.fem || b.fem ? 'CHEFONA SE APROXIMANDO' : 'CHEFÃO SE APROXIMANDO', { color: G.C.red, dur: 2.4 });
     call(G.Audio, 'sfx', 'warning');
     call(G.Audio, 'stopMusic');
     return b;
@@ -1428,7 +1469,7 @@
     it.dead = true;
     switch (it.type) {
       case 'pix': case 'pix5': case 'mala': {
-        const v = it.type === 'pix' ? 1 : it.type === 'pix5' ? 5 : 25;
+        const v = it.v || (it.type === 'pix' ? 1 : it.type === 'pix5' ? 5 : 25); // it.v: moeda de tiros convertidos
         run.pix += v; g.pixStage += v;
         G.addScore(v * 20);
         if (it.type !== 'pix') G.text(it.x, it.y - 8, '+R$ ' + v, { color: G.C.pix, size: 11, life: 0.7 });
@@ -1635,6 +1676,7 @@
     // o ímã (Chave Pix) e a coleta automática no alto da tela NÃO puxam o P: a cor é escolha do jogador
     const magR = 46 + G.upg('ima') * 28;
     const autoCollect = p.alive && p.y < H * 0.3;
+    if (g.pixQ && g.pixQ.length) spawnPixQ(g, PIX_CLEAR_STEP); // moedas dos tiros convertidos, aos poucos
     for (const it of g.pickups) {
       if (it.dead) continue;
       it.t += dt;
@@ -1781,16 +1823,21 @@
     // camada do chefão por cima dos tiros (anéis, rótulos e miras da manha: bala nenhuma esconde)
     if (b && b.state !== 'warning' && b.def.drawOver) { ctx.save(); call(b.def, 'drawOver', ctx, b, g); ctx.restore(); }
     // textos flutuantes
+    // Surgem crescendo por ESCALA em volta de (x, y), nunca pelo tamanho da fonte: um tamanho fracionário
+    // é uma fonte nova para o canvas a cada quadro (~1,7 ms a 4x). A fonte fica sempre em px inteiros (tx.f).
+    // Escala <= 1: o texto nunca passa da largura que o G.text mediu para caber na tela.
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; // contorno sem espinho no M/A
     for (const tx of g.texts) {
       const a = M.clamp(1 - (tx.t / tx.life) * (tx.t / tx.life), 0, 1);
       ctx.globalAlpha = a;
-      const sz = tx.size * (tx.t < 0.1 ? 0.6 + tx.t * 4 : 1);
-      ctx.font = sz + 'px ' + tx.font;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = tx.f || tx.size + 'px ' + tx.font;
+      const s = tx.t < 0.1 ? 0.6 + tx.t * 4 : 1;
+      if (s !== 1) ctx.setTransform(k * s, 0, 0, k * s, k * (tx.x * (1 - s) + ox), k * (tx.y * (1 - s) + oy));
       if (tx.stroke) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(tx.str, tx.x, tx.y); }
       ctx.fillStyle = tx.color; ctx.fillText(tx.str, tx.x, tx.y);
-      ctx.globalAlpha = 1;
+      if (s !== 1) ctx.setTransform(k, 0, 0, k, ox * k, oy * k);
     }
+    ctx.globalAlpha = 1; ctx.lineJoin = 'miter';
     if (g.stamp) drawStamp(g.stamp);
     // efeito da bomba
     if (g.bombFx) {
@@ -1997,6 +2044,20 @@
     ctx.fillStyle = '#e63946'; ctx.fillText(st.text, 0, 2);
     ctx.restore();
   }
+  // Caixa alta para nomes de turno/faixa, mas o 'x' entre algarismos fica minúsculo ('ESCALA 6x1', não '6X1').
+  // Guarda o resultado: a barra do chefão pede o nome do turno a cada quadro.
+  const upperCache = new Map();
+  function upperName(s) {
+    s = String(s);
+    let u = upperCache.get(s);
+    if (u === undefined) {
+      u = s.toUpperCase().replace(/(\d)X(?=\d)/g, '$1x');
+      if (upperCache.size > 200) upperCache.clear();
+      upperCache.set(s, u);
+    }
+    return u;
+  }
+  G.upperName = upperName;
   function drawBanner(bn) {
     const t = bn.t, d = bn.dur;
     const inK = M.clamp(t / 0.25, 0, 1), outK = M.clamp((d - t) / 0.3, 0, 1);
@@ -2016,7 +2077,7 @@
     ctx.fillStyle = bn.color; ctx.fillText(bn.title, G.W / 2 - slide, y - (bn.sub ? 9 : 0), G.W - 20);
     if (bn.sub) {
       ctx.font = '700 ' + (bn.small ? 13 : 15) + 'px ' + G.FONT_BODY;
-      ctx.fillStyle = '#ffffff'; ctx.fillText(bn.sub.toUpperCase(), G.W / 2 + slide, y + (bn.small ? 13 : 19), G.W - 20);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(upperName(bn.sub), G.W / 2 + slide, y + (bn.small ? 13 : 19), G.W - 20);
     }
     ctx.restore();
   }
@@ -2119,7 +2180,7 @@
       ctx.fillText(b.name, bx, by + 7);
       if (b.phases[b.phase] && b.phases[b.phase].name) {
         ctx.textAlign = 'right'; ctx.font = '700 10px ' + G.FONT_BODY; ctx.fillStyle = '#ffd23f';
-        ctx.fillText(b.phases[b.phase].name.toUpperCase(), bx + bw, by + 7);
+        ctx.fillText(upperName(b.phases[b.phase].name), bx + bw, by + 7);
       }
       // etiqueta da manha (ex.: 'BRECHA ×2,2', 'EM ALTA ×0,8'), piscando no meio da barra
       const tag = b.hudTag;
@@ -2202,7 +2263,7 @@
     G.run = {
       loop, stageIdx, startStage: stageIdx, score: 0, lives, baseLives: lives, bombs, baseBombs: bombs,
       weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, continues: 0, maxContinues: 3, grazes: 0, pix: 0, hits: 0,
-      total: 0, extGiven: 0, // pontos da partida inteira (a recontagem não zera) e vidas extras já dadas
+      total: 0, extGiven: 0, // pontos da partida inteira (o recurso não zera) e vidas extras já dadas
     };
     G.count('runs');
     const go = () => G.startStage(stageIdx);
@@ -2269,6 +2330,7 @@
     G.state = 'clear';
     setPlayButtons(false);
     g.canFire = false; g.beam = null; g.player.inv = 999;
+    spawnPixQ(g); // moeda ainda na fila também conta
     for (const it of g.pickups) if (!it.dead) { if (it.type === 'power') lockPower(it); collectPickup(it); }
     const noHit = g.hits === 0, noBomb = g.bombsUsed === 0;
     const rank = G.rankFor(g.hits, g.bombsUsed, g.stageIdx);
@@ -2313,7 +2375,7 @@
     if (G.state === 'over') return;
     G.state = 'over';
     setPlayButtons(false);
-    input.active = false;
+    // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
     commitPix();
     call(G.Audio, 'music', 'gameover');
     const info = { score: run.score, stage: g.stage, index: g.stageIdx, continuesLeft: run.maxContinues - run.continues, pix: G.save.pix, best: G.save.best };
@@ -2323,7 +2385,7 @@
       onQuit: () => G.toMenu(),
     });
   }
-  // "Pedir recontagem": continua de onde parou, mas zera o placar
+  // "Entrar com recurso": continua de onde parou, mas zera o placar
   G.continueRun = function () {
     const g = G.game, run = G.run;
     if (!g || run.continues >= run.maxContinues) return false;
@@ -2336,6 +2398,7 @@
     G.clearBullets(false);
     G.state = 'play';
     setPlayButtons(true);
+    if (input.active) reanchor(); // (o carro está entrando: o reanchor do fim da entrada vale de novo)
     // música certa para o momento: chefão chegando/caindo ou cinemática da volta do Lule = silêncio
     const b = g.boss;
     if (b && (b.state !== 'fight' || (b.data && b.data.reviving))) call(G.Audio, 'stopMusic');
@@ -2357,7 +2420,7 @@
     if (G.state !== 'play') return;
     G.state = 'pause';
     setPlayButtons(false);
-    input.active = false;
+    // o dedo que pilota NÃO é solto: na volta (CONTINUAR) ele pilota de onde o carro está
     call(G.Audio, 'sfx', 'pause');
     call(G.UI, 'pause', {
       onResume: () => G.resume(),
@@ -2369,6 +2432,7 @@
     G.state = 'play';
     if (G.game) G.game.resumeT = RESUME_T;
     setPlayButtons(true);
+    if (input.active) reanchor(); // e de novo a cada passo do "PRONTO? VAI!" (updateGame)
     call(G.UI, 'hidePause');
   };
   const RESUME_T = 1.0;
@@ -2533,7 +2597,7 @@
       },
       shop(o, done) { close(); done(); },
       gameOver(info, h) {
-        const u = screen('<h2>DERROTADO NAS URNAS</h2><p>' + G.fmt(info.score) + ' votos</p>' + (info.continuesLeft > 0 ? '<button id="fbCont">PEDIR RECONTAGEM (' + info.continuesLeft + ')</button>' : '') + '<button id="fbQuit">MENU</button>');
+        const u = screen('<h2>VOCÊ FOI DERROTADO</h2><p>' + G.fmt(info.score) + ' votos</p>' + (info.continuesLeft > 0 ? '<button id="fbCont">ENTRAR COM RECURSO (' + info.continuesLeft + ')</button>' : '<p>Acabaram os recursos. Transitou em julgado.</p>') + '<button id="fbQuit">MENU</button>');
         btn(u, '#fbCont', () => { close(); h.onContinue(); });
         btn(u, '#fbQuit', () => { close(); h.onQuit(); });
       },

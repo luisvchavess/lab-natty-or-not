@@ -245,8 +245,8 @@ ignoring it has a cost. It is strongly rewarded, **never a hard lock**: fatigue 
 |---|---|---|---|---|
 | `centrao` | **PEGAR** | touch the parachuting EMENDA briefcase | "BASE DO ZÉ", ×2,2 for 3–4 s | the emenda lands: +2% HP |
 | `dilmae` | **FICAR** | keep the white dot inside the drifting META ring until it fills | "RECALCULANDO...", ×2,2 for 3 s | "META ABERTA" armour ×0,8 |
-| `erika` | **CORTAR** | fly through every cable ("fio") of her live before it regrows | "CAIU A LIVE! FLOPOU!", ×2,4 for 4–4,5 s | "EM ALTA" armour ×0,7–0,9 + VIRALIZOU heart bursts |
-| `lule` | **OLÉ** | stay under Lule while the Leão da Receita aims, then sidestep | "TAXARAM O TAXADOR!", ×2,3 for 4 s (3,2 s in life 2) | the lion bites Zé's Pix (never a life) |
+| `erika` | **CORTAR** | fly through every cable ("fio") of her live before it regrows | "CAIU A LIVE! FLOPOU!", ×2,4 for 4–4,5 s (1º Mandato: rigs of 2/2/3/3 phones, regrow ×2,5, stun 5–5,6 s, 3 s pause after a stun, an uncut phone hops toward Zé after 4,5 s with "NOVO ÂNGULO!", HP 4700; 2º Mandato keeps 3/4/3/4, HP 3400 base) | "EM ALTA" armour ×0,7–0,9 + VIRALIZOU heart bursts |
+| `lule` | **OLÉ** | stay under Lule while the Leão da Receita aims, then sidestep | "TAXARAM O TAXADOR!", ×2,3 for 3,4 s (2,8 s in life 2); the Leão stays at x ≤ W−110, left of the DELAÇÃO button | the lion bites Zé's Pix (never a life) |
 
 **Boss fields (set by the boss module every frame):**
 - `b.autoGoal = { x, y, r, why, id } | null` — where the car should be for the mechanic right now. Clamped to

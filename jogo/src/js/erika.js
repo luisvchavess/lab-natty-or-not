@@ -7,18 +7,13 @@
    (+ retrato dos diálogos e estilos de tiro 'erk_'). Contrato: docs/ENGINE.md §5 e §5.1.
    Usa G.BossKit (bosses.js), obrigatório: sem ele o módulo avisa e não registra a chefona.
 
-   Checklist de conteúdo (SPEC §1.2) — vale para texto, arte, som e comentários deste arquivo:
-   - A Erika é sempre tratada no feminino: "ela", "a deputada", "a Erika", "CANCELADA!".
-   - Nada sobre gênero, identidade de gênero, corpo, jeito de falar, passado, nome de nascimento ou
-     transição. Nada de piada de cabelo falso, nem código de diva/drag (nenhum dos bordões que a
-     SPEC §1.2 proíbe, nem jogar o cabelo).
-   - Rosto: o mesmo rosto chibi de todas as caricaturas, tom de pele natural, sem traço exagerado.
-     A caricatura fica só na roupa (amarelo e vermelho do PSOL), no volume do cabelo, nas argolas
-     douradas, nos adereços (ring light, pau de selfie, tribuna, celular) e nas marcas políticas.
-   - Material: PSOL, a PEC do fim da escala 6x1 (piada com o custo e com quem paga, nunca com quem
-     trabalha), lives, posts, fios, textão, trending, engajamento, "o PSOL vai ao STF / ADI" contra
-     políticas e discursos na tribuna.
-   - Fora: piadas de "vou te processar" e a gíria que a SPEC §1.2 proíbe.
+   Regras de conteúdo (docs/ENGINE.md §7) — valem para texto, arte, som e comentários deste arquivo:
+   - A Erika é tratada como qualquer caricatura do jogo: a piada é só sobre atos públicos (lives,
+     posts, fios, textão, trending, a PEC da 6x1, o PSOL no STF, discursos na tribuna), nunca sobre
+     a pessoa. Sempre no feminino: "ela", "a deputada", "a Erika", "CANCELADA!".
+   - 6x1: a piada é com o custo e com quem paga a conta, nunca com quem trabalha.
+   - Desenho: o mesmo rosto chibi das outras caricaturas; o resto fica na roupa (amarelo e vermelho
+     do PSOL), no cabelo, nas argolas, nos adereços (ring light, pau de selfie, tribuna, celular).
    - Dignidade de desenho animado, igual à Dilmãe e ao Lule: ninguém morre; ela é cancelada e sai
      voando carregada pelos drones da live, filmando.
    ============================================================ */
@@ -35,27 +30,37 @@
   // Afinação (SPEC §7: HP → tempo de tonto → cadência → armadura)
   // ======================================================================
   // CUT_R = raio do corte no fio (px, do centro do carro), PHONE_R = encostar no celular, REGROW = segundos até
-  // o fio voltar (por turno; 2º mandato ×REGROW_L2), CONNECT/LOAD = os celulares chegando / carregando (sem corte),
-  // STUN = tonto "CAIU A LIVE!" (s), MUL = dano no tonto, ARMOR[n] = armadura com n fios no ar,
+  // o fio voltar (por turno; 1º mandato ×REGROW_L1, 2º mandato ×REGROW_L2), CONNECT/LOAD = os celulares chegando /
+  // carregando (sem corte), STUN = tonto "CAIU A LIVE!" (s), MUL = dano no tonto, ARMOR[n] = armadura com n fios no ar,
   // ENG_MAX = engajamento (fio·s) até o VIRALIZOU, VIRAL_N = corações do anel.
+  // 1º mandato (o 2º mandato fica como na SPEC): rigs menores (PHONES_L1 celulares por turno) e PHONE_DY_L1·H mais
+  // baixos, o fio cortado demora REGROW_L1× mais para voltar (quem corta devagar não perde o que já cortou), tonto
+  // STUN_L1K× mais longo, LOAD_L1 s carregando e, depois do tonto, STUN_GAP_L1 s sem live (respiro; quem corta rápido
+  // não emenda um tonto no outro). Celular que fica HOP_T s no ar sem ser cortado "muda de ângulo": voa HOP_DUR s para
+  // mais perto do Zé (HOP_PULL do caminho na horizontal, metade do caminho até HOP_Y·H na vertical).
   const FI = {
     CUT_R: 10, PHONE_R: 12, REGROW: [11, 10, 6, 9], CONNECT: 1.4, CONNECT_P4: 1.2, LOAD: 2.0, STUN: 4.0, STUN_P4: 4.5, MUL: 2.4,
     ARMOR: [1, 0.9, 0.8, 0.75, 0.7], ENG_MAX: 20, VIRAL_N: 28,
-    REGROW_L2: 0.8, REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
+    REGROW_L1: 2.5, REGROW_L2: 0.8, PHONES_L1: [2, 2, 3, 3], STUN_L1K: 1.25, LOAD_L1: 1.4,
+    HOP_T: 4.5, HOP_DUR: 0.7, HOP_PULL: 0.55, HOP_Y: 0.76, STUN_GAP_L1: 3, PHONE_DY_L1: 0.05,
+    REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
   };
   // Padrões (SPEC §5.4; afinados com o humanbot para a escada de mortes Centrão < Dilmãe < Erika < Lule).
   // THREAD_* = fileiras de textão (DX = espaço entre tiras, GAP = fresta, WALK = quanto a fresta anda por fileira),
-  // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3), SPIRAL_* = 4º turno.
+  // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3; *_L2 = 2º mandato),
+  // SAY_PRE = a fala da semana sai antes do aviso (a chuva não cobre o balão), SPIRAL_* = 4º turno.
   const PAT = {
     LIKE_N: 5, LIKE_N_L2: 7, LIKE_SPD: 108, LIKE_SPREAD: 0.62, NOTIF_P1: 2.2, NOTIF_P3: 2.4, NOTIF_SPD: 112, ADI_SPD: 100,
     THREAD_ROWS: 7, THREAD_DX: 32, THREAD_GAP: 80, THREAD_WALK: 24, THREAD_SPD: 92, THREAD_SPD_L2: 106, THREAD_EVERY: 0.66,
-    RAIN_SPD: 150, RAIN_EVERY: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.15, RAIN_JIT: 3, RAIN_DBL_DX: 10,
+    RAIN_SPD: 150, RAIN_EVERY: 0.32, RAIN_EVERY_L2: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.05, RAIN_DBL_L2: 1.15,
+    RAIN_JIT: 3, RAIN_DBL_DX: 10, SAY_PRE: 0.3,
     SWAY: [45, 20, 60, 50], // balanço lateral por turno (px)
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
   };
-  // HP (SPEC 4200) afinado com o humanbot ttk nv.3 (voto/boca/panela/jato): cortando os fios ~72–88 s (mediana ~80),
-  // ignorando ~92–123 s (mediana ~104). Com 4200 dava ~81–94 / ~110–143 s (acima das faixas 70–85 / 105–120).
-  const HP = 3400;
+  // HP (SPEC 4200) afinado com o humanbot (só o chefão, nv.3, 24 partidas por perfil, 1º mandato): casual cortando os
+  // fios ~2,6 mortes / ~138 s e ignorando ~4 / ~170 s (a manha vale a pena); bom ~2 mortes / ~100 s (nv.5: ~73 s).
+  // HP_L2 = base do 2º mandato (o core ainda põe ×1,25), a mesma de antes: o 2º mandato continua como estava.
+  const HP = 4700, HP_L2 = 3400;
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -68,6 +73,7 @@
   const HY = PY - 14 * SC, HR = 27 * SC;   // centro e raio da cabeça (G.Art.personAnchors)
   const RING_R = 46;                       // ring light atrás da cabeça
   const TRY = PY + 44 * SC;                // topo da tribuna (como na prévia aprovada)
+  const STUN_PILL_DY = TRY + 70;           // no tonto o '0 CURTIDAS' fica embaixo da tribuna (abaixo dos jatos)
   // hub Wi-Fi: no topo da tribuna (1º–3º turnos) / na borda de cima do celular-prancha (4º).
   // A SPEC pede b.y+40 / b.y+30; o hub desenhado (prévia aprovada) fica em b.y+30 nos dois casos.
   const HUB_DY = 30, HUB_DY_P4 = 30;
@@ -224,6 +230,8 @@
   }
   const PLUS_BOX = [-7, -6, 14, 12];
   function paintPlus(c) { K.txt(c, '+1', 0, 0, 7, '#ffffff', { font: G.FONT_BODY, weight: 700, stroke: 2.4 }); }
+  const CORTE_BOX = [-32, -8, 64, 16];
+  function paintCorte(c) { K.txt(c, 'CORTE!', 0, 0, 9, '#ffffff', { stroke: 3, maxW: 58 }); }
 
   const glowSpr = () => sprite('glow', GLOW_BOX, paintGlow);
   const ringSpr = (lit) => sprite(lit ? 'ring1' : 'ring0', RING_BOX, (c) => paintRing(c, lit));
@@ -233,10 +241,11 @@
   const selfieSpr = (kind) => sprite('selfie|' + kind + '|' + fontKey(), SELFIE_BOX, (c) => paintSelfie(c, kind));
   const rigSpr = (mode, cut) => sprite('rp|' + mode + (cut ? '|x' : '') + '|' + fontKey(), RP_BOX, (c) => paintRigPhone(c, mode, cut));
   const plusSpr = () => sprite('plus|' + fontKey(), PLUS_BOX, paintPlus);
+  const corteSpr = () => sprite('corte|' + fontKey(), CORTE_BOX, paintCorte);
   // aquecimento: um sprite por quadro na entrada (nada de pintar canvas grande no 1º quadro da luta)
   const WARM = [glowSpr, () => ringSpr(true), () => ringSpr(false), frontSpr, () => tribSpr(false), () => tribSpr(true),
     () => selfieSpr('live'), () => selfieSpr('static'), () => selfieSpr('flash'), () => rigSpr('tripod', false), () => rigSpr('tripod', true),
-    () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, () => surfSpr(false), () => surfSpr(true)];
+    () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, corteSpr, () => surfSpr(false), () => surfSpr(true)];
 
   // ---------- partes vivas ----------
   // ponta do pau de selfie por pose: [mão, dx, dy, giro do celular]
@@ -316,7 +325,7 @@
   }
   // selo "SEM SINAL" (tonto): Wi-Fi riscado + texto + spinner de carregando
   function noSignal(c, x, y, t) {
-    K.rr(c, x - 48, y - 8, 96, 16, 8); c.fillStyle = 'rgba(20,18,26,0.88)'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = INK; c.stroke();
+    K.rr(c, x - 48, y - 7, 96, 14, 7); c.fillStyle = 'rgba(20,18,26,0.88)'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = INK; c.stroke();
     wifiX(c, x - 35, y - 1, 0.85);
     K.txt(c, 'SEM SINAL', x - 1, y + 0.5, 8, '#ffffff', { maxW: 56 });
     spinner(c, x + 37, y, 4.2, t, '#ffffff');
@@ -431,15 +440,18 @@
   // ======================================================================
   // rig d.live = { gen, st: null|'connecting'|'loading'|'on'|'down', t, dur, phones: [] }
   // phone = { i, x, y, bx, by, vx, cut, regrowT, mode, inT, ... + pts (11 pontos do fio), cum (comprimento) }
+  // rig cheio (2º mandato, SPEC §5.5); no 1º mandato fica só o começo da lista (FI.PHONES_L1 por turno)
   function rigLayout(b) {
     const W = G.W, H = G.H, ph = b.phase, l2 = L2(), L = [];
-    if (ph === 0) { L.push([0.18 * W, 0.66 * H, 'tripod'], [0.82 * W, 0.62 * H, 'tripod']); if (l2) L.push([0.5 * W, 0.72 * H, 'tripod']); }
+    if (ph === 0) L.push([0.18 * W, 0.66 * H, 'tripod'], [0.82 * W, 0.62 * H, 'tripod'], [0.5 * W, 0.72 * H, 'tripod']);
     else if (ph === 1) {
-      // nas faixas do calendário: DOM (a folga da 6x1), SEG e QUA (dias de trampo: corte entre as chuvas)
-      L.push([(6.5 * W) / 7, 0.62 * H, 'tripod'], [(0.5 * W) / 7, 0.66 * H, 'tripod'], [(3.5 * W) / 7, 0.72 * H, 'tripod']);
-      if (l2) L.push([(4.5 * W) / 7, 0.68 * H, 'tripod']);
+      // nas faixas do calendário: DOM (a folga da 6x1) e QUA (o meio, dia de trampo: corte entre as chuvas);
+      // no 2º mandato também SEG e SEX
+      L.push([(6.5 * W) / 7, 0.62 * H, 'tripod'], [(3.5 * W) / 7, 0.72 * H, 'tripod'], [(0.5 * W) / 7, 0.66 * H, 'tripod'], [(4.5 * W) / 7, 0.68 * H, 'tripod']);
     } else if (ph === 2) L.push([0.15 * W, 0.58 * H, 'tripod', 'slide'], [0.85 * W, 0.58 * H, 'tripod', 'slide'], [W / 2, 0.5 * H, 'drone', 'live']);
-    else for (let i = 0; i < 4; i++) L.push([[0.12, 0.38, 0.62, 0.88][i] * W, (i % 2 ? 0.68 : 0.58) * H, 'drone', 'bob']);
+    else if (l2 || FI.PHONES_L1[3] >= 4) for (let i = 0; i < 4; i++) L.push([[0.12, 0.38, 0.62, 0.88][i] * W, (i % 2 ? 0.68 : 0.58) * H, 'drone', 'bob']);
+    else L.push([0.16 * W, 0.58 * H, 'drone', 'bob'], [0.5 * W, 0.68 * H, 'drone', 'bob'], [0.84 * W, 0.58 * H, 'drone', 'bob']);
+    if (!l2) L.length = Math.min(L.length, FI.PHONES_L1[ph]);
     return L;
   }
   function rigStart(b) {
@@ -450,10 +462,10 @@
     for (let i = 0; i < lay.length; i++) {
       const [x0, y0, mode, mv] = lay[i];
       const jx = mv === 'live' ? 0 : M.rand(-FI.JIT, FI.JIT);
-      const bx = clamp(x0 + jx, 36, W - 36), by = clamp(y0 + M.rand(-FI.JIT, FI.JIT), H * 0.5, H * 0.74);
+      const bx = clamp(x0 + jx, 36, W - 36), by = clamp(y0 + M.rand(-FI.JIT, FI.JIT) + (L2() ? 0 : FI.PHONE_DY_L1 * H), H * 0.5, H * 0.74);
       Lv.phones.push({
         i, x: bx < W / 2 ? -30 : W + 30, y: by - 40, bx, by, vx: (Math.random() < 0.5 ? -1 : 1) * 18, cut: false, regrowT: 0, regrow0: 1, mode, mv: mv || null, inT: 0,
-        sx: bx < W / 2 ? -30 : W + 30, x0b: bx, side: bx >= W / 2 ? 1 : -1, ph: Math.random() * TAU, plugT: 0, cutT: 0, cutK: 0.5, tape: false, tilt: 0,
+        sx: bx < W / 2 ? -30 : W + 30, x0b: bx, side: bx >= W / 2 ? 1 : -1, ph: Math.random() * TAU, plugT: 0, cutT: 0, cutK: 0.5, tape: false, tilt: 0, onT: 0, hopT: 0, hox: 0, hoy: 0,
         pts: new Float32Array(22), cum: new Float32Array(11), hx: 0, hy: 0, cx: 0, cy: 0, px: 0, py: 0, mt: 0,
       });
     }
@@ -484,10 +496,27 @@
       ph.inT = Math.min(1, Lv.t / Lv.dur);
       const u = M.easeOutCubic(ph.inT);
       ph.x = M.lerp(ph.sx, tx, u); ph.y = M.lerp(ty - 40, ty, u) - Math.sin(u * PI) * 26;
+    } else if (ph.hopT > 0) {
+      // mudando de ângulo: voa num arco curto até o lugar novo (o fio continua cortável)
+      ph.hopT -= dt;
+      const u = M.easeOutCubic(1 - Math.max(0, ph.hopT) / FI.HOP_DUR);
+      ph.x = M.lerp(ph.hox, tx, u); ph.y = M.lerp(ph.hoy, ty, u) - Math.sin(u * PI) * 18;
     } else { ph.x = tx; ph.y = ty; }
     // cortado: o celular tomba 20° (vai e volta com mola)
     const want = ph.cut ? 0.35 * ph.side : 0;
     ph.tilt += (want - ph.tilt) * Math.min(1, dt * 10);
+  }
+  // 1º mandato: celular esquecido no ar muda de ângulo e chega mais perto do Zé (outro lugar = outro alvo)
+  function phoneHop(b, ph, Lv) {
+    const W = G.W, H = G.H, p = pl(), px = p && p.alive ? p.x : W / 2;
+    ph.onT = 0; ph.hopT = FI.HOP_DUR; ph.hox = ph.x; ph.hoy = ph.y;
+    let nx = clamp(M.lerp(ph.x, px, FI.HOP_PULL) + M.rand(-20, 20), 36, W - 36);
+    const ny = clamp(M.lerp(ph.by, H * FI.HOP_Y, 0.5) + M.rand(-10, 10), H * 0.5, H * 0.74);
+    for (const q of Lv.phones) if (q !== ph && Math.abs(q.bx - nx) < 56 && Math.abs(q.by - ny) < 64) nx = clamp(nx + (nx < q.bx ? -56 : 56), 36, W - 36);
+    ph.bx = ph.x0b = nx; ph.by = ny; ph.side = nx >= W / 2 ? 1 : -1;
+    ph.n = (ph.n || 0) + 1;
+    sfx('whoosh');
+    G.text(ph.hox, ph.hoy - 34, 'NOVO ÂNGULO!', { size: 9, color: MECH.TEAL_L, life: 0.8, stroke: true });
   }
   // fio = Bézier quadrática hub → topo do celular, controle abaixo (o fio faz barriga; nunca reto)
   function cableSample(ph, hx, hy) {
@@ -515,8 +544,10 @@
     QP[0] = a * ph.hx + bb * ph.cx + cc * ph.px; QP[1] = a * ph.hy + bb * ph.cy + cc * ph.py;
     return QP;
   }
+  const loadT = () => (L2() ? FI.LOAD : FI.LOAD_L1);
   function liveCount(Lv) { let n = 0; for (const ph of Lv.phones) if (!ph.cut) n++; return n; }
-  const ARMOR_TAG = FI.ARMOR.map((a) => ({ text: 'EM ALTA ×' + K.fmtMul(a), color: PINK }));
+  // texto exato (×0,75 não vira ×0,8): 'EM ALTA ×0,9' / '×0,8' / '×0,75' / '×0,7'
+  const ARMOR_TAG = FI.ARMOR.map((a) => ({ text: 'EM ALTA ×' + String(a).replace('.', ','), color: PINK }));
   // o rig liga (fio cortável). 1ª live da partida (1º mandato) = demonstração: 2,5 s sem tiro
   function rigOn(b) {
     const d = b.data;
@@ -532,8 +563,8 @@
     let hx, hy;
     if (seg >= 10) { hx = ph.x; hy = ph.y - 20; ph.cutK = 0.94; }
     else { hx = (P[2 * seg] + P[2 * seg + 2]) / 2; hy = (P[2 * seg + 1] + P[2 * seg + 3]) / 2; ph.cutK = (seg + 0.5) / 10; }
-    ph.cut = true; ph.cutT = 0; ph.tape = false;
-    ph.regrowT = ph.regrow0 = FI.REGROW[b.phase] * (L2() ? FI.REGROW_L2 : 1);
+    ph.cut = true; ph.cutT = 0; ph.tape = false; ph.onT = 0;
+    ph.regrowT = ph.regrow0 = FI.REGROW[b.phase] * (L2() ? FI.REGROW_L2 : FI.REGROW_L1);
     sfx('snap');
     G.burst(hx, hy, 6, { colors: [MECH.TEAL, MECH.TEAL_L], speed: 190, life: 0.45 });
     G.burst(hx, hy, 4, { colors: ['#ffffff'], speed: 240, life: 0.35 });
@@ -547,16 +578,18 @@
   function erkStun(b) {
     const d = b.data;
     d.flopT = 0.9; // 'FLOPOU!' sai logo depois do 'CAIU A LIVE!' (não empilha com ele nem com o 'BRECHA!')
-    K.stunStart(b, b.phase < 3 ? FI.STUN : FI.STUN_P4, FI.MUL, { tag: 'BRECHA ×2,4', text: 'CAIU A LIVE!', say: M.pick(STUN_SAY), onEnd: erkStunEnd, sfx: 'mech_ok' });
+    K.stunStart(b, (b.phase < 3 ? FI.STUN : FI.STUN_P4) * (L2() ? 1 : FI.STUN_L1K), FI.MUL, { tag: 'BRECHA ×2,4', text: 'CAIU A LIVE!', say: M.pick(STUN_SAY), onEnd: erkStunEnd, sfx: 'mech_ok' });
     sfx('buffer');
     d.eng = 0; d.live.st = 'down'; d.armor = 1; d.armorTag = null;
     d.demo = false; d.flickT = 0.45; d.pose = 'hold'; d.poseT = 0;
     K.co(b, null, 2); d.viral = false; d.viralWarn = 0; // o VIRALIZOU que vinha cai junto com a live
   }
   function erkStunEnd(b) {
+    const d = b.data;
     say(b, 'VOLTEI, GENTE!', 1.6);
     rigClear(b, true);
-    rigStart(b);
+    // 1º mandato: a live demora STUN_GAP_L1 s para voltar (respiro; quem corta rápido não emenda um tonto no outro)
+    if (!L2() && FI.STUN_GAP_L1 > 0) { d.live.st = null; d.rigT = FI.STUN_GAP_L1; } else rigStart(b);
   }
   // rig a cada quadro: posição, fio, estados, corte, volta do fio, armadura e engajamento
   function rigUpdate(b, dt, st) {
@@ -571,7 +604,7 @@
       if (ph.plugT > 0) ph.plugT -= dt;
     }
     if (Lv.st === 'connecting') { if (Lv.t >= Lv.dur) { Lv.st = 'loading'; Lv.t = 0; } }
-    else if (Lv.st === 'loading') { if (Lv.t >= FI.LOAD) { Lv.st = 'on'; Lv.t = 0; rigOn(b); } }
+    else if (Lv.st === 'loading') { if (Lv.t >= loadT()) { Lv.st = 'on'; Lv.t = 0; rigOn(b); } }
     else if (Lv.st === 'on' && !st) {
       for (const ph of Lv.phones) {
         if (ph.cut) {
@@ -588,6 +621,7 @@
           continue;
         }
         if (ph.plugT > 0) continue;
+        if (FI.HOP_T > 0 && !L2() && ph.mv !== 'live' && (ph.onT = (ph.onT || 0) + dt) >= FI.HOP_T + ph.i * 1.2 && !(ph.hopT > 0)) phoneHop(b, ph, Lv);
         let seg = K.carSwept(b, ph.pts, 11, FI.CUT_R, 3);
         if (seg < 0 && K.carNear(ph.x, ph.y, FI.PHONE_R)) seg = 10;
         if (seg >= 0) { cutPhone(b, ph, seg); if (Lv.st !== 'on') break; }
@@ -658,7 +692,7 @@
     const d = b.data, Lv = d.live;
     if (!Lv.phones.length) return;
     const ghost = Lv.st === 'connecting', loading = Lv.st === 'loading';
-    // celulares (corpos) e o halo verde-água dos cortáveis
+    // os celulares (aparelho + tripé/drone) e o halo verde-água dos cortáveis
     for (const ph of Lv.phones) {
       const live = Lv.st === 'on' && !ph.cut && ph.plugT <= 0;
       if (live) K.tealHalo(c, ph.x, ph.y - 2, 27, t + ph.i);
@@ -672,7 +706,7 @@
       }
       if (loading) {
         K.rr(c, -8, 7, 16, 3.4, 1.5); c.fillStyle = '#3a3f4c'; c.fill();
-        K.rr(c, -8, 7, 16 * Math.min(1, Lv.t / FI.LOAD), 3.4, 1.5); c.fillStyle = MECH.TEAL_L; c.fill();
+        K.rr(c, -8, 7, 16 * Math.min(1, Lv.t / loadT()), 3.4, 1.5); c.fillStyle = MECH.TEAL_L; c.fill();
       }
       c.restore();
     }
@@ -725,9 +759,11 @@
     for (const ph of Lv.phones) {
       const live = Lv.st === 'on' && !ph.cut && ph.plugT <= 0;
       if (live) K.mechRing(c, ph.x, ph.y, 22, t + ph.i * 0.3, { fill: false, alpha: 0.8 });
-      if (d.firstRig && !ph.cut && (Lv.st === 'on' || Lv.st === 'loading')) {
+      // rótulo 'CORTE!' (regra do verde-água: todo tocável tem rótulo branco) em todo celular cortável;
+      // na 1ª live da partida ele já aparece no carregando
+      if (!ph.cut && (live || (d.firstRig && Lv.st === 'loading'))) {
         const sx = ph.x < G.W / 2 ? 1 : -1;
-        K.txt(c, 'CORTE!', ph.x + sx * 40, ph.y - 2 + Math.sin(t * 5 + ph.i) * 2, 9, MECH.TEAL_L, { stroke: 3 });
+        blit(c, corteSpr(), ph.x + sx * 44, ph.y - 2 + Math.sin(t * 5 + ph.i) * 1.5);
       }
       if (ph.cut && Lv.st === 'on') {
         const k = clamp(ph.regrowT / ph.regrow0, 0, 1);
@@ -745,11 +781,14 @@
     c.fillStyle = 'rgba(255,111,174,0.15)'; c.fill();
     c.lineWidth = 1.5; c.strokeStyle = 'rgba(255,255,255,0.6)'; c.stroke();
     if (decoK() > 0) {
-      c.fillStyle = PINK; c.lineWidth = 1; c.strokeStyle = '#ffffff';
+      // corações de enfeite só com contorno branco: coração rosa cheio é sempre tiro (erk_like)
+      c.globalAlpha = 0.7; c.lineWidth = 1.5; c.strokeStyle = '#ffffff';
+      c.beginPath();
       for (let i = 0; i < 6; i++) {
         const a = t * 0.9 + (i * TAU) / 6;
-        c.beginPath(); K.heartPath(c, x + Math.cos(a) * 62, y + Math.sin(a) * 62, 9); c.fill(); c.stroke();
+        K.heartPath(c, x + Math.cos(a) * 62, y + Math.sin(a) * 62, 9);
       }
+      c.stroke();
     }
     c.restore();
   }
@@ -832,6 +871,7 @@
   }
   // ---------- 2º turno: FIM DA ESCALA 6x1 (a semana do calendário) ----------
   const P2_DY = 28; // ela desce um pouco: a faixa da semana fica livre lá em cima
+  const SAY_RAIN = PAT.SAY_PRE + PAT.RAIN_WARN - 0.05; // fala da semana: some logo antes da 1ª carteira cair
   function lanesFolga(list) { const w = [1, 1, 1, 1, 1, 1, 1]; for (const i of list) w[i] = 0; return w; }
   function folga3() {
     // 3 folgas, pelo menos duas lado a lado
@@ -845,7 +885,7 @@
     const d = b.data, wk = d.week, W = G.W, lw = W / 7;
     wk.work = lanesFolga(folga); wk.mode = 'warn'; wk.warnT = PAT.RAIN_WARN; d.weekN = (d.weekN || 0) + 1;
     d.rainOn = true; sfx('charge');
-    const spd = PAT.RAIN_SPD * (dbl ? PAT.RAIN_DBL : 1);
+    const l2 = L2(), spd = PAT.RAIN_SPD * (dbl ? (l2 ? PAT.RAIN_DBL_L2 : PAT.RAIN_DBL) : 1), every = l2 ? PAT.RAIN_EVERY_L2 : PAT.RAIN_EVERY;
     const row = (delay) => {
       const o = delay ? { style: CTPS.style, color: CTPS.color, delay } : CTPS;
       for (let i = 0; i < 7; i++) {
@@ -861,15 +901,22 @@
     wk.mode = 'rain';
     const t0 = K.clk(b);
     let k = 0;
-    yield PAT.RAIN_EVERY;
+    yield every;
     while (K.clk(b) - t0 < PAT.RAIN_DUR) {
       row(0);
       if (k++ % 3 === 0) sfx('enemy_shot');
-      yield PAT.RAIN_EVERY;
+      yield every;
     }
     wk.mode = 'gap';
     yield PAT.RAIN_GAP;
     d.rainOn = false; wk.mode = 'idle';
+  }
+  // fala da semana: sai PAT.SAY_PRE s antes do aviso e some antes da 1ª carteira de verdade (a chuva não cobre o
+  // balão); a semana já conta como chuva (nada de VIRALIZOU começando na fresta)
+  function* weekSay(b, line) {
+    b.data.rainOn = true;
+    say(b, line, SAY_RAIN);
+    yield PAT.SAY_PRE;
   }
   function* erkP2(b) {
     const d = b.data, W = G.W, H = G.H, wk = d.week;
@@ -879,13 +926,13 @@
     yield 1.0;
     for (;;) {
       // a) a escala 6x1 (folga no domingo; no 2º mandato a folga já muda)
-      say(b, 'ESCALA 6x1? ABSURDO!', 1.8);
+      yield* weekSay(b, 'ESCALA 6x1? ABSURDO!');
       yield* erkWeek(b, [L2() ? M.randi(0, 6) : 6], false);
       // b) a folga muda de lugar
-      say(b, 'A FOLGA É QUANDO EU QUISER!', 1.8);
+      yield* weekSay(b, 'FOLGA AGORA É POR DECRETO!');
       yield* erkWeek(b, [M.randi(0, 6)], false);
       // c) FIM DA 6x1 → 4x3: o mesmo trampo em 4 dias (chuva dupla, 1,25× mais rápida)
-      say(b, 'FIM DA 6x1!', 1.6);
+      yield* weekSay(b, 'FIM DA 6x1!');
       d.cal2 = '4x3'; d.flipTo = 1;
       G.text(W / 2, H * 0.46, 'MESMO TRAMPO EM 4 DIAS!', { size: 13, color: '#ffd23f', stroke: true, life: 1.8 });
       const run = G.run || {};
@@ -1084,10 +1131,12 @@
   });
   function drawLowerThird(c, b, t) {
     const u = b.state === 'enter' ? M.easeOutCubic(clamp(b.t / 0.45, 0, 1)) : 1;
+    // tela baixa (360x640): sobe a faixa para o PULAR do diálogo não cobrir o fim dela
+    const ly = G.H < 700 ? G.H * 0.52 : G.H * 0.62;
     c.save(); c.globalAlpha = u; c.translate((1 - u) * -G.W * 0.6, 0);
-    blit(c, lowerThird(), 0, G.H * 0.62);
+    blit(c, lowerThird(), 0, ly);
     // o ponto do AO VIVO pisca
-    if (((t * 2) | 0) % 2) { c.beginPath(); K.O(c, 23, G.H * 0.62, 3.4); c.fillStyle = '#ff9aa2'; c.fill(); }
+    if (((t * 2) | 0) % 2) { c.beginPath(); K.O(c, 23, ly, 3.4); c.fillStyle = '#ff9aa2'; c.fill(); }
     c.restore();
   }
   function drawViralWarn(c, b, t) {
@@ -1101,7 +1150,7 @@
   // A chefona
   // ======================================================================
   G.Bosses.define('erika', {
-    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: 90,
+    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: 90,
     score: 220000, pix: 180, music: 'boss', defeatText: 'CANCELADA!',
     phases: [
       { at: 1, name: 'Segue o Fio' },
@@ -1121,6 +1170,7 @@
       d.chatT = M.rand(7, 10); d.cutSayT = 0; d.flopT = 0; d.flickT = 0; d.ringFlashT = 0; d.leaveSaid = false; d.lv = null;
       d.S = { look: [0, 0] }; d.warmI = 0;
       K.mechInit(b, 'fio');
+      if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
       b.hitboxes = HB_A;
       K.warmPeople(b, 'p1', K.poses(ERIKA, ERK_SIZE, ['idle', 'hold', 'point', 'up', 'shrug', 'wave']).concat(K.poses(ERIKA, ERK_SIZE, ['fist'])));
       K.warmShots(b, ERK_SHOTS);
@@ -1161,7 +1211,8 @@
       if (!K.stunning(b) && !d.viral && !d.rainOn && !d.demo && d.eng >= FI.ENG_MAX) { d.viral = true; K.co(b, erkViral(b), 2); }
       K.fatigue(b, 'VOU FAZER DETOX DIGITAL...');
       if (d.cutSayT > 0) d.cutSayT -= dt;
-      if (d.flopT > 0 && (d.flopT -= dt) <= 0) G.text(G.W / 2, G.H * 0.4, 'FLOPOU!', { size: 20, color: PINK, stroke: true, life: 1.4 });
+      // 'FLOPOU!' em 0,40H, mas sempre abaixo do '0 CURTIDAS' do tonto (tela baixa: 360x640) e subindo devagar
+      if (d.flopT > 0 && (d.flopT -= dt) <= 0) G.text(G.W / 2, Math.max(G.H * 0.4, b.y + STUN_PILL_DY + 34), 'FLOPOU!', { size: 20, color: PINK, stroke: true, life: 1.4, vy: -12 });
       if (d.flickT > 0) d.flickT -= dt;
       if (d.ringFlashT > 0) d.ringFlashT -= dt;
       if (d.postT > 0) d.postT -= dt;
@@ -1228,7 +1279,8 @@
       S.likes = st ? '0 CURTIDAS' : (Math.round((12.4 + 0.1 * d.engTot) * 10) / 10).toFixed(1).replace('.', ',') + ' MIL';
       S.prop = d.prop; S.cal = d.cal; S.cal2 = d.cal2; S.flip = d.flip;
       S.tilt = d.surf && fight && !st ? 0.07 * Math.cos(0.45 * K.clk(b)) : 0;
-      S.pillY = Math.max(76, b.y + HY - RING_R - 10);
+      // no tonto o balão de fala ocupa o alto da cabeça: o '0 CURTIDAS' desce para baixo da tribuna (fica à vista)
+      S.pillY = st ? b.y + STUN_PILL_DY : Math.max(76, b.y + HY - RING_R - 10);
       let x = b.x, y = b.y;
       if (st) x += Math.sin(t * 15) * 1.6;
       if (leaving) {
@@ -1256,8 +1308,11 @@
         drawErika(ctx, x, y, S);
       }
       if (st) {
-        K.dizzy(ctx, x, y + HY - HR + 16, t, 22);
-        noSignal(ctx, x, y + HY - HR + 2, t);
+        // selo SEM SINAL logo acima dos olhos, sempre abaixo da ponta do balão (o balão fica em y >= 104,
+        // ponta em b.y - b.bubbleY - 1); as estrelinhas giram em volta do selo
+        const ny = Math.max(y + HY - HR + 12, 111);
+        K.dizzy(ctx, x, ny, t, 58);
+        noSignal(ctx, x, ny, t);
       }
       K.drawFx(ctx, b, 'top');
       if (!(G.coreHooks && G.coreHooks.drawOver)) { ctx.save(); b.def.drawOver(ctx, b, g); ctx.restore(); }

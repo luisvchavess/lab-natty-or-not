@@ -107,7 +107,7 @@
     const h = run._luleHints || (run._luleHints = {});
     if (h[key]) return;
     h[key] = 1;
-    G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10 });
+    G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10, stroke: true });
   }
   function pose(b, name, dur) { b.data.pose = name; b.data.poseT = dur || 0.8; }
 
@@ -146,13 +146,20 @@
   });
 
   // Ajustes do Leão (ENGINE §9). GAP = intervalo depois do FIM do leão anterior, por fase (ph1..ph7; 0 = sem leão).
-  // 2º mandato: STALK 140, AIM −0,15 (trava 0,60), SPD 660, GAP ×0,9, tonto ×0,85.
-  // AIM 1,2 (trava 0,75 s; a spec começava em 1,0): com 0,55 s de trava o humanbot casual levava a mordida em 60%
-  // dos leões que ele via (reação 0,45 s + dedo), e o good acertava 71%; com 0,75 s: 82% dos vistos nos dois.
+  // 2º mandato: STALK 140, AIM −0,15 (trava 0,85), SPD 660, GAP ×0,9, tonto ×0,85.
+  // AIM 1,45 (trava 1,0 s; a spec começava em 1,0 = trava 0,55): com 0,55 s o humanbot casual levava a mordida em 60%
+  // dos leões que ele via (reação 0,45 s + o movimento); com 0,75 s (AIM 1,2) o olé dava certo em ~40% dos leões do casual e
+  // ~70–80% do good. Rodada 4: AIM 1,45 e o tonto mais curto (STUN 4,0/3,2 → 3,4/2,8) para o tempo de luta não cair.
   const LEAO = {
-    FIRST: 7, GAP: [11, 10, 0, 9, 10, 9, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.2, TRACK: 0.45, SPD: 600,
-    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [4.0, 3.2], MUL: 2.3, PIX: 30,
+    FIRST: 7, GAP: [11, 10, 0, 9, 10, 9, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.45, TRACK: 0.45, SPD: 600,
+    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [3.4, 2.8], MUL: 2.3, PIX: 30, XR: 110, RISE: 256,
   };
+  // XR: o leão nunca passa de x = W − XR (no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas;
+  // com 110 nem a juba nem o rabo entram no botão, de 360×640 a 412×915). O Lule anda em x ≤ W − 95, então o bote
+  // ainda pega o Lule em qualquer lugar (o piloto mira na reta leão → Lule). Do lado direito ele não entra andando
+  // por baixo do botão: sobe da borda de baixo da tela (RISE px/s) já em x = W − XR.
+  const lionXMax = () => G.W - LEAO.XR;
+  const lionY = () => G.H - 34; // chão do leão (recalculado todo quadro: a altura da tela muda com a barra do navegador)
   const BITE_LINES = ['AI, MEU BOLSO!', 'ISSO É IMPOSTO?!', 'QUEM TAXA É TAXADO!'];
 
   // dano × (tonto) × (1 + cansaço), teto 4; a etiqueta da barra mostra a brecha
@@ -221,11 +228,12 @@
   }
   function spawnLion(b) {
     const d = b.data, p = pl();
-    const x = p.x < G.W / 2 ? G.W - 22 : 22, y = G.H - 34;
+    // Zé na esquerda: o leão sobe da borda de baixo à direita (fora da coluna do botão); na direita: entra andando pela esquerda
+    const rise = p.x < G.W / 2, x = rise ? lionXMax() : 22, y = rise ? G.H + 30 : lionY();
     const n = d.lionN = (d.lionN || 0) + 1;
     d.lion = {
-      st: 'enter', x, y, a: -DOWN, t: 0, T: 0, n, gold: false, locked: false, vx: 0, vy: 0, mouth: 0,
-      dir: x < G.W / 2 ? 1 : -1, x0: x, s: 1, passed: false, bristle: 0, sx: 1, sy: 1, rot: 0, look: 0,
+      st: 'enter', x, y, a: -DOWN, t: 0, T: 0, n, gold: false, locked: false, vx: 0, vy: 0, mouth: 0, rise,
+      dir: rise ? 0 : 1, x0: x, s: 1, passed: false, bristle: 0, sx: 1, sy: 1, rot: 0, look: 0,
       eyes: false, bag: false, hit: -1, ex: x, ey: 60, coinT: 0, gx: null, idA: 'leao' + n, idS: 'leao' + n + 's',
     };
     // (mais alto e para dentro: no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas)
@@ -239,6 +247,8 @@
       hint('ole', 'DEIXE O LEÃO MORDER O LULE!', '#ffb02e');
     }
   }
+  // Leão em cena antes do fim do bote: carimbo e o L gigante esperam (um aviso de cada vez; ele também espera por eles)
+  const lionBusy = (d) => { const L = d.lion; return !!L && (L.st === 'enter' || L.st === 'stalk' || L.st === 'aim' || L.st === 'lunge'); };
   function lionEnd(b) {
     const d = b.data;
     d.lion = null; d.lionTut = false;
@@ -343,25 +353,30 @@
     L.t += dt; L.T += dt;
     if (!fighting(b) && L.st !== 'flee') lionFlee(b);
     L.look = M.clamp((p.x - L.x) / 60, -1, 1);
+    const xMax = lionXMax(), yF = lionY();
     switch (L.st) {
       case 'enter': {
-        const tx = L.x0 + L.dir * 40;
+        // da esquerda: anda 40 px para dentro; da direita: sobe da borda de baixo (já fora da coluna do botão)
+        const tx = M.clamp(L.x0 + L.dir * 40, 22, xMax);
         L.x = M.approach(L.x, tx, LEAO.ENTER * dt);
-        if (L.x === tx) { L.st = 'stalk'; L.t = 0; }
+        L.y = L.rise ? M.approach(L.y, yF, LEAO.RISE * dt) : yF;
+        if (L.x === tx && L.y === yF) { L.st = 'stalk'; L.t = 0; }
         break;
       }
       case 'stalk': {
         if (!p.alive) { lionFlee(b); break; }
-        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, G.W - 22);
+        L.y = yF;
+        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
         L.bristle = Math.min(1, L.bristle + dt / LEAO.STALK_MAX);
         if (Math.abs(p.x - L.x) < 16 || L.t >= LEAO.STALK_MAX) { L.st = 'aim'; L.t = 0; }
         break;
       }
       case 'aim': {
         if (!p.alive) { lionFlee(b); break; }
+        L.y = yF;
         if (!L.locked) {
           // enquanto mira, ainda se ajeita embaixo do Zé (o raio sai quase reto: quem está embaixo do Lule acerta o Lule)
-          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, G.W - 22);
+          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
           L.a = clampAim(Math.atan2(p.y - L.y, p.x - L.x));
           if (L.t >= LEAO.TRACK) {
             // TRAVOU: olhos vermelhos, agacha e o "SAI!" aponta para o lado com mais espaço
@@ -416,7 +431,11 @@
     const d = b.data, L = d.lion, p = pl();
     if (d.stunT > 0) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.78, 'stun', 40, d.stunId || 'stun'); return; }
     if (L && fighting(b)) {
-      if (L.st === 'stalk' || (L.st === 'aim' && !L.locked)) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.82, 'leao-alinha', 12, L.idA); return; }
+      if (L.st === 'stalk' || (L.st === 'aim' && !L.locked)) {
+        // embaixo do Lule; se ele está mais à direita do que o leão pode ir, no ponto da reta leão → Lule
+        const gy = G.H * 0.82, lx = M.clamp(b.x, 22, lionXMax()), k = (L.y - gy) / Math.max(40, L.y - b.y);
+        setGoal(b, M.clamp(lx + (b.x - lx) * k, 30, G.W - 30), gy, 'leao-alinha', 12, L.idA); return;
+      }
       // (x fixo na trava: com p.x + 56 recalculado todo quadro o piloto corria até a parede)
       if ((L.st === 'aim' && L.locked) || (L.st === 'lunge' && !L.passed)) { setGoal(b, L.gx != null ? L.gx : p.x + L.s * 56, p.y, 'leao-sai', 10, L.idS); return; }
     }
@@ -995,7 +1014,15 @@
     // trilha A: chuva de encomendas em colunas
     co(b, (function* () { for (;;) { laneRain(d, 2, { spd: L2() ? 210 : 190 }); yield L2() ? 2.3 : 2.7; } })());
     // trilha B: carimbo TAXADO!
-    co(b, (function* () { yield 1.4; for (;;) { dropStamp(b, d); say(b, 'TAXADO!', 1.2); yield L2() ? 3.0 : 3.6; } })());
+    // (com o Leão em cena o carimbo espera: o passo do olé, 56 px, não sai da área do carimbo, ±62 px)
+    co(b, (function* () {
+      yield 1.4;
+      for (;;) {
+        if (lionBusy(d)) { yield () => !lionBusy(d); yield 0.6; } // e um respiro depois (moedas, "IMPOSTO PAGO!")
+        dropStamp(b, d); say(b, 'TAXADO!', 1.2);
+        yield L2() ? 2.7 : 3.2; // (era 3,6/3,0: com o carimbo esperando o leão, a fase perdia ~1/4 dos carimbos)
+      }
+    })());
     // trilha C: encomendas miradas
     yield 0.8;
     for (;;) {
@@ -1064,14 +1091,17 @@
       for (let i = 0; i < 2; i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
         yield 0.7;
-        dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
+        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
         yield 1.7;
       }
       yield 0.8;
-      // C: o L gigante, mais rápido
-      s = pl().x > G.W / 2 ? 1 : -1;
-      yield* lSweep(b, d, s, 0.38, 46 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
-      yield 0.4;
+      // C: o L gigante, mais rápido. Com o Leão em cena fica só a chuva de L ("FIQUE DENTRO DO L" e o olé não cabem
+      // juntos; esperar o leão deixava o L colado no fim do tonto, com as moedas ainda caindo)
+      if (!lionBusy(d)) {
+        s = pl().x > G.W / 2 ? 1 : -1;
+        yield* lSweep(b, d, s, 0.38, 46 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
+        yield 0.4;
+      }
       lRain(L2() ? 6 : 5);
       yield 1.4;
       // D: rodinha rápida de ciranda

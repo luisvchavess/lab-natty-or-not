@@ -2128,7 +2128,7 @@ body.in-play #toasts { opacity: 0; }
     p.tx = p.x; p.ty = p.y;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
   }
-  // O dedo que continuou na tela (morte, entrada do carro, recontagem, volta da pausa)
+  // O dedo que continuou na tela (morte, entrada do carro, recurso depois do fim de jogo, volta da pausa)
   // passa a pilotar a partir de onde o carro está agora, sem pulo.
   function reanchor() {
     const g = G.game; if (!g || !input.active) return;
@@ -2136,12 +2136,22 @@ body.in-play #toasts { opacity: 0; }
     input.fx = input.lx; input.fy = input.ly; input.ax = p.x; input.ay = p.y;
     p.tx = p.x; p.ty = p.y;
   }
+  // Outro dedo já pilota? O dedo que pilota continua valendo na pausa e no fim de jogo (ao sair da tela,
+  // o pointerup chega ao canvas pela captura). Se mesmo assim o id ficou velho (o canvas não tem mais a
+  // captura dele: o dedo saiu sem o evento chegar), libera para o dedo novo pilotar.
+  function steeringElsewhere(id) {
+    if (!input.active || input.id === id) return false;
+    try {
+      if (canvas.hasPointerCapture && !canvas.hasPointerCapture(input.id)) { input.active = false; input.id = null; return false; }
+    } catch (err) { /* nada */ }
+    return true;
+  }
   function setupInput() {
     canvas.addEventListener('pointerdown', (e) => {
       call(G.Audio, 'unlock');
       if (G.state !== 'play' || !G.game) return;
       e.preventDefault();
-      if (input.active && input.id !== e.pointerId) return; // um dedo pilota
+      if (steeringElsewhere(e.pointerId)) return; // um dedo pilota
       anchorTouch(e);
     }, { passive: false });
     const move = (e) => {
@@ -2186,7 +2196,7 @@ body.in-play #toasts { opacity: 0; }
     // App para o fundo: pausa e grava o Pix da fase (o sistema do celular pode matar a aba lá atrás).
     // Ao voltar: se o jogo entrou em 'play' escondido (cartão da fase avança sozinho), pausa também.
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { if (G.state === 'play') G.pause(); saveProgress(); }
+      if (document.hidden) { input.active = false; if (G.state === 'play') G.pause(); saveProgress(); }
       else if (G.state === 'play') G.pause();
     });
     window.addEventListener('pagehide', () => { if (G.state === 'play') G.pause(); saveProgress(); });
@@ -2197,7 +2207,7 @@ body.in-play #toasts { opacity: 0; }
         e.preventDefault(); e.stopPropagation(); call(G.Audio, 'unlock');
         if (G.state !== 'play' || !G.game) return;
         // segundo dedo (o outro já pilota) ou mouse: intenção clara, solta na hora
-        if ((input.active && input.id !== e.pointerId) || e.pointerType === 'mouse') { G.bomb(); return; }
+        if (steeringElsewhere(e.pointerId) || e.pointerType === 'mouse') { G.bomb(); return; }
         // dedão que voltou à tela em cima do botão: começa a pilotar; vira bomba no pointerup se foi um toque
         anchorTouch(e);
         bombTap = { id: e.pointerId, t: performance.now(), x: e.clientX, y: e.clientY };
@@ -2231,6 +2241,7 @@ body.in-play #toasts { opacity: 0; }
       kills: 0, hits: 0, bombsUsed: 0, bombsUsedBoss: 0, grazes: 0, pixStage: 0, pixCommitted: 0,
       script: null, cleared: false, canFire: false, introT: 0, beam: null, grazeSfxT: 0, inDialogue: false,
       resumeT: 0, rank: null,
+      pixQ: [], // moedas de tiros convertidos esperando para sair (G.clearBullets)
     };
     return g;
   }
@@ -2396,7 +2407,9 @@ body.in-play #toasts { opacity: 0; }
       ctx.font = f0;
       x = hw * 2 >= W ? W / 2 : M.clamp(x, hw, W - hw);
     }
-    g.texts.push({ x, y, str, color: o.color || '#fff', size, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font, stroke: o.stroke !== false && (G.quality !== 'low' || size >= 16) });
+    // contorno: no 'low' só some nos textos pequenos que não pediram (stroke: true = dica da manha, sempre legível)
+    g.texts.push({ x, y, str, color: o.color || '#fff', size, life: o.life || 0.9, t: 0, vy: o.vy != null ? o.vy : -40, font, f: size + 'px ' + font,
+      stroke: o.stroke === true || (o.stroke !== false && (G.quality !== 'low' || size >= 16)) });
   };
   G.shake = function (m) { const g = G.game; if (g && G.save.settings.shake) g.shake = Math.min(14, Math.max(g.shake, m)); };
   G.flash = function (a, c) { const g = G.game; if (g) { g.flashA = Math.max(g.flashA, a); g.flashC = c || '#fff'; } };
@@ -2411,24 +2424,51 @@ body.in-play #toasts { opacity: 0; }
   G.isFlash = (ent) => !!(ent && ent.flash > 0);
   G.say = function (ent, text, dur) { if (!ent) return; ent.sayText = text; ent.sayT = dur || 2.2; };
 
-  // Converte tiros inimigos em brilho (opcionalmente em Pix)
+  // Converte tiros inimigos em brilho (opcionalmente em Pix).
+  // toPix: vale 1 Pix por tiro, até PIX_CLEAR_MAX por chamada (o valor de sempre), mas em poucas moedas:
+  // no máximo PIX_CLEAR_COINS, cada uma valendo vários Pix (it.v), espalhadas por onde os tiros estavam e
+  // saindo aos poucos (PIX_CLEAR_STEP por passo). Cada tiro vira só um brilho. Antes eram até 35 moedas
+  // novas no mesmo quadro (tonto do chefão com a tela cheia), puxadas e desenhadas uma a uma por ~1 s.
+  const PIX_CLEAR_MAX = 35, PIX_CLEAR_COINS = 12, PIX_CLEAR_STEP = 4;
+  const clearXY = new Float32Array(PIX_CLEAR_MAX * 2);
   G.clearBullets = function (toPix) {
     const g = G.game; if (!g) return;
-    let n = 0;
+    let n = 0, v = 0;
+    const maxDots = toPix ? 70 : 140; // brilhos: no máximo 70 (+ até 12 moedas), como os 35 + 70 de antes
     for (const b of g.eb) {
       if (b.dead) continue;
       b.dead = true;
-      if (toPix && n < 70) { G.drop('pix', b.x, b.y, { vx: 0, vy: -30, magnet: true }); n++; }
-      else if (n < 140) G.part({ x: b.x, y: b.y, type: 'dot', size: 2.5, life: 0.35, color: b.color, vy: -30 });
+      if (toPix && v < PIX_CLEAR_MAX) { clearXY[v * 2] = b.x; clearXY[v * 2 + 1] = b.y; v++; }
+      if (n < maxDots) G.part({ x: b.x, y: b.y, type: 'dot', size: 2.5, life: 0.35, color: b.color, vy: -30 });
       n++;
+    }
+    if (v > 0) {
+      const q = g.pixQ || (g.pixQ = []);
+      const c = Math.min(v, PIX_CLEAR_COINS), base = Math.floor(v / c), extra = v - base * c;
+      for (let i = 0; i < c; i++) {
+        const j = Math.min(v - 1, Math.floor(((i + 0.5) * v) / c));
+        q.push({ x: clearXY[j * 2], y: clearXY[j * 2 + 1], v: base + (i < extra ? 1 : 0) });
+      }
+      spawnPixQ(g, PIX_CLEAR_STEP);
     }
     // laser ainda avisando some; laser já ativo encerra logo
     for (const l of g.lasers) { if (l.t < l.warn) l.dead = true; else if (l.t < l.warn + l.life - 0.25) l.t = l.warn + l.life - 0.25; }
   };
+  // solta até max moedas da fila (max omitido = todas: fim da fase)
+  function spawnPixQ(g, max) {
+    const q = g.pixQ; if (!q || !q.length) return;
+    const n = max == null ? q.length : Math.min(max, q.length);
+    for (let i = 0; i < n; i++) {
+      const e = q[i];
+      const it = G.drop('pix', e.x, e.y, { vx: 0, vy: -30, magnet: true });
+      if (it) it.v = e.v;
+    }
+    q.splice(0, n);
+  }
 
   // ===================== Placar / aprovação =====================
   G.mult = function () { const g = G.game; return g ? 1 + g.approval / 25 : 1; };
-  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que a recontagem
+  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que o recurso
   // NÃO zera: cada marca só dá vida uma vez por partida.
   const EXTENDS = [500000, 1500000, 3000000, 6000000];
   function checkExtends(run) {
@@ -2536,7 +2576,8 @@ body.in-play #toasts { opacity: 0; }
     g.boss = b;
     g.bombsUsedBoss = 0;
     if (def.init) call(def, 'init', b, g);
-    G.banner('ALERTA!', 'CHEFÃO SE APROXIMANDO', { color: G.C.red, dur: 2.4 });
+    // def.fem (Dilmãe, Erika): sempre no feminino, como o cartão da fase (CHEFONA)
+    G.banner('ALERTA!', def.fem || b.fem ? 'CHEFONA SE APROXIMANDO' : 'CHEFÃO SE APROXIMANDO', { color: G.C.red, dur: 2.4 });
     call(G.Audio, 'sfx', 'warning');
     call(G.Audio, 'stopMusic');
     return b;
@@ -2977,7 +3018,7 @@ body.in-play #toasts { opacity: 0; }
     it.dead = true;
     switch (it.type) {
       case 'pix': case 'pix5': case 'mala': {
-        const v = it.type === 'pix' ? 1 : it.type === 'pix5' ? 5 : 25;
+        const v = it.v || (it.type === 'pix' ? 1 : it.type === 'pix5' ? 5 : 25); // it.v: moeda de tiros convertidos
         run.pix += v; g.pixStage += v;
         G.addScore(v * 20);
         if (it.type !== 'pix') G.text(it.x, it.y - 8, '+R$ ' + v, { color: G.C.pix, size: 11, life: 0.7 });
@@ -3184,6 +3225,7 @@ body.in-play #toasts { opacity: 0; }
     // o ímã (Chave Pix) e a coleta automática no alto da tela NÃO puxam o P: a cor é escolha do jogador
     const magR = 46 + G.upg('ima') * 28;
     const autoCollect = p.alive && p.y < H * 0.3;
+    if (g.pixQ && g.pixQ.length) spawnPixQ(g, PIX_CLEAR_STEP); // moedas dos tiros convertidos, aos poucos
     for (const it of g.pickups) {
       if (it.dead) continue;
       it.t += dt;
@@ -3330,16 +3372,21 @@ body.in-play #toasts { opacity: 0; }
     // camada do chefão por cima dos tiros (anéis, rótulos e miras da manha: bala nenhuma esconde)
     if (b && b.state !== 'warning' && b.def.drawOver) { ctx.save(); call(b.def, 'drawOver', ctx, b, g); ctx.restore(); }
     // textos flutuantes
+    // Surgem crescendo por ESCALA em volta de (x, y), nunca pelo tamanho da fonte: um tamanho fracionário
+    // é uma fonte nova para o canvas a cada quadro (~1,7 ms a 4x). A fonte fica sempre em px inteiros (tx.f).
+    // Escala <= 1: o texto nunca passa da largura que o G.text mediu para caber na tela.
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round'; // contorno sem espinho no M/A
     for (const tx of g.texts) {
       const a = M.clamp(1 - (tx.t / tx.life) * (tx.t / tx.life), 0, 1);
       ctx.globalAlpha = a;
-      const sz = tx.size * (tx.t < 0.1 ? 0.6 + tx.t * 4 : 1);
-      ctx.font = sz + 'px ' + tx.font;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = tx.f || tx.size + 'px ' + tx.font;
+      const s = tx.t < 0.1 ? 0.6 + tx.t * 4 : 1;
+      if (s !== 1) ctx.setTransform(k * s, 0, 0, k * s, k * (tx.x * (1 - s) + ox), k * (tx.y * (1 - s) + oy));
       if (tx.stroke) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(tx.str, tx.x, tx.y); }
       ctx.fillStyle = tx.color; ctx.fillText(tx.str, tx.x, tx.y);
-      ctx.globalAlpha = 1;
+      if (s !== 1) ctx.setTransform(k, 0, 0, k, ox * k, oy * k);
     }
+    ctx.globalAlpha = 1; ctx.lineJoin = 'miter';
     if (g.stamp) drawStamp(g.stamp);
     // efeito da bomba
     if (g.bombFx) {
@@ -3546,6 +3593,20 @@ body.in-play #toasts { opacity: 0; }
     ctx.fillStyle = '#e63946'; ctx.fillText(st.text, 0, 2);
     ctx.restore();
   }
+  // Caixa alta para nomes de turno/faixa, mas o 'x' entre algarismos fica minúsculo ('ESCALA 6x1', não '6X1').
+  // Guarda o resultado: a barra do chefão pede o nome do turno a cada quadro.
+  const upperCache = new Map();
+  function upperName(s) {
+    s = String(s);
+    let u = upperCache.get(s);
+    if (u === undefined) {
+      u = s.toUpperCase().replace(/(\d)X(?=\d)/g, '$1x');
+      if (upperCache.size > 200) upperCache.clear();
+      upperCache.set(s, u);
+    }
+    return u;
+  }
+  G.upperName = upperName;
   function drawBanner(bn) {
     const t = bn.t, d = bn.dur;
     const inK = M.clamp(t / 0.25, 0, 1), outK = M.clamp((d - t) / 0.3, 0, 1);
@@ -3565,7 +3626,7 @@ body.in-play #toasts { opacity: 0; }
     ctx.fillStyle = bn.color; ctx.fillText(bn.title, G.W / 2 - slide, y - (bn.sub ? 9 : 0), G.W - 20);
     if (bn.sub) {
       ctx.font = '700 ' + (bn.small ? 13 : 15) + 'px ' + G.FONT_BODY;
-      ctx.fillStyle = '#ffffff'; ctx.fillText(bn.sub.toUpperCase(), G.W / 2 + slide, y + (bn.small ? 13 : 19), G.W - 20);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(upperName(bn.sub), G.W / 2 + slide, y + (bn.small ? 13 : 19), G.W - 20);
     }
     ctx.restore();
   }
@@ -3668,7 +3729,7 @@ body.in-play #toasts { opacity: 0; }
       ctx.fillText(b.name, bx, by + 7);
       if (b.phases[b.phase] && b.phases[b.phase].name) {
         ctx.textAlign = 'right'; ctx.font = '700 10px ' + G.FONT_BODY; ctx.fillStyle = '#ffd23f';
-        ctx.fillText(b.phases[b.phase].name.toUpperCase(), bx + bw, by + 7);
+        ctx.fillText(upperName(b.phases[b.phase].name), bx + bw, by + 7);
       }
       // etiqueta da manha (ex.: 'BRECHA ×2,2', 'EM ALTA ×0,8'), piscando no meio da barra
       const tag = b.hudTag;
@@ -3751,7 +3812,7 @@ body.in-play #toasts { opacity: 0; }
     G.run = {
       loop, stageIdx, startStage: stageIdx, score: 0, lives, baseLives: lives, bombs, baseBombs: bombs,
       weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, continues: 0, maxContinues: 3, grazes: 0, pix: 0, hits: 0,
-      total: 0, extGiven: 0, // pontos da partida inteira (a recontagem não zera) e vidas extras já dadas
+      total: 0, extGiven: 0, // pontos da partida inteira (o recurso não zera) e vidas extras já dadas
     };
     G.count('runs');
     const go = () => G.startStage(stageIdx);
@@ -3818,6 +3879,7 @@ body.in-play #toasts { opacity: 0; }
     G.state = 'clear';
     setPlayButtons(false);
     g.canFire = false; g.beam = null; g.player.inv = 999;
+    spawnPixQ(g); // moeda ainda na fila também conta
     for (const it of g.pickups) if (!it.dead) { if (it.type === 'power') lockPower(it); collectPickup(it); }
     const noHit = g.hits === 0, noBomb = g.bombsUsed === 0;
     const rank = G.rankFor(g.hits, g.bombsUsed, g.stageIdx);
@@ -3862,7 +3924,7 @@ body.in-play #toasts { opacity: 0; }
     if (G.state === 'over') return;
     G.state = 'over';
     setPlayButtons(false);
-    input.active = false;
+    // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
     commitPix();
     call(G.Audio, 'music', 'gameover');
     const info = { score: run.score, stage: g.stage, index: g.stageIdx, continuesLeft: run.maxContinues - run.continues, pix: G.save.pix, best: G.save.best };
@@ -3872,7 +3934,7 @@ body.in-play #toasts { opacity: 0; }
       onQuit: () => G.toMenu(),
     });
   }
-  // "Pedir recontagem": continua de onde parou, mas zera o placar
+  // "Entrar com recurso": continua de onde parou, mas zera o placar
   G.continueRun = function () {
     const g = G.game, run = G.run;
     if (!g || run.continues >= run.maxContinues) return false;
@@ -3885,6 +3947,7 @@ body.in-play #toasts { opacity: 0; }
     G.clearBullets(false);
     G.state = 'play';
     setPlayButtons(true);
+    if (input.active) reanchor(); // (o carro está entrando: o reanchor do fim da entrada vale de novo)
     // música certa para o momento: chefão chegando/caindo ou cinemática da volta do Lule = silêncio
     const b = g.boss;
     if (b && (b.state !== 'fight' || (b.data && b.data.reviving))) call(G.Audio, 'stopMusic');
@@ -3906,7 +3969,7 @@ body.in-play #toasts { opacity: 0; }
     if (G.state !== 'play') return;
     G.state = 'pause';
     setPlayButtons(false);
-    input.active = false;
+    // o dedo que pilota NÃO é solto: na volta (CONTINUAR) ele pilota de onde o carro está
     call(G.Audio, 'sfx', 'pause');
     call(G.UI, 'pause', {
       onResume: () => G.resume(),
@@ -3918,6 +3981,7 @@ body.in-play #toasts { opacity: 0; }
     G.state = 'play';
     if (G.game) G.game.resumeT = RESUME_T;
     setPlayButtons(true);
+    if (input.active) reanchor(); // e de novo a cada passo do "PRONTO? VAI!" (updateGame)
     call(G.UI, 'hidePause');
   };
   const RESUME_T = 1.0;
@@ -4082,7 +4146,7 @@ body.in-play #toasts { opacity: 0; }
       },
       shop(o, done) { close(); done(); },
       gameOver(info, h) {
-        const u = screen('<h2>DERROTADO NAS URNAS</h2><p>' + G.fmt(info.score) + ' votos</p>' + (info.continuesLeft > 0 ? '<button id="fbCont">PEDIR RECONTAGEM (' + info.continuesLeft + ')</button>' : '') + '<button id="fbQuit">MENU</button>');
+        const u = screen('<h2>VOCÊ FOI DERROTADO</h2><p>' + G.fmt(info.score) + ' votos</p>' + (info.continuesLeft > 0 ? '<button id="fbCont">ENTRAR COM RECURSO (' + info.continuesLeft + ')</button>' : '<p>Acabaram os recursos. Transitou em julgado.</p>') + '<button id="fbQuit">MENU</button>');
         btn(u, '#fbCont', () => { close(); h.onContinue(); });
         btn(u, '#fbQuit', () => { close(); h.onQuit(); });
       },
@@ -15508,7 +15572,7 @@ body.in-play #toasts { opacity: 0; }
   // APEX_Y = altura do paraquedas (× H); STUN = tonto por turno; HEAL = cura de emenda perdida (× HP máx).
   const EM = {
     APEX_Y: 0.28, FALL: 50, FALL_L2: 62, FALL_TUT: 40, CATCH_R: 13, SWAY: 18, SWAY_HZ: 0.45,
-    STUN: [3.0, 3.5, 4.0, 3.0], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
+    STUN: [3.5, 4.0, 4.0, 3.5], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
     FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9, RACE_DY: 100,
   };
   const SIDE = [
@@ -16634,8 +16698,9 @@ body.in-play #toasts { opacity: 0; }
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold]];
   G.Bosses.define('centrao', {
     // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
-    // HP afinado com a manha (humanbot ttk voto nv3: ~70 s pegando a emenda, ~85 s ignorando)
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3300, r: 46, homeY: 165, fatStart: 85,
+    // HP afinado com a manha (humanbot ttk nv3, mediana das 4 armas: ~69 s pegando a emenda, ~81 s ignorando;
+    // boss-only nv3, 24 partidas: casual ~84 s fazendo a manha / ~97 s ignorando, good ~72 s / ~87 s)
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3500, r: 46, homeY: 165, fatStart: 85,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -16801,6 +16866,9 @@ body.in-play #toasts { opacity: 0; }
         if (!e.real) { ctx.save(); ctx.globalAlpha = 0.9; txt(ctx, 'REFLEXO', e.x, e.y + 21, 9, COL.violet, { stroke: 3 }); ctx.restore(); continue; }
         tealHalo(ctx, e.x, e.y + 2, 26, t);
         mechRing(ctx, e.x, e.y + 2, 20, t, {});
+        // rótulo branco legível em toda emenda (§2.2): embaixo do anel (o paraquedas fica em cima); levada por
+        // um deputadinho, vai por cima do anel (embaixo dele está o deputadinho), a não ser que a seta PEGUE! esteja lá
+        txt(ctx, 'EMENDA', e.x, e.st === 'carried' && !e.arrow ? e.y - 28 : e.y + 32, 9, '#ffffff', { stroke: 3 });
         if (e.arrow) pegueArrow(ctx, e.x, e.y - (e.st === 'para' ? 58 : 26), t);
       }
     },
@@ -16853,7 +16921,7 @@ body.in-play #toasts { opacity: 0; }
     FIRST: 3.0, P4_SPD: 55, P4_JUMP: 120, P4_EVERY: 3.0,
     R0_L2: 35, DEMO: 2, P2_R: 36, P2_NEED: 2.4, STUN_L3: 4.0, MUL_L3: 2.3, P4_R: 40, P4_LIFE: 9,
     // 3º turno (META DOBRADA): nível 1 / 2 / 3
-    LVL: [{ r: 38, need: 1.6, life: 8, ax: 46, ay: 18 }, { r: 32, need: 1.2, life: 8, ax: 24, ay: 10, gap: 120 }, { r: 28, need: 0.8, life: 9, ax: 12, ay: 6 }],
+    LVL: [{ r: 38, need: 1.3, life: 8, ax: 46, ay: 18 }, { r: 32, need: 1.0, life: 8, ax: 24, ay: 10, gap: 120 }, { r: 28, need: 0.7, life: 9, ax: 12, ay: 6 }],
   };
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
@@ -17683,8 +17751,9 @@ body.in-play #toasts { opacity: 0; }
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
   G.Bosses.define('dilmae', {
-    // HP afinado com a manha (humanbot ttk voto nv3: ~78 s enchendo as metas, ~103 s ignorando com a META ABERTA)
-    name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 3000, r: 40, homeY: 168, spdK: 1.12,
+    // HP afinado com a manha (humanbot ttk nv3, mediana das 4 armas: ~76 s enchendo as metas, ~99 s ignorando com a
+    // META ABERTA; boss-only nv3, 24 partidas: casual ~117 s / ~134 s, good ~86 s / ~108 s)
+    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 2900, r: 40, homeY: 168, spdK: 1.12,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
@@ -17906,18 +17975,13 @@ body.in-play #toasts { opacity: 0; }
    (+ retrato dos diálogos e estilos de tiro 'erk_'). Contrato: docs/ENGINE.md §5 e §5.1.
    Usa G.BossKit (bosses.js), obrigatório: sem ele o módulo avisa e não registra a chefona.
 
-   Checklist de conteúdo (SPEC §1.2) — vale para texto, arte, som e comentários deste arquivo:
-   - A Erika é sempre tratada no feminino: "ela", "a deputada", "a Erika", "CANCELADA!".
-   - Nada sobre gênero, identidade de gênero, corpo, jeito de falar, passado, nome de nascimento ou
-     transição. Nada de piada de cabelo falso, nem código de diva/drag (nenhum dos bordões que a
-     SPEC §1.2 proíbe, nem jogar o cabelo).
-   - Rosto: o mesmo rosto chibi de todas as caricaturas, tom de pele natural, sem traço exagerado.
-     A caricatura fica só na roupa (amarelo e vermelho do PSOL), no volume do cabelo, nas argolas
-     douradas, nos adereços (ring light, pau de selfie, tribuna, celular) e nas marcas políticas.
-   - Material: PSOL, a PEC do fim da escala 6x1 (piada com o custo e com quem paga, nunca com quem
-     trabalha), lives, posts, fios, textão, trending, engajamento, "o PSOL vai ao STF / ADI" contra
-     políticas e discursos na tribuna.
-   - Fora: piadas de "vou te processar" e a gíria que a SPEC §1.2 proíbe.
+   Regras de conteúdo (docs/ENGINE.md §7) — valem para texto, arte, som e comentários deste arquivo:
+   - A Erika é tratada como qualquer caricatura do jogo: a piada é só sobre atos públicos (lives,
+     posts, fios, textão, trending, a PEC da 6x1, o PSOL no STF, discursos na tribuna), nunca sobre
+     a pessoa. Sempre no feminino: "ela", "a deputada", "a Erika", "CANCELADA!".
+   - 6x1: a piada é com o custo e com quem paga a conta, nunca com quem trabalha.
+   - Desenho: o mesmo rosto chibi das outras caricaturas; o resto fica na roupa (amarelo e vermelho
+     do PSOL), no cabelo, nas argolas, nos adereços (ring light, pau de selfie, tribuna, celular).
    - Dignidade de desenho animado, igual à Dilmãe e ao Lule: ninguém morre; ela é cancelada e sai
      voando carregada pelos drones da live, filmando.
    ============================================================ */
@@ -17934,27 +17998,37 @@ body.in-play #toasts { opacity: 0; }
   // Afinação (SPEC §7: HP → tempo de tonto → cadência → armadura)
   // ======================================================================
   // CUT_R = raio do corte no fio (px, do centro do carro), PHONE_R = encostar no celular, REGROW = segundos até
-  // o fio voltar (por turno; 2º mandato ×REGROW_L2), CONNECT/LOAD = os celulares chegando / carregando (sem corte),
-  // STUN = tonto "CAIU A LIVE!" (s), MUL = dano no tonto, ARMOR[n] = armadura com n fios no ar,
+  // o fio voltar (por turno; 1º mandato ×REGROW_L1, 2º mandato ×REGROW_L2), CONNECT/LOAD = os celulares chegando /
+  // carregando (sem corte), STUN = tonto "CAIU A LIVE!" (s), MUL = dano no tonto, ARMOR[n] = armadura com n fios no ar,
   // ENG_MAX = engajamento (fio·s) até o VIRALIZOU, VIRAL_N = corações do anel.
+  // 1º mandato (o 2º mandato fica como na SPEC): rigs menores (PHONES_L1 celulares por turno) e PHONE_DY_L1·H mais
+  // baixos, o fio cortado demora REGROW_L1× mais para voltar (quem corta devagar não perde o que já cortou), tonto
+  // STUN_L1K× mais longo, LOAD_L1 s carregando e, depois do tonto, STUN_GAP_L1 s sem live (respiro; quem corta rápido
+  // não emenda um tonto no outro). Celular que fica HOP_T s no ar sem ser cortado "muda de ângulo": voa HOP_DUR s para
+  // mais perto do Zé (HOP_PULL do caminho na horizontal, metade do caminho até HOP_Y·H na vertical).
   const FI = {
     CUT_R: 10, PHONE_R: 12, REGROW: [11, 10, 6, 9], CONNECT: 1.4, CONNECT_P4: 1.2, LOAD: 2.0, STUN: 4.0, STUN_P4: 4.5, MUL: 2.4,
     ARMOR: [1, 0.9, 0.8, 0.75, 0.7], ENG_MAX: 20, VIRAL_N: 28,
-    REGROW_L2: 0.8, REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
+    REGROW_L1: 2.5, REGROW_L2: 0.8, PHONES_L1: [2, 2, 3, 3], STUN_L1K: 1.25, LOAD_L1: 1.4,
+    HOP_T: 4.5, HOP_DUR: 0.7, HOP_PULL: 0.55, HOP_Y: 0.76, STUN_GAP_L1: 3, PHONE_DY_L1: 0.05,
+    REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
   };
   // Padrões (SPEC §5.4; afinados com o humanbot para a escada de mortes Centrão < Dilmãe < Erika < Lule).
   // THREAD_* = fileiras de textão (DX = espaço entre tiras, GAP = fresta, WALK = quanto a fresta anda por fileira),
-  // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3), SPIRAL_* = 4º turno.
+  // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3; *_L2 = 2º mandato),
+  // SAY_PRE = a fala da semana sai antes do aviso (a chuva não cobre o balão), SPIRAL_* = 4º turno.
   const PAT = {
     LIKE_N: 5, LIKE_N_L2: 7, LIKE_SPD: 108, LIKE_SPREAD: 0.62, NOTIF_P1: 2.2, NOTIF_P3: 2.4, NOTIF_SPD: 112, ADI_SPD: 100,
     THREAD_ROWS: 7, THREAD_DX: 32, THREAD_GAP: 80, THREAD_WALK: 24, THREAD_SPD: 92, THREAD_SPD_L2: 106, THREAD_EVERY: 0.66,
-    RAIN_SPD: 150, RAIN_EVERY: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.15, RAIN_JIT: 3, RAIN_DBL_DX: 10,
+    RAIN_SPD: 150, RAIN_EVERY: 0.32, RAIN_EVERY_L2: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.05, RAIN_DBL_L2: 1.15,
+    RAIN_JIT: 3, RAIN_DBL_DX: 10, SAY_PRE: 0.3,
     SWAY: [45, 20, 60, 50], // balanço lateral por turno (px)
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
   };
-  // HP (SPEC 4200) afinado com o humanbot ttk nv.3 (voto/boca/panela/jato): cortando os fios ~72–88 s (mediana ~80),
-  // ignorando ~92–123 s (mediana ~104). Com 4200 dava ~81–94 / ~110–143 s (acima das faixas 70–85 / 105–120).
-  const HP = 3400;
+  // HP (SPEC 4200) afinado com o humanbot (só o chefão, nv.3, 24 partidas por perfil, 1º mandato): casual cortando os
+  // fios ~2,6 mortes / ~138 s e ignorando ~4 / ~170 s (a manha vale a pena); bom ~2 mortes / ~100 s (nv.5: ~73 s).
+  // HP_L2 = base do 2º mandato (o core ainda põe ×1,25), a mesma de antes: o 2º mandato continua como estava.
+  const HP = 4700, HP_L2 = 3400;
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -17967,6 +18041,7 @@ body.in-play #toasts { opacity: 0; }
   const HY = PY - 14 * SC, HR = 27 * SC;   // centro e raio da cabeça (G.Art.personAnchors)
   const RING_R = 46;                       // ring light atrás da cabeça
   const TRY = PY + 44 * SC;                // topo da tribuna (como na prévia aprovada)
+  const STUN_PILL_DY = TRY + 70;           // no tonto o '0 CURTIDAS' fica embaixo da tribuna (abaixo dos jatos)
   // hub Wi-Fi: no topo da tribuna (1º–3º turnos) / na borda de cima do celular-prancha (4º).
   // A SPEC pede b.y+40 / b.y+30; o hub desenhado (prévia aprovada) fica em b.y+30 nos dois casos.
   const HUB_DY = 30, HUB_DY_P4 = 30;
@@ -18123,6 +18198,8 @@ body.in-play #toasts { opacity: 0; }
   }
   const PLUS_BOX = [-7, -6, 14, 12];
   function paintPlus(c) { K.txt(c, '+1', 0, 0, 7, '#ffffff', { font: G.FONT_BODY, weight: 700, stroke: 2.4 }); }
+  const CORTE_BOX = [-32, -8, 64, 16];
+  function paintCorte(c) { K.txt(c, 'CORTE!', 0, 0, 9, '#ffffff', { stroke: 3, maxW: 58 }); }
 
   const glowSpr = () => sprite('glow', GLOW_BOX, paintGlow);
   const ringSpr = (lit) => sprite(lit ? 'ring1' : 'ring0', RING_BOX, (c) => paintRing(c, lit));
@@ -18132,10 +18209,11 @@ body.in-play #toasts { opacity: 0; }
   const selfieSpr = (kind) => sprite('selfie|' + kind + '|' + fontKey(), SELFIE_BOX, (c) => paintSelfie(c, kind));
   const rigSpr = (mode, cut) => sprite('rp|' + mode + (cut ? '|x' : '') + '|' + fontKey(), RP_BOX, (c) => paintRigPhone(c, mode, cut));
   const plusSpr = () => sprite('plus|' + fontKey(), PLUS_BOX, paintPlus);
+  const corteSpr = () => sprite('corte|' + fontKey(), CORTE_BOX, paintCorte);
   // aquecimento: um sprite por quadro na entrada (nada de pintar canvas grande no 1º quadro da luta)
   const WARM = [glowSpr, () => ringSpr(true), () => ringSpr(false), frontSpr, () => tribSpr(false), () => tribSpr(true),
     () => selfieSpr('live'), () => selfieSpr('static'), () => selfieSpr('flash'), () => rigSpr('tripod', false), () => rigSpr('tripod', true),
-    () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, () => surfSpr(false), () => surfSpr(true)];
+    () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, corteSpr, () => surfSpr(false), () => surfSpr(true)];
 
   // ---------- partes vivas ----------
   // ponta do pau de selfie por pose: [mão, dx, dy, giro do celular]
@@ -18215,7 +18293,7 @@ body.in-play #toasts { opacity: 0; }
   }
   // selo "SEM SINAL" (tonto): Wi-Fi riscado + texto + spinner de carregando
   function noSignal(c, x, y, t) {
-    K.rr(c, x - 48, y - 8, 96, 16, 8); c.fillStyle = 'rgba(20,18,26,0.88)'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = INK; c.stroke();
+    K.rr(c, x - 48, y - 7, 96, 14, 7); c.fillStyle = 'rgba(20,18,26,0.88)'; c.fill(); c.lineWidth = 1.2; c.strokeStyle = INK; c.stroke();
     wifiX(c, x - 35, y - 1, 0.85);
     K.txt(c, 'SEM SINAL', x - 1, y + 0.5, 8, '#ffffff', { maxW: 56 });
     spinner(c, x + 37, y, 4.2, t, '#ffffff');
@@ -18330,15 +18408,18 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // rig d.live = { gen, st: null|'connecting'|'loading'|'on'|'down', t, dur, phones: [] }
   // phone = { i, x, y, bx, by, vx, cut, regrowT, mode, inT, ... + pts (11 pontos do fio), cum (comprimento) }
+  // rig cheio (2º mandato, SPEC §5.5); no 1º mandato fica só o começo da lista (FI.PHONES_L1 por turno)
   function rigLayout(b) {
     const W = G.W, H = G.H, ph = b.phase, l2 = L2(), L = [];
-    if (ph === 0) { L.push([0.18 * W, 0.66 * H, 'tripod'], [0.82 * W, 0.62 * H, 'tripod']); if (l2) L.push([0.5 * W, 0.72 * H, 'tripod']); }
+    if (ph === 0) L.push([0.18 * W, 0.66 * H, 'tripod'], [0.82 * W, 0.62 * H, 'tripod'], [0.5 * W, 0.72 * H, 'tripod']);
     else if (ph === 1) {
-      // nas faixas do calendário: DOM (a folga da 6x1), SEG e QUA (dias de trampo: corte entre as chuvas)
-      L.push([(6.5 * W) / 7, 0.62 * H, 'tripod'], [(0.5 * W) / 7, 0.66 * H, 'tripod'], [(3.5 * W) / 7, 0.72 * H, 'tripod']);
-      if (l2) L.push([(4.5 * W) / 7, 0.68 * H, 'tripod']);
+      // nas faixas do calendário: DOM (a folga da 6x1) e QUA (o meio, dia de trampo: corte entre as chuvas);
+      // no 2º mandato também SEG e SEX
+      L.push([(6.5 * W) / 7, 0.62 * H, 'tripod'], [(3.5 * W) / 7, 0.72 * H, 'tripod'], [(0.5 * W) / 7, 0.66 * H, 'tripod'], [(4.5 * W) / 7, 0.68 * H, 'tripod']);
     } else if (ph === 2) L.push([0.15 * W, 0.58 * H, 'tripod', 'slide'], [0.85 * W, 0.58 * H, 'tripod', 'slide'], [W / 2, 0.5 * H, 'drone', 'live']);
-    else for (let i = 0; i < 4; i++) L.push([[0.12, 0.38, 0.62, 0.88][i] * W, (i % 2 ? 0.68 : 0.58) * H, 'drone', 'bob']);
+    else if (l2 || FI.PHONES_L1[3] >= 4) for (let i = 0; i < 4; i++) L.push([[0.12, 0.38, 0.62, 0.88][i] * W, (i % 2 ? 0.68 : 0.58) * H, 'drone', 'bob']);
+    else L.push([0.16 * W, 0.58 * H, 'drone', 'bob'], [0.5 * W, 0.68 * H, 'drone', 'bob'], [0.84 * W, 0.58 * H, 'drone', 'bob']);
+    if (!l2) L.length = Math.min(L.length, FI.PHONES_L1[ph]);
     return L;
   }
   function rigStart(b) {
@@ -18349,10 +18430,10 @@ body.in-play #toasts { opacity: 0; }
     for (let i = 0; i < lay.length; i++) {
       const [x0, y0, mode, mv] = lay[i];
       const jx = mv === 'live' ? 0 : M.rand(-FI.JIT, FI.JIT);
-      const bx = clamp(x0 + jx, 36, W - 36), by = clamp(y0 + M.rand(-FI.JIT, FI.JIT), H * 0.5, H * 0.74);
+      const bx = clamp(x0 + jx, 36, W - 36), by = clamp(y0 + M.rand(-FI.JIT, FI.JIT) + (L2() ? 0 : FI.PHONE_DY_L1 * H), H * 0.5, H * 0.74);
       Lv.phones.push({
         i, x: bx < W / 2 ? -30 : W + 30, y: by - 40, bx, by, vx: (Math.random() < 0.5 ? -1 : 1) * 18, cut: false, regrowT: 0, regrow0: 1, mode, mv: mv || null, inT: 0,
-        sx: bx < W / 2 ? -30 : W + 30, x0b: bx, side: bx >= W / 2 ? 1 : -1, ph: Math.random() * TAU, plugT: 0, cutT: 0, cutK: 0.5, tape: false, tilt: 0,
+        sx: bx < W / 2 ? -30 : W + 30, x0b: bx, side: bx >= W / 2 ? 1 : -1, ph: Math.random() * TAU, plugT: 0, cutT: 0, cutK: 0.5, tape: false, tilt: 0, onT: 0, hopT: 0, hox: 0, hoy: 0,
         pts: new Float32Array(22), cum: new Float32Array(11), hx: 0, hy: 0, cx: 0, cy: 0, px: 0, py: 0, mt: 0,
       });
     }
@@ -18383,10 +18464,27 @@ body.in-play #toasts { opacity: 0; }
       ph.inT = Math.min(1, Lv.t / Lv.dur);
       const u = M.easeOutCubic(ph.inT);
       ph.x = M.lerp(ph.sx, tx, u); ph.y = M.lerp(ty - 40, ty, u) - Math.sin(u * PI) * 26;
+    } else if (ph.hopT > 0) {
+      // mudando de ângulo: voa num arco curto até o lugar novo (o fio continua cortável)
+      ph.hopT -= dt;
+      const u = M.easeOutCubic(1 - Math.max(0, ph.hopT) / FI.HOP_DUR);
+      ph.x = M.lerp(ph.hox, tx, u); ph.y = M.lerp(ph.hoy, ty, u) - Math.sin(u * PI) * 18;
     } else { ph.x = tx; ph.y = ty; }
     // cortado: o celular tomba 20° (vai e volta com mola)
     const want = ph.cut ? 0.35 * ph.side : 0;
     ph.tilt += (want - ph.tilt) * Math.min(1, dt * 10);
+  }
+  // 1º mandato: celular esquecido no ar muda de ângulo e chega mais perto do Zé (outro lugar = outro alvo)
+  function phoneHop(b, ph, Lv) {
+    const W = G.W, H = G.H, p = pl(), px = p && p.alive ? p.x : W / 2;
+    ph.onT = 0; ph.hopT = FI.HOP_DUR; ph.hox = ph.x; ph.hoy = ph.y;
+    let nx = clamp(M.lerp(ph.x, px, FI.HOP_PULL) + M.rand(-20, 20), 36, W - 36);
+    const ny = clamp(M.lerp(ph.by, H * FI.HOP_Y, 0.5) + M.rand(-10, 10), H * 0.5, H * 0.74);
+    for (const q of Lv.phones) if (q !== ph && Math.abs(q.bx - nx) < 56 && Math.abs(q.by - ny) < 64) nx = clamp(nx + (nx < q.bx ? -56 : 56), 36, W - 36);
+    ph.bx = ph.x0b = nx; ph.by = ny; ph.side = nx >= W / 2 ? 1 : -1;
+    ph.n = (ph.n || 0) + 1;
+    sfx('whoosh');
+    G.text(ph.hox, ph.hoy - 34, 'NOVO ÂNGULO!', { size: 9, color: MECH.TEAL_L, life: 0.8, stroke: true });
   }
   // fio = Bézier quadrática hub → topo do celular, controle abaixo (o fio faz barriga; nunca reto)
   function cableSample(ph, hx, hy) {
@@ -18414,8 +18512,10 @@ body.in-play #toasts { opacity: 0; }
     QP[0] = a * ph.hx + bb * ph.cx + cc * ph.px; QP[1] = a * ph.hy + bb * ph.cy + cc * ph.py;
     return QP;
   }
+  const loadT = () => (L2() ? FI.LOAD : FI.LOAD_L1);
   function liveCount(Lv) { let n = 0; for (const ph of Lv.phones) if (!ph.cut) n++; return n; }
-  const ARMOR_TAG = FI.ARMOR.map((a) => ({ text: 'EM ALTA ×' + K.fmtMul(a), color: PINK }));
+  // texto exato (×0,75 não vira ×0,8): 'EM ALTA ×0,9' / '×0,8' / '×0,75' / '×0,7'
+  const ARMOR_TAG = FI.ARMOR.map((a) => ({ text: 'EM ALTA ×' + String(a).replace('.', ','), color: PINK }));
   // o rig liga (fio cortável). 1ª live da partida (1º mandato) = demonstração: 2,5 s sem tiro
   function rigOn(b) {
     const d = b.data;
@@ -18431,8 +18531,8 @@ body.in-play #toasts { opacity: 0; }
     let hx, hy;
     if (seg >= 10) { hx = ph.x; hy = ph.y - 20; ph.cutK = 0.94; }
     else { hx = (P[2 * seg] + P[2 * seg + 2]) / 2; hy = (P[2 * seg + 1] + P[2 * seg + 3]) / 2; ph.cutK = (seg + 0.5) / 10; }
-    ph.cut = true; ph.cutT = 0; ph.tape = false;
-    ph.regrowT = ph.regrow0 = FI.REGROW[b.phase] * (L2() ? FI.REGROW_L2 : 1);
+    ph.cut = true; ph.cutT = 0; ph.tape = false; ph.onT = 0;
+    ph.regrowT = ph.regrow0 = FI.REGROW[b.phase] * (L2() ? FI.REGROW_L2 : FI.REGROW_L1);
     sfx('snap');
     G.burst(hx, hy, 6, { colors: [MECH.TEAL, MECH.TEAL_L], speed: 190, life: 0.45 });
     G.burst(hx, hy, 4, { colors: ['#ffffff'], speed: 240, life: 0.35 });
@@ -18446,16 +18546,18 @@ body.in-play #toasts { opacity: 0; }
   function erkStun(b) {
     const d = b.data;
     d.flopT = 0.9; // 'FLOPOU!' sai logo depois do 'CAIU A LIVE!' (não empilha com ele nem com o 'BRECHA!')
-    K.stunStart(b, b.phase < 3 ? FI.STUN : FI.STUN_P4, FI.MUL, { tag: 'BRECHA ×2,4', text: 'CAIU A LIVE!', say: M.pick(STUN_SAY), onEnd: erkStunEnd, sfx: 'mech_ok' });
+    K.stunStart(b, (b.phase < 3 ? FI.STUN : FI.STUN_P4) * (L2() ? 1 : FI.STUN_L1K), FI.MUL, { tag: 'BRECHA ×2,4', text: 'CAIU A LIVE!', say: M.pick(STUN_SAY), onEnd: erkStunEnd, sfx: 'mech_ok' });
     sfx('buffer');
     d.eng = 0; d.live.st = 'down'; d.armor = 1; d.armorTag = null;
     d.demo = false; d.flickT = 0.45; d.pose = 'hold'; d.poseT = 0;
     K.co(b, null, 2); d.viral = false; d.viralWarn = 0; // o VIRALIZOU que vinha cai junto com a live
   }
   function erkStunEnd(b) {
+    const d = b.data;
     say(b, 'VOLTEI, GENTE!', 1.6);
     rigClear(b, true);
-    rigStart(b);
+    // 1º mandato: a live demora STUN_GAP_L1 s para voltar (respiro; quem corta rápido não emenda um tonto no outro)
+    if (!L2() && FI.STUN_GAP_L1 > 0) { d.live.st = null; d.rigT = FI.STUN_GAP_L1; } else rigStart(b);
   }
   // rig a cada quadro: posição, fio, estados, corte, volta do fio, armadura e engajamento
   function rigUpdate(b, dt, st) {
@@ -18470,7 +18572,7 @@ body.in-play #toasts { opacity: 0; }
       if (ph.plugT > 0) ph.plugT -= dt;
     }
     if (Lv.st === 'connecting') { if (Lv.t >= Lv.dur) { Lv.st = 'loading'; Lv.t = 0; } }
-    else if (Lv.st === 'loading') { if (Lv.t >= FI.LOAD) { Lv.st = 'on'; Lv.t = 0; rigOn(b); } }
+    else if (Lv.st === 'loading') { if (Lv.t >= loadT()) { Lv.st = 'on'; Lv.t = 0; rigOn(b); } }
     else if (Lv.st === 'on' && !st) {
       for (const ph of Lv.phones) {
         if (ph.cut) {
@@ -18487,6 +18589,7 @@ body.in-play #toasts { opacity: 0; }
           continue;
         }
         if (ph.plugT > 0) continue;
+        if (FI.HOP_T > 0 && !L2() && ph.mv !== 'live' && (ph.onT = (ph.onT || 0) + dt) >= FI.HOP_T + ph.i * 1.2 && !(ph.hopT > 0)) phoneHop(b, ph, Lv);
         let seg = K.carSwept(b, ph.pts, 11, FI.CUT_R, 3);
         if (seg < 0 && K.carNear(ph.x, ph.y, FI.PHONE_R)) seg = 10;
         if (seg >= 0) { cutPhone(b, ph, seg); if (Lv.st !== 'on') break; }
@@ -18557,7 +18660,7 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data, Lv = d.live;
     if (!Lv.phones.length) return;
     const ghost = Lv.st === 'connecting', loading = Lv.st === 'loading';
-    // celulares (corpos) e o halo verde-água dos cortáveis
+    // os celulares (aparelho + tripé/drone) e o halo verde-água dos cortáveis
     for (const ph of Lv.phones) {
       const live = Lv.st === 'on' && !ph.cut && ph.plugT <= 0;
       if (live) K.tealHalo(c, ph.x, ph.y - 2, 27, t + ph.i);
@@ -18571,7 +18674,7 @@ body.in-play #toasts { opacity: 0; }
       }
       if (loading) {
         K.rr(c, -8, 7, 16, 3.4, 1.5); c.fillStyle = '#3a3f4c'; c.fill();
-        K.rr(c, -8, 7, 16 * Math.min(1, Lv.t / FI.LOAD), 3.4, 1.5); c.fillStyle = MECH.TEAL_L; c.fill();
+        K.rr(c, -8, 7, 16 * Math.min(1, Lv.t / loadT()), 3.4, 1.5); c.fillStyle = MECH.TEAL_L; c.fill();
       }
       c.restore();
     }
@@ -18624,9 +18727,11 @@ body.in-play #toasts { opacity: 0; }
     for (const ph of Lv.phones) {
       const live = Lv.st === 'on' && !ph.cut && ph.plugT <= 0;
       if (live) K.mechRing(c, ph.x, ph.y, 22, t + ph.i * 0.3, { fill: false, alpha: 0.8 });
-      if (d.firstRig && !ph.cut && (Lv.st === 'on' || Lv.st === 'loading')) {
+      // rótulo 'CORTE!' (regra do verde-água: todo tocável tem rótulo branco) em todo celular cortável;
+      // na 1ª live da partida ele já aparece no carregando
+      if (!ph.cut && (live || (d.firstRig && Lv.st === 'loading'))) {
         const sx = ph.x < G.W / 2 ? 1 : -1;
-        K.txt(c, 'CORTE!', ph.x + sx * 40, ph.y - 2 + Math.sin(t * 5 + ph.i) * 2, 9, MECH.TEAL_L, { stroke: 3 });
+        blit(c, corteSpr(), ph.x + sx * 44, ph.y - 2 + Math.sin(t * 5 + ph.i) * 1.5);
       }
       if (ph.cut && Lv.st === 'on') {
         const k = clamp(ph.regrowT / ph.regrow0, 0, 1);
@@ -18644,11 +18749,14 @@ body.in-play #toasts { opacity: 0; }
     c.fillStyle = 'rgba(255,111,174,0.15)'; c.fill();
     c.lineWidth = 1.5; c.strokeStyle = 'rgba(255,255,255,0.6)'; c.stroke();
     if (decoK() > 0) {
-      c.fillStyle = PINK; c.lineWidth = 1; c.strokeStyle = '#ffffff';
+      // corações de enfeite só com contorno branco: coração rosa cheio é sempre tiro (erk_like)
+      c.globalAlpha = 0.7; c.lineWidth = 1.5; c.strokeStyle = '#ffffff';
+      c.beginPath();
       for (let i = 0; i < 6; i++) {
         const a = t * 0.9 + (i * TAU) / 6;
-        c.beginPath(); K.heartPath(c, x + Math.cos(a) * 62, y + Math.sin(a) * 62, 9); c.fill(); c.stroke();
+        K.heartPath(c, x + Math.cos(a) * 62, y + Math.sin(a) * 62, 9);
       }
+      c.stroke();
     }
     c.restore();
   }
@@ -18731,6 +18839,7 @@ body.in-play #toasts { opacity: 0; }
   }
   // ---------- 2º turno: FIM DA ESCALA 6x1 (a semana do calendário) ----------
   const P2_DY = 28; // ela desce um pouco: a faixa da semana fica livre lá em cima
+  const SAY_RAIN = PAT.SAY_PRE + PAT.RAIN_WARN - 0.05; // fala da semana: some logo antes da 1ª carteira cair
   function lanesFolga(list) { const w = [1, 1, 1, 1, 1, 1, 1]; for (const i of list) w[i] = 0; return w; }
   function folga3() {
     // 3 folgas, pelo menos duas lado a lado
@@ -18744,7 +18853,7 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data, wk = d.week, W = G.W, lw = W / 7;
     wk.work = lanesFolga(folga); wk.mode = 'warn'; wk.warnT = PAT.RAIN_WARN; d.weekN = (d.weekN || 0) + 1;
     d.rainOn = true; sfx('charge');
-    const spd = PAT.RAIN_SPD * (dbl ? PAT.RAIN_DBL : 1);
+    const l2 = L2(), spd = PAT.RAIN_SPD * (dbl ? (l2 ? PAT.RAIN_DBL_L2 : PAT.RAIN_DBL) : 1), every = l2 ? PAT.RAIN_EVERY_L2 : PAT.RAIN_EVERY;
     const row = (delay) => {
       const o = delay ? { style: CTPS.style, color: CTPS.color, delay } : CTPS;
       for (let i = 0; i < 7; i++) {
@@ -18760,15 +18869,22 @@ body.in-play #toasts { opacity: 0; }
     wk.mode = 'rain';
     const t0 = K.clk(b);
     let k = 0;
-    yield PAT.RAIN_EVERY;
+    yield every;
     while (K.clk(b) - t0 < PAT.RAIN_DUR) {
       row(0);
       if (k++ % 3 === 0) sfx('enemy_shot');
-      yield PAT.RAIN_EVERY;
+      yield every;
     }
     wk.mode = 'gap';
     yield PAT.RAIN_GAP;
     d.rainOn = false; wk.mode = 'idle';
+  }
+  // fala da semana: sai PAT.SAY_PRE s antes do aviso e some antes da 1ª carteira de verdade (a chuva não cobre o
+  // balão); a semana já conta como chuva (nada de VIRALIZOU começando na fresta)
+  function* weekSay(b, line) {
+    b.data.rainOn = true;
+    say(b, line, SAY_RAIN);
+    yield PAT.SAY_PRE;
   }
   function* erkP2(b) {
     const d = b.data, W = G.W, H = G.H, wk = d.week;
@@ -18778,13 +18894,13 @@ body.in-play #toasts { opacity: 0; }
     yield 1.0;
     for (;;) {
       // a) a escala 6x1 (folga no domingo; no 2º mandato a folga já muda)
-      say(b, 'ESCALA 6x1? ABSURDO!', 1.8);
+      yield* weekSay(b, 'ESCALA 6x1? ABSURDO!');
       yield* erkWeek(b, [L2() ? M.randi(0, 6) : 6], false);
       // b) a folga muda de lugar
-      say(b, 'A FOLGA É QUANDO EU QUISER!', 1.8);
+      yield* weekSay(b, 'FOLGA AGORA É POR DECRETO!');
       yield* erkWeek(b, [M.randi(0, 6)], false);
       // c) FIM DA 6x1 → 4x3: o mesmo trampo em 4 dias (chuva dupla, 1,25× mais rápida)
-      say(b, 'FIM DA 6x1!', 1.6);
+      yield* weekSay(b, 'FIM DA 6x1!');
       d.cal2 = '4x3'; d.flipTo = 1;
       G.text(W / 2, H * 0.46, 'MESMO TRAMPO EM 4 DIAS!', { size: 13, color: '#ffd23f', stroke: true, life: 1.8 });
       const run = G.run || {};
@@ -18983,10 +19099,12 @@ body.in-play #toasts { opacity: 0; }
   });
   function drawLowerThird(c, b, t) {
     const u = b.state === 'enter' ? M.easeOutCubic(clamp(b.t / 0.45, 0, 1)) : 1;
+    // tela baixa (360x640): sobe a faixa para o PULAR do diálogo não cobrir o fim dela
+    const ly = G.H < 700 ? G.H * 0.52 : G.H * 0.62;
     c.save(); c.globalAlpha = u; c.translate((1 - u) * -G.W * 0.6, 0);
-    blit(c, lowerThird(), 0, G.H * 0.62);
+    blit(c, lowerThird(), 0, ly);
     // o ponto do AO VIVO pisca
-    if (((t * 2) | 0) % 2) { c.beginPath(); K.O(c, 23, G.H * 0.62, 3.4); c.fillStyle = '#ff9aa2'; c.fill(); }
+    if (((t * 2) | 0) % 2) { c.beginPath(); K.O(c, 23, ly, 3.4); c.fillStyle = '#ff9aa2'; c.fill(); }
     c.restore();
   }
   function drawViralWarn(c, b, t) {
@@ -19000,7 +19118,7 @@ body.in-play #toasts { opacity: 0; }
   // A chefona
   // ======================================================================
   G.Bosses.define('erika', {
-    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: 90,
+    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: 90,
     score: 220000, pix: 180, music: 'boss', defeatText: 'CANCELADA!',
     phases: [
       { at: 1, name: 'Segue o Fio' },
@@ -19020,6 +19138,7 @@ body.in-play #toasts { opacity: 0; }
       d.chatT = M.rand(7, 10); d.cutSayT = 0; d.flopT = 0; d.flickT = 0; d.ringFlashT = 0; d.leaveSaid = false; d.lv = null;
       d.S = { look: [0, 0] }; d.warmI = 0;
       K.mechInit(b, 'fio');
+      if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
       b.hitboxes = HB_A;
       K.warmPeople(b, 'p1', K.poses(ERIKA, ERK_SIZE, ['idle', 'hold', 'point', 'up', 'shrug', 'wave']).concat(K.poses(ERIKA, ERK_SIZE, ['fist'])));
       K.warmShots(b, ERK_SHOTS);
@@ -19060,7 +19179,8 @@ body.in-play #toasts { opacity: 0; }
       if (!K.stunning(b) && !d.viral && !d.rainOn && !d.demo && d.eng >= FI.ENG_MAX) { d.viral = true; K.co(b, erkViral(b), 2); }
       K.fatigue(b, 'VOU FAZER DETOX DIGITAL...');
       if (d.cutSayT > 0) d.cutSayT -= dt;
-      if (d.flopT > 0 && (d.flopT -= dt) <= 0) G.text(G.W / 2, G.H * 0.4, 'FLOPOU!', { size: 20, color: PINK, stroke: true, life: 1.4 });
+      // 'FLOPOU!' em 0,40H, mas sempre abaixo do '0 CURTIDAS' do tonto (tela baixa: 360x640) e subindo devagar
+      if (d.flopT > 0 && (d.flopT -= dt) <= 0) G.text(G.W / 2, Math.max(G.H * 0.4, b.y + STUN_PILL_DY + 34), 'FLOPOU!', { size: 20, color: PINK, stroke: true, life: 1.4, vy: -12 });
       if (d.flickT > 0) d.flickT -= dt;
       if (d.ringFlashT > 0) d.ringFlashT -= dt;
       if (d.postT > 0) d.postT -= dt;
@@ -19127,7 +19247,8 @@ body.in-play #toasts { opacity: 0; }
       S.likes = st ? '0 CURTIDAS' : (Math.round((12.4 + 0.1 * d.engTot) * 10) / 10).toFixed(1).replace('.', ',') + ' MIL';
       S.prop = d.prop; S.cal = d.cal; S.cal2 = d.cal2; S.flip = d.flip;
       S.tilt = d.surf && fight && !st ? 0.07 * Math.cos(0.45 * K.clk(b)) : 0;
-      S.pillY = Math.max(76, b.y + HY - RING_R - 10);
+      // no tonto o balão de fala ocupa o alto da cabeça: o '0 CURTIDAS' desce para baixo da tribuna (fica à vista)
+      S.pillY = st ? b.y + STUN_PILL_DY : Math.max(76, b.y + HY - RING_R - 10);
       let x = b.x, y = b.y;
       if (st) x += Math.sin(t * 15) * 1.6;
       if (leaving) {
@@ -19155,8 +19276,11 @@ body.in-play #toasts { opacity: 0; }
         drawErika(ctx, x, y, S);
       }
       if (st) {
-        K.dizzy(ctx, x, y + HY - HR + 16, t, 22);
-        noSignal(ctx, x, y + HY - HR + 2, t);
+        // selo SEM SINAL logo acima dos olhos, sempre abaixo da ponta do balão (o balão fica em y >= 104,
+        // ponta em b.y - b.bubbleY - 1); as estrelinhas giram em volta do selo
+        const ny = Math.max(y + HY - HR + 12, 111);
+        K.dizzy(ctx, x, ny, t, 58);
+        noSignal(ctx, x, ny, t);
       }
       K.drawFx(ctx, b, 'top');
       if (!(G.coreHooks && G.coreHooks.drawOver)) { ctx.save(); b.def.drawOver(ctx, b, g); ctx.restore(); }
@@ -19303,7 +19427,7 @@ body.in-play #toasts { opacity: 0; }
     const h = run._luleHints || (run._luleHints = {});
     if (h[key]) return;
     h[key] = 1;
-    G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10 });
+    G.text(G.W / 2, G.H * 0.56, str, { color: color || G.C.yellow, size: 14, life: 2.6, vy: -10, stroke: true });
   }
   function pose(b, name, dur) { b.data.pose = name; b.data.poseT = dur || 0.8; }
 
@@ -19342,13 +19466,20 @@ body.in-play #toasts { opacity: 0; }
   });
 
   // Ajustes do Leão (ENGINE §9). GAP = intervalo depois do FIM do leão anterior, por fase (ph1..ph7; 0 = sem leão).
-  // 2º mandato: STALK 140, AIM −0,15 (trava 0,60), SPD 660, GAP ×0,9, tonto ×0,85.
-  // AIM 1,2 (trava 0,75 s; a spec começava em 1,0): com 0,55 s de trava o humanbot casual levava a mordida em 60%
-  // dos leões que ele via (reação 0,45 s + dedo), e o good acertava 71%; com 0,75 s: 82% dos vistos nos dois.
+  // 2º mandato: STALK 140, AIM −0,15 (trava 0,85), SPD 660, GAP ×0,9, tonto ×0,85.
+  // AIM 1,45 (trava 1,0 s; a spec começava em 1,0 = trava 0,55): com 0,55 s o humanbot casual levava a mordida em 60%
+  // dos leões que ele via (reação 0,45 s + o movimento); com 0,75 s (AIM 1,2) o olé dava certo em ~40% dos leões do casual e
+  // ~70–80% do good. Rodada 4: AIM 1,45 e o tonto mais curto (STUN 4,0/3,2 → 3,4/2,8) para o tempo de luta não cair.
   const LEAO = {
-    FIRST: 7, GAP: [11, 10, 0, 9, 10, 9, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.2, TRACK: 0.45, SPD: 600,
-    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [4.0, 3.2], MUL: 2.3, PIX: 30,
+    FIRST: 7, GAP: [11, 10, 0, 9, 10, 9, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.45, TRACK: 0.45, SPD: 600,
+    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [3.4, 2.8], MUL: 2.3, PIX: 30, XR: 110, RISE: 256,
   };
+  // XR: o leão nunca passa de x = W − XR (no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas;
+  // com 110 nem a juba nem o rabo entram no botão, de 360×640 a 412×915). O Lule anda em x ≤ W − 95, então o bote
+  // ainda pega o Lule em qualquer lugar (o piloto mira na reta leão → Lule). Do lado direito ele não entra andando
+  // por baixo do botão: sobe da borda de baixo da tela (RISE px/s) já em x = W − XR.
+  const lionXMax = () => G.W - LEAO.XR;
+  const lionY = () => G.H - 34; // chão do leão (recalculado todo quadro: a altura da tela muda com a barra do navegador)
   const BITE_LINES = ['AI, MEU BOLSO!', 'ISSO É IMPOSTO?!', 'QUEM TAXA É TAXADO!'];
 
   // dano × (tonto) × (1 + cansaço), teto 4; a etiqueta da barra mostra a brecha
@@ -19417,11 +19548,12 @@ body.in-play #toasts { opacity: 0; }
   }
   function spawnLion(b) {
     const d = b.data, p = pl();
-    const x = p.x < G.W / 2 ? G.W - 22 : 22, y = G.H - 34;
+    // Zé na esquerda: o leão sobe da borda de baixo à direita (fora da coluna do botão); na direita: entra andando pela esquerda
+    const rise = p.x < G.W / 2, x = rise ? lionXMax() : 22, y = rise ? G.H + 30 : lionY();
     const n = d.lionN = (d.lionN || 0) + 1;
     d.lion = {
-      st: 'enter', x, y, a: -DOWN, t: 0, T: 0, n, gold: false, locked: false, vx: 0, vy: 0, mouth: 0,
-      dir: x < G.W / 2 ? 1 : -1, x0: x, s: 1, passed: false, bristle: 0, sx: 1, sy: 1, rot: 0, look: 0,
+      st: 'enter', x, y, a: -DOWN, t: 0, T: 0, n, gold: false, locked: false, vx: 0, vy: 0, mouth: 0, rise,
+      dir: rise ? 0 : 1, x0: x, s: 1, passed: false, bristle: 0, sx: 1, sy: 1, rot: 0, look: 0,
       eyes: false, bag: false, hit: -1, ex: x, ey: 60, coinT: 0, gx: null, idA: 'leao' + n, idS: 'leao' + n + 's',
     };
     // (mais alto e para dentro: no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas)
@@ -19435,6 +19567,8 @@ body.in-play #toasts { opacity: 0; }
       hint('ole', 'DEIXE O LEÃO MORDER O LULE!', '#ffb02e');
     }
   }
+  // Leão em cena antes do fim do bote: carimbo e o L gigante esperam (um aviso de cada vez; ele também espera por eles)
+  const lionBusy = (d) => { const L = d.lion; return !!L && (L.st === 'enter' || L.st === 'stalk' || L.st === 'aim' || L.st === 'lunge'); };
   function lionEnd(b) {
     const d = b.data;
     d.lion = null; d.lionTut = false;
@@ -19539,25 +19673,30 @@ body.in-play #toasts { opacity: 0; }
     L.t += dt; L.T += dt;
     if (!fighting(b) && L.st !== 'flee') lionFlee(b);
     L.look = M.clamp((p.x - L.x) / 60, -1, 1);
+    const xMax = lionXMax(), yF = lionY();
     switch (L.st) {
       case 'enter': {
-        const tx = L.x0 + L.dir * 40;
+        // da esquerda: anda 40 px para dentro; da direita: sobe da borda de baixo (já fora da coluna do botão)
+        const tx = M.clamp(L.x0 + L.dir * 40, 22, xMax);
         L.x = M.approach(L.x, tx, LEAO.ENTER * dt);
-        if (L.x === tx) { L.st = 'stalk'; L.t = 0; }
+        L.y = L.rise ? M.approach(L.y, yF, LEAO.RISE * dt) : yF;
+        if (L.x === tx && L.y === yF) { L.st = 'stalk'; L.t = 0; }
         break;
       }
       case 'stalk': {
         if (!p.alive) { lionFlee(b); break; }
-        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, G.W - 22);
+        L.y = yF;
+        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
         L.bristle = Math.min(1, L.bristle + dt / LEAO.STALK_MAX);
         if (Math.abs(p.x - L.x) < 16 || L.t >= LEAO.STALK_MAX) { L.st = 'aim'; L.t = 0; }
         break;
       }
       case 'aim': {
         if (!p.alive) { lionFlee(b); break; }
+        L.y = yF;
         if (!L.locked) {
           // enquanto mira, ainda se ajeita embaixo do Zé (o raio sai quase reto: quem está embaixo do Lule acerta o Lule)
-          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, G.W - 22);
+          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
           L.a = clampAim(Math.atan2(p.y - L.y, p.x - L.x));
           if (L.t >= LEAO.TRACK) {
             // TRAVOU: olhos vermelhos, agacha e o "SAI!" aponta para o lado com mais espaço
@@ -19612,7 +19751,11 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data, L = d.lion, p = pl();
     if (d.stunT > 0) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.78, 'stun', 40, d.stunId || 'stun'); return; }
     if (L && fighting(b)) {
-      if (L.st === 'stalk' || (L.st === 'aim' && !L.locked)) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.82, 'leao-alinha', 12, L.idA); return; }
+      if (L.st === 'stalk' || (L.st === 'aim' && !L.locked)) {
+        // embaixo do Lule; se ele está mais à direita do que o leão pode ir, no ponto da reta leão → Lule
+        const gy = G.H * 0.82, lx = M.clamp(b.x, 22, lionXMax()), k = (L.y - gy) / Math.max(40, L.y - b.y);
+        setGoal(b, M.clamp(lx + (b.x - lx) * k, 30, G.W - 30), gy, 'leao-alinha', 12, L.idA); return;
+      }
       // (x fixo na trava: com p.x + 56 recalculado todo quadro o piloto corria até a parede)
       if ((L.st === 'aim' && L.locked) || (L.st === 'lunge' && !L.passed)) { setGoal(b, L.gx != null ? L.gx : p.x + L.s * 56, p.y, 'leao-sai', 10, L.idS); return; }
     }
@@ -20191,7 +20334,15 @@ body.in-play #toasts { opacity: 0; }
     // trilha A: chuva de encomendas em colunas
     co(b, (function* () { for (;;) { laneRain(d, 2, { spd: L2() ? 210 : 190 }); yield L2() ? 2.3 : 2.7; } })());
     // trilha B: carimbo TAXADO!
-    co(b, (function* () { yield 1.4; for (;;) { dropStamp(b, d); say(b, 'TAXADO!', 1.2); yield L2() ? 3.0 : 3.6; } })());
+    // (com o Leão em cena o carimbo espera: o passo do olé, 56 px, não sai da área do carimbo, ±62 px)
+    co(b, (function* () {
+      yield 1.4;
+      for (;;) {
+        if (lionBusy(d)) { yield () => !lionBusy(d); yield 0.6; } // e um respiro depois (moedas, "IMPOSTO PAGO!")
+        dropStamp(b, d); say(b, 'TAXADO!', 1.2);
+        yield L2() ? 2.7 : 3.2; // (era 3,6/3,0: com o carimbo esperando o leão, a fase perdia ~1/4 dos carimbos)
+      }
+    })());
     // trilha C: encomendas miradas
     yield 0.8;
     for (;;) {
@@ -20260,14 +20411,17 @@ body.in-play #toasts { opacity: 0; }
       for (let i = 0; i < 2; i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
         yield 0.7;
-        dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
+        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
         yield 1.7;
       }
       yield 0.8;
-      // C: o L gigante, mais rápido
-      s = pl().x > G.W / 2 ? 1 : -1;
-      yield* lSweep(b, d, s, 0.38, 46 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
-      yield 0.4;
+      // C: o L gigante, mais rápido. Com o Leão em cena fica só a chuva de L ("FIQUE DENTRO DO L" e o olé não cabem
+      // juntos; esperar o leão deixava o L colado no fim do tonto, com as moedas ainda caindo)
+      if (!lionBusy(d)) {
+        s = pl().x > G.W / 2 ? 1 : -1;
+        yield* lSweep(b, d, s, 0.38, 46 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
+        yield 0.4;
+      }
       lRain(L2() ? 6 : 5);
       yield 1.4;
       // D: rodinha rápida de ciranda
