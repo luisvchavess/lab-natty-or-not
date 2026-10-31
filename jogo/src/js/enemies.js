@@ -840,7 +840,7 @@
   // ======================================================================
   // BOT DE ENGAJAMENTO — enxame em curvas; às vezes mergulha (com aviso)
   // ======================================================================
-  const BOT_LINES = ['CURTI!', 'Compartilha!', 'Engaja!', 'Segue de volta!', 'Viralizou!'];
+  const BOT_LINES = ['CURTI!', 'Compartilha!', 'Engaja!', 'Segue de volta!', 'Viralizou!', 'Fim da 6x1!'];
   define('bot', {
     hp: 1, r: 8, score: 60, pix: 0,
     init(e, o) {

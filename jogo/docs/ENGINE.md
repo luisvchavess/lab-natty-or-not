@@ -423,7 +423,7 @@ Cast (keep these traits consistent everywhere — in-game sprite, portrait, stor
 - **Dilmãe** (boss 2): short dark-brown bob haircut, strong jaw, red blazer, holds a mandioca (cassava) and glass jars of
   "vento estocado"; stunned, she holds a calculator blinking `'ERRO'` ("RECALCULANDO...").
 - **Erika Viralton** (boss 3, "A Deputada do Engajamento", erika.js): `G.Art.person` size 112 with the standard chibi face,
-  natural skin tone `#8d5a3b`, long dark hair (`hair: 'long'`, `#17110f`) with a glossy blow-dry volume layer, PSOL-yellow
+  natural skin tone `#8d5a3b`, long blonde hair (`hair: 'long'`, `#f2d98e`, back volume `#d9b65f`), as in real life, with a glossy blow-dry volume layer, PSOL-yellow
   blazer `#ffc531` over a red blouse `#d7191c`, gold hoop earrings, a PSOL-sun lapel pin and a Câmara crachá. Props: a ring
   light behind her head (dark while the live is down), a selfie stick with a red-case phone showing `'AO VIVO'`, a like
   counter (drawn heart + `'12,4 MIL'`), a floating wooden TRIBUNA (`'CÂMARA'` plate, gooseneck mic) with a Wi-Fi hub where
@@ -431,6 +431,22 @@ Cast (keep these traits consistent everywhere — in-game sprite, portrait, stor
   (`'#TRENDING'`). Stunned: shrug + shock, phone held up looking for signal, a crossed Wi-Fi icon, `'SEM SINAL'` and a
   buffering spinner. Leaving: 4 camera drones lift her while she keeps filming and waving. Bullets `erk_like`, `erk_hash`,
   `erk_textao`, `erk_notif`, `erk_ctps`, `erk_adi` (saturated, never teal). The content rules of §7 apply in full.
+- **Participação especial in Erika's fight** (erika.js, tunables `PV` / `PAV_TXT`): LUCAS PAVANATTO (parody of the
+  most-voted federal deputy of SP) flies in once per fight on a blue palanque-drone labelled `'PAVANATTO'`, holding a
+  `'3 MILHÕES DE VOTOS'` placard. It is armed in P2 after the first full calendar week (start of P3 if P2 ends first)
+  and starts at the next between-weeks cue where the live cannot drop for ≥ `PV.SAFE` s, right after a stun ends
+  (`erkStunEnd`: the live needs connecting + loading before it can be cut), or after `PV.ARM_MAX` s of her clock if Zé
+  has not stunned her since it was armed. Script (seconds since he arrives): she says "1,6 MILHÃO É POUCO?!" and fires
+  `PV.N` textões at him (own list, never `g.eb`, never hit Zé); he raises the placard and they bounce back into her
+  (`PV.DMG` = 2,5% max HP in total through `G.hitBoss`, 0,8 s flinch, not a stun); then "ZÉ, CORTA OS FIOS DELA!",
+  "FIM DA 6x1? VIRA 0x7!", he leaves and she resumes with "VOU ABRIR UM FIO SOBRE ELE!". While `d.pav.pause` (≈ 5,2 s)
+  her coroutine is paused like a stun and cut cables do not regrow; the live and `b.autoGoal` stay active. A stun, a
+  phase change, her death or Zé's death aborts it (he leaves at once, saying his 6x1 line if he has not yet). State:
+  `d.pav` (scene object | null), `d.pavReq`, `d.pavDone`, `d.pavArmT`, `d.pavStuns0`, `d.pavWait`, `d.pavFlinchT`,
+  `d.pavHoldT`, `d.pavDmg`; `drawErika`'s state gets `S.face` (1, or −1 when she turns left to point her phone at him).
+  The joke is only about votes (pride and jealousy, never doubts about the election) and the 6x1 policy; nothing
+  from the two deputies' personal dispute. He is a standard chibi (young man, short dark hair, short beard, navy
+  suit, white shirt, small blue-and-yellow pin) with no exaggerated features.
 - **Lule** (final boss): grey/white full beard, grey receding hair, bushy brows, round face, dark suit, red tie, small red star pin,
   raspy friendly-scheming smile; props: picanha on a skewer, beer cans, a giant "L" hand sign (hands always drawn normally — use an
   L made of light / a foam hand). His fight brings the **Leão da Receita** (`G.EnemyArt.lion`), which bites his pocket on an olé.

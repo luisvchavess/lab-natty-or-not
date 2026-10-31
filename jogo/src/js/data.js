@@ -77,6 +77,7 @@
     centrao:    { name: 'O Centrão',       color: '#9aa5b8' },
     dilmae:     { name: 'Dilmãe',          color: '#e63946' },
     erika:      { name: 'Erika Viralton',  color: '#ffc531' },
+    pavanatto:  { name: 'Lucas Pavanatto', color: '#2f6fd6' },
     lule:       { name: 'Lule',            color: '#e63946' },
   };
 
@@ -121,6 +122,8 @@
         intro: [
           { who: 'vo', text: 'Lago Paranoá, Zezinho. Que monte de drone é esse filmando tudo?' },
           { who: 'ze', text: 'É live, vó. Tem uma deputada filmando tudo ao vivo da beira do lago.' },
+          { who: 'vo', text: 'Dizem que essa deputada quer acabar com a escala 6x1.' },
+          { who: 'ze', text: 'Ótimo, vó. Eu trabalho 7x0.' },
           { who: 'vo', text: 'E esses motoboys da picanha? Passam, atiram e não entregam nada!' },
           { who: 'vo', text: 'Cuidado com o servidor do Ministério da Verdade. O que ele não gosta, ele apaga!' },
         ],

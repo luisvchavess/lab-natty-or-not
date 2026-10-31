@@ -1409,6 +1409,7 @@ body.in-play #toasts { opacity: 0; }
     centrao:    { name: 'O Centrão',       color: '#9aa5b8' },
     dilmae:     { name: 'Dilmãe',          color: '#e63946' },
     erika:      { name: 'Erika Viralton',  color: '#ffc531' },
+    pavanatto:  { name: 'Lucas Pavanatto', color: '#2f6fd6' },
     lule:       { name: 'Lule',            color: '#e63946' },
   };
 
@@ -1453,6 +1454,8 @@ body.in-play #toasts { opacity: 0; }
         intro: [
           { who: 'vo', text: 'Lago Paranoá, Zezinho. Que monte de drone é esse filmando tudo?' },
           { who: 'ze', text: 'É live, vó. Tem uma deputada filmando tudo ao vivo da beira do lago.' },
+          { who: 'vo', text: 'Dizem que essa deputada quer acabar com a escala 6x1.' },
+          { who: 'ze', text: 'Ótimo, vó. Eu trabalho 7x0.' },
           { who: 'vo', text: 'E esses motoboys da picanha? Passam, atiram e não entregam nada!' },
           { who: 'vo', text: 'Cuidado com o servidor do Ministério da Verdade. O que ele não gosta, ele apaga!' },
         ],
@@ -13019,7 +13022,7 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // BOT DE ENGAJAMENTO — enxame em curvas; às vezes mergulha (com aviso)
   // ======================================================================
-  const BOT_LINES = ['CURTI!', 'Compartilha!', 'Engaja!', 'Segue de volta!', 'Viralizou!'];
+  const BOT_LINES = ['CURTI!', 'Compartilha!', 'Engaja!', 'Segue de volta!', 'Viralizou!', 'Fim da 6x1!'];
   define('bot', {
     hp: 1, r: 8, score: 60, pix: 0,
     init(e, o) {
@@ -17975,6 +17978,11 @@ body.in-play #toasts { opacity: 0; }
      do PSOL), no cabelo, nas argolas, nos adereços (ring light, pau de selfie, tribuna, celular).
    - Dignidade de desenho animado, igual à Dilmãe e ao Lule: ninguém morre; ela é cancelada e sai
      voando carregada pelos drones da live, filmando.
+   - Participação especial "O MAIS VOTADO" (LUCAS PAVANATTO, paródia do deputado federal mais votado de SP):
+     a piada é só sobre quem teve mais votos (orgulho e ciúme, nada de suspeita sobre a eleição) e sobre a
+     6x1 (política). Nada da briga pessoal dos dois fora da política. Ele é uma caricatura chibi padrão
+     (rapaz jovem, cabelo curto escuro, barba curta, terno azul-marinho, broche azul e amarelo), sem traço
+     exagerado; ninguém se machuca além do tom de desenho animado do jogo.
    ============================================================ */
 (function () {
   'use strict';
@@ -18193,6 +18201,39 @@ body.in-play #toasts { opacity: 0; }
   const CORTE_BOX = [-32, -8, 64, 16];
   function paintCorte(c) { K.txt(c, 'CORTE!', 0, 0, 9, '#ffffff', { stroke: 3, maxW: 58 }); }
 
+  // ---------- participação especial: LUCAS PAVANATTO no palanque-drone (px relativos ao centro dele) ----------
+  // caricatura chibi padrão: rapaz jovem, cabelo curto escuro, barba curta, terno azul-marinho, camisa branca
+  const PAV = { skin: '#eab48f', face: 'oval', nose: 'small', hair: 'short', hairColor: '#241a14', browColor: '#241a14',
+    beard: 'stubble', beardColor: '#2b2019', body: 'suit', suit: '#1e2c55', shirt: '#ffffff', tie: null, seed: 23 };
+  const PAV_SIZE = 60, PAV_SC = PAV_SIZE / 100;
+  const pavBlue = () => (G.CAST && G.CAST.pavanatto && G.CAST.pavanatto.color) || '#2f6fd6';
+  // palanque (frente azul com faixa amarela e 'SP'), os braços do drone que o seguram no ar e, pendurada embaixo,
+  // a faixa com o nome dele (sempre à vista: a placa em repouso cobre a frente do palanque)
+  const PALQ_BOX = [-58, 18, 116, 46];
+  function paintPalanque(c) {
+    for (const sx of [-1, 1]) {
+      c.beginPath(); c.moveTo(sx * 26, 40); c.lineTo(sx * 46, 40); c.moveTo(sx * 46, 40); c.lineTo(sx * 46, 35); stroke2(c, 3.6, '#9aa3b5', 1.8);
+      c.beginPath(); K.O(c, sx * 46, 41, 3.2); K.inked(c, '#3a3f4c', 1.2);
+    }
+    c.beginPath(); c.moveTo(-40, 22); c.lineTo(40, 22); c.lineTo(33, 44); c.lineTo(-33, 44); c.closePath(); K.inked(c, pavBlue(), 2.4);
+    c.fillStyle = '#ffd23f'; c.fillRect(-37.6, 27, 75.2, 4.5);
+    c.beginPath(); c.moveTo(-41, 22); c.lineTo(41, 22); stroke2(c, 3.6, '#ffffff', 1.8);
+    K.txt(c, 'SP', 0, 38, 8, '#ffffff', { stroke: 2.4, maxW: 20 });
+    for (const sx of [-1, 1]) { c.beginPath(); c.moveTo(sx * 24, 43); c.lineTo(sx * 24, 50); stroke2(c, 2.6, '#ffffff', 1.1); }
+    K.rr(c, -33, 49, 66, 12.5, 2.5); K.inked(c, '#ffffff', 1.8);
+    K.txt(c, 'PAVANATTO', 0, 55.6, 8.5, '#1d2f6b', { maxW: 60 });
+  }
+  // a placa '3 MILHÕES DE VOTOS'
+  const BOARD_BOX = [-40, -20, 80, 40];
+  function paintBoard(c) {
+    K.rr(c, -36, -16, 72, 32, 3); K.inked(c, '#ffffff', 2.2);
+    K.rr(c, -34.6, -14.6, 69.2, 6, 2); c.fillStyle = pavBlue(); c.fill();
+    K.txt(c, '3 MILHÕES', 0, -0.5, 10.5, '#1d2f6b', { maxW: 66 });
+    K.txt(c, 'DE VOTOS', 0, 9.6, 7.5, '#1d2f6b', { maxW: 52 });
+  }
+  const palqSpr = () => sprite('palq|' + fontKey(), PALQ_BOX, paintPalanque);
+  const boardSpr = () => sprite('board|' + fontKey(), BOARD_BOX, paintBoard);
+
   const glowSpr = () => sprite('glow', GLOW_BOX, paintGlow);
   const ringSpr = (lit) => sprite(lit ? 'ring1' : 'ring0', RING_BOX, (c) => paintRing(c, lit));
   const frontSpr = () => sprite('front|' + fontKey(), FRONT_BOX, paintFront);
@@ -18205,28 +18246,30 @@ body.in-play #toasts { opacity: 0; }
   // aquecimento: um sprite por quadro na entrada (nada de pintar canvas grande no 1º quadro da luta)
   const WARM = [glowSpr, () => ringSpr(true), () => ringSpr(false), frontSpr, () => tribSpr(false), () => tribSpr(true),
     () => selfieSpr('live'), () => selfieSpr('static'), () => selfieSpr('flash'), () => rigSpr('tripod', false), () => rigSpr('tripod', true),
-    () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, corteSpr, () => surfSpr(false), () => surfSpr(true)];
+    () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, corteSpr, () => surfSpr(false), () => surfSpr(true),
+    palqSpr, boardSpr];
 
   // ---------- partes vivas ----------
   // ponta do pau de selfie por pose: [mão, dx, dy, giro do celular]
   const STICK = { hold: [29, -49, 0.25], idle: [24, -46, 0.22], point: [24, -42, 0.3], up: [14, -44, 0.15], fist: [20, -42, 0.22], shrug: [5, -60, 0.05], wave: [-26, -44, -0.25] };
   const STICK_OUT = { x0: 0, y0: 0, x: 0, y: 0, rot: 0 };
-  function stickPos(pose, t, stun) {
-    const st = STICK[pose] || STICK.hold;
-    const h = K.hand(ERK_SIZE, pose, t, ERIKA.seed, pose !== 'wave', 1);
+  // face = -1: ela virada para a esquerda (participação especial: aponta o celular para o Pavanatto)
+  function stickPos(pose, t, stun, face) {
+    const st = STICK[pose] || STICK.hold, f = face || 1;
+    const h = K.hand(ERK_SIZE, pose, t, ERIKA.seed, pose !== 'wave', f);
     const o = STICK_OUT;
     o.x0 = h.x; o.y0 = PY + h.y;
     const wob = stun ? Math.sin(t * 7) * 5 : 0;
-    o.x = o.x0 + st[0] + wob; o.y = o.y0 + st[1]; o.rot = st[2] + (stun ? Math.sin(t * 7) * 0.12 : 0);
+    o.x = o.x0 + st[0] * f + wob; o.y = o.y0 + st[1]; o.rot = (st[2] + (stun ? Math.sin(t * 7) * 0.12 : 0)) * f;
     return o;
   }
   // celular do pau de selfie em coordenadas de tela (de onde saem as curtidas)
   function phoneXY(b) {
-    const d = b.data, o = stickPos(d.pose || 'hold', b.t, false);
+    const d = b.data, o = stickPos(d.pose || 'hold', b.t, false, erkFace(b));
     return [b.x + o.x, b.y + o.y];
   }
   function drawStick(c, S) {
-    const o = stickPos(S.pose, S.t, S.stun);
+    const o = stickPos(S.pose, S.t, S.stun, S.face);
     c.beginPath(); c.moveTo(o.x0, o.y0); c.lineTo(o.x, o.y); stroke2(c, 5, S.fl ? WHITE : '#c9d3e6', 2.7);
     c.save(); c.translate(o.x, o.y); c.rotate(o.rot);
     if (S.vec) { c.lineJoin = 'round'; paintSelfie(c, S.fl ? 'flash' : S.phone === 'live' ? 'live' : 'static'); }
@@ -18303,7 +18346,7 @@ body.in-play #toasts { opacity: 0; }
 
   /**
    * Desenha a Erika. S: { t, fl, pose, mood, mouth, look, lit, glowA, spec, surf, stun, likes, cal, cal2, flip, prop,
-   *   phone: 'live'|'static'|'nosignal', vehicle, counter, vec (retrato: só vetor), tilt }
+   *   phone: 'live'|'static'|'nosignal', vehicle, counter, vec (retrato: só vetor), tilt, face (1 | -1 virada à esquerda) }
    */
   function drawErika(c, x, y, S) {
     const t = S.t, fl = S.fl;
@@ -18319,7 +18362,7 @@ body.in-play #toasts { opacity: 0; }
     if (S.vec) paintRing(c, S.lit); else blit(c, ringSpr(S.lit), 0, 0);
     if (fl) paintHair(c, true);
     // 2) a pessoa
-    G.Art.person(c, 0, PY, ERK_SIZE, S.spec || ERIKA, { t, mood: S.mood, mouth: S.mouth, pose: S.pose, flash: fl, lookX: S.look[0], lookY: S.look[1], autoLook: false });
+    G.Art.person(c, 0, PY, ERK_SIZE, S.spec || ERIKA, { t, mood: S.mood, mouth: S.mouth, pose: S.pose, flash: fl, lookX: S.look[0], lookY: S.look[1], autoLook: false, facing: S.face === -1 ? -1 : 1 });
     // 3) argolas, broche e crachá
     if (!fl) { if (S.vec) paintFront(c); else blit(c, frontSpr(), 0, 0); }
     // 4) pau de selfie
@@ -18543,6 +18586,7 @@ body.in-play #toasts { opacity: 0; }
     d.eng = 0; d.live.st = 'down'; d.armor = 1; d.armorTag = null;
     d.demo = false; d.flickT = 0.45; d.pose = 'hold'; d.poseT = 0;
     K.co(b, null, 2); d.viral = false; d.viralWarn = 0; // o VIRALIZOU que vinha cai junto com a live
+    if (d.pav) pavAbort(b); // participação especial no meio: ele vai embora na hora
   }
   function erkStunEnd(b) {
     const d = b.data;
@@ -18550,6 +18594,9 @@ body.in-play #toasts { opacity: 0; }
     rigClear(b, true);
     // 1º mandato: a live demora STUN_GAP_L1 s para voltar (respiro; quem corta rápido não emenda um tonto no outro)
     if (!L2() && FI.STUN_GAP_L1 > 0) { d.live.st = null; d.rigT = FI.STUN_GAP_L1; } else rigStart(b);
+    // participação especial armada e ainda não feita: a hora mais segura é agora (a live só volta a ser cortável
+    // depois de connecting + loading)
+    if (d.pavArmT != null && !d.pavDone && !d.pav && (b.phase === 1 || b.phase === 2)) { d.pavReq = true; d.pavWait = 0; }
   }
   // rig a cada quadro: posição, fio, estados, corte, volta do fio, armadura e engajamento
   function rigUpdate(b, dt, st) {
@@ -18568,7 +18615,7 @@ body.in-play #toasts { opacity: 0; }
     else if (Lv.st === 'on' && !st) {
       for (const ph of Lv.phones) {
         if (ph.cut) {
-          if ((ph.regrowT -= dt) <= 0) {
+          if (!(d.pav && d.pav.pause) && (ph.regrowT -= dt) <= 0) { // não volta enquanto ela está pausada na cena dele
             ph.cut = false; ph.plugT = FI.REPLUG; ph.cutT = 0; ph.n = (ph.n || 0) + 1; // fio novo (outro alvo)
             K.mechMiss(b); // o fio voltou antes de a live cair: corte desperdiçado
             G.text(ph.x, ph.y - 34, 'RECONECTOU!', { size: 10, color: PINK, life: 0.9, stroke: true });
@@ -18888,9 +18935,13 @@ body.in-play #toasts { opacity: 0; }
       // a) a escala 6x1 (folga no domingo; no 2º mandato a folga já muda)
       yield* weekSay(b, 'ESCALA 6x1? ABSURDO!');
       yield* erkWeek(b, [L2() ? M.randi(0, 6) : 6], false);
+      // participação especial (uma vez por luta): depois da 1ª semana inteira chega O MAIS VOTADO, na 1ª deixa entre
+      // as semanas em que a live ainda demora a poder cair (pavCue)
+      yield* pavCue(b);
       // b) a folga muda de lugar
       yield* weekSay(b, 'FOLGA AGORA É POR DECRETO!');
       yield* erkWeek(b, [M.randi(0, 6)], false);
+      yield* pavCue(b);
       // c) FIM DA 6x1 → 4x3: o mesmo trampo em 4 dias (chuva dupla, 1,25× mais rápida)
       yield* weekSay(b, 'FIM DA 6x1!');
       d.cal2 = '4x3'; d.flipTo = 1;
@@ -18898,6 +18949,7 @@ body.in-play #toasts { opacity: 0; }
       const run = G.run || {};
       if (!run._erk7x0) { run._erk7x0 = 1; const p = pl(); G.text(p.x, p.y - 40, 'E O ZÉ? 7x0.', { size: 12, color: '#ffffff', life: 1.8 }); }
       yield* erkWeek(b, folga3(), true);
+      yield* pavCue(b);
       d.cal = '4x3'; d.cal2 = '6x1'; d.flip = 0; d.flipTo = 1;
       // d) SEXTOU TODO DIA: semana toda verde, respiro (ela bate palma)
       say(b, 'SEXTOU TODO DIA!', 1.6);
@@ -18917,10 +18969,26 @@ body.in-play #toasts { opacity: 0; }
       }
       d.pose = 'hold';
       yield 0.5;
+      yield* pavCue(b);
       // f) curtidas e repete
       yield* erkLikes(b);
       yield 0.8;
+      yield* pavCue(b);
     }
+  }
+  // deixa da participação especial (entre dois ataques): se for uma hora boa, pede a cena e espera ela acabar (a Erika
+  // fica pausada enquanto ele está lá); depois, um respiro para a última fala dela. Hora boa = a live ainda vai demorar
+  // a poder cair toda (um tonto logo no começo cortaria a cena). Armada há mais de ARM_MAX s: vai assim mesmo.
+  function* pavCue(b) {
+    const d = b.data;
+    if (d.pavDone || d.pavReq || d.pav) return;
+    if (d.pavArmT == null) { d.pavArmT = K.clk(b); d.pavStuns0 = b.mech ? b.mech.stuns : 0; }
+    if (!pavReady(b)) return;
+    // fallback só para quem não está derrubando a live (quem derruba ganha a cena no fim do tonto)
+    if (pavSafeT(b) < PV.SAFE && (K.clk(b) - d.pavArmT < PV.ARM_MAX || (b.mech && b.mech.stuns > d.pavStuns0))) return;
+    d.pavReq = true; d.pavWait = 0;
+    yield () => !d.pavReq && !(d.pav && d.pav.pause);
+    if (d.pavDone) yield PV.POST;
   }
   // ---------- 3º turno: O PSOL VAI AO STF ----------
   function* erkCerco(b) {
@@ -18981,10 +19049,14 @@ body.in-play #toasts { opacity: 0; }
     d.mv = (bb, dd) => { const t = K.clk(bb); dd.tx = bb.homeX + PAT.SWAY[2] * Math.sin(0.55 * t); dd.ty = bb.homeY + 6 * Math.sin(1.2 * t); };
     d.prop = 'stf';
     yield 1.0;
+    yield* pavCue(b); // o 2º turno acabou antes da participação especial: ela vem agora (ou na próxima deixa)
     for (;;) {
       yield* erkCerco(b); yield 1.2;
+      yield* pavCue(b);
       yield* erkADIfan(b); yield 0.9;
+      yield* pavCue(b);
       yield* erkArquivado(b); yield 1.4;
+      yield* pavCue(b);
     }
   }
   // ---------- 4º turno: TRENDING TOPIC (no celular-prancha) ----------
@@ -19036,6 +19108,239 @@ body.in-play #toasts { opacity: 0; }
     sfx('enemy_shot2');
     G.text(b.x, b.y + 70, '+20 MIL SEGUIDORES', { size: 12, color: PINK, life: 1.4, stroke: true });
     d.eng = 0; d.viral = false;
+  }
+
+  // ======================================================================
+  // Participação especial: O MAIS VOTADO (uma vez por luta, nos dois mandatos)
+  // ======================================================================
+  // LUCAS PAVANATTO chega voando num palanque-drone com a placa '3 MILHÕES DE VOTOS'. A Erika (1,6 milhão) fica com
+  // ciúme e manda um leque de textões nele; ele levanta a placa e os textões voltam nela (dano modesto via G.hitBoss,
+  // então armadura e cansaço valem; 0,8 s de susto, não é tonto). Quando: armada no 2º turno, depois da 1ª semana
+  // inteira do calendário (se o 2º turno acabar antes, no começo do 3º); vem na primeira deixa entre semanas com hora
+  // boa (SAFE) ou logo no fim de um tonto (erkStunEnd: a live leva connecting + loading para voltar a ser cortável).
+  // Enquanto ele está em cena (~5,2 s) a corrotina da Erika fica pausada como no tonto (sem d.clk, d.mv nem conversa)
+  // e os fios cortados não voltam; os fios da live e o alvo do piloto continuam valendo.
+  // Os textões da cena não são tiros (g.eb): ficam numa lista própria, lá em cima, e nunca acertam o Zé.
+  // Tonto, troca de turno, morte da chefona ou do Zé no meio da cena: ele vai embora na hora e os textões somem.
+  // X/Y = onde o palanque para (fração da tela); IN/OUT = voo de entrada / saída (s), FLEE = saída quando a cena é
+  // interrompida; o resto são os instantes do roteiro (s desde a chegada); N textões a SPD px/s (TURN rad/s de mira),
+  // na volta BACK_SPD/BACK_TURN; DMG = dano total (fração da vida, antes do multiplicador); FLINCH = susto (s);
+  // POST = respiro da Erika depois da cena (relógio dela) para a última fala. SAFE = hora boa: a live só pode cair
+  // toda daqui a SAFE s ou mais (pavSafeT; cobre o leque, que acaba em ~FIRE + 0,75 s); ARM_MAX = armada há tantos
+  // s (relógio dela) sem hora boa e sem nenhum tonto desde então (quem derruba a live ganha a cena no fim do tonto):
+  // vai assim mesmo;
+  // WAIT_MAX = pedida e sem poder começar (Zé caído) por tantos s: desiste até a próxima deixa.
+  const PV = {
+    X: 0.16, Y: 0.30, IN: 0.7, OUT: 0.85, FLEE: 1.1,
+    E1: 0.45, E2: 1.65, FIRE: 1.7, P1: 2.5, P2: 3.6, LEAVE: 4.9, RESUME: 5.2,
+    N: 7, SPD: 170, TURN: 7, BACK_SPD: 220, BACK_TURN: 9, DMG: 0.025, FLINCH: 0.8, POST: 1.3, SAFE: 2.8, ARM_MAX: 12, WAIT_MAX: 6,
+  };
+  const PAV_TXT = {
+    IN: 'CHEGOU O PAVANATTO!', E1: '1,6 MILHÃO É POUCO?!', E2: 'TEXTÃO NELE!', BACK: 'DEVOLVEU O TEXTÃO!',
+    P1: 'ZÉ, CORTA OS FIOS DELA!', P2: 'FIM DA 6x1? VIRA 0x7!', E3: 'VOU ABRIR UM FIO SOBRE ELE!',
+  };
+  // aquecimento das poses dele (cabeça falando: boca quantizada em terços, como em G.Art)
+  const PAV_WARM = [['hold', 'smug', 0], ['hold', 'smug', 1 / 3], ['hold', 'smug', 2 / 3], ['up', 'smug', 0], ['up', 'laugh', 0],
+    ['wave', 'smug', 0], ['wave', 'smug', 1 / 3], ['wave', 'smug', 2 / 3]].map(([pose, mood, mouth]) => ({ spec: PAV, size: PAV_SIZE, pose, mood, mouth }));
+  // a placa: apoiada na frente do palanque (0) ou levantada acima da cabeça (1)
+  const BOARD_REST = [0, 31, 0], BOARD_UP = [-4, -42, -0.12];
+  const PB = [0, 0, 0];
+  function pavBoard(P) {
+    const u = M.easeOutBack(clamp(P.board, 0, 1));
+    PB[0] = P.x + M.lerp(BOARD_REST[0], BOARD_UP[0], u); PB[1] = P.y + P.bob + M.lerp(BOARD_REST[1], BOARD_UP[1], u);
+    PB[2] = M.lerp(BOARD_REST[2], BOARD_UP[2], u);
+    return PB;
+  }
+  // a Erika fica virada para ele enquanto ele está em cena
+  const erkFace = (b) => (b.data.pav && b.data.pav.pause ? -1 : 1);
+  // dá para começar agora? (sem tonto nem VIRALIZOU no meio, chefona fora da invulnerabilidade da troca de turno,
+  // Zé vivo e já na tela)
+  function pavReady(b) {
+    const d = b.data, p = pl();
+    return b.state === 'fight' && !K.stunning(b) && !d.viral && !(b.invulnT > 0) && !!p.alive && !p.entering;
+  }
+  // daqui a quantos s a live pode cair toda (no mínimo): o que falta para os fios ficarem cortáveis + ~0,25 s por fio
+  // a cortar (quem já espera em cima do fio corta rápido)
+  function pavSafeT(b) {
+    const d = b.data, Lv = d.live, n = Lv.phones.length ? liveCount(Lv) : 2;
+    let t = 0;
+    if (!Lv.st) t = Math.max(0, d.rigT) + FI.CONNECT + loadT();
+    else if (Lv.st === 'connecting') t = Math.max(0, Lv.dur - Lv.t) + loadT();
+    else if (Lv.st === 'loading') t = Math.max(0, loadT() - Lv.t);
+    else if (Lv.st === 'down') return 0;
+    return t + 0.25 * n;
+  }
+  function pavStart(b) {
+    const d = b.data, W = G.W, H = G.H;
+    d.pavReq = false; d.pavDone = true; d.pavWait = 0; d.pavFlinchT = 0;
+    d.pavDmg = (PV.DMG * b.maxHp) / PV.N;
+    d.pav = { st: 'in', t: 0, ot: 0, outDur: PV.OUT, x: -70, y: H * PV.Y, x0: -70, y0: H * PV.Y, tx: W * PV.X, ty: H * PV.Y, ex: W + 90, bob: 0,
+      pose: 'hold', board: 0, boardTo: 0, laughT: 0, sayText: null, sayT: 0, bye: false, proj: [], ev: 0, bounced: 0, hits: 0, pause: true };
+    d.pose = 'hold'; d.poseT = 0;
+    sfx('whoosh');
+    G.text(W / 2, Math.max(H * 0.4, b.y + STUN_PILL_DY + 34), PAV_TXT.IN, { size: 14, color: '#8fc1ff', stroke: true, life: 1.2, vy: -10 }); // linha do 'FLOPOU!'
+  }
+  function pavSay(P, s, dur) { P.sayText = s; P.sayT = dur; }
+  // roteiro: [instante, ação]
+  const PAV_EV = [
+    [PV.E1, (b, d) => { say(b, PAV_TXT.E1, PV.E2 - PV.E1); d.pose = 'point'; }],
+    [PV.E2, (b) => say(b, PAV_TXT.E2, 0.8)],
+    [PV.FIRE, (b, d, P) => { pavFire(b, P); P.boardTo = 1; }],
+    [PV.FIRE + 0.35, (b, d) => { d.pose = 'hold'; }],
+    [PV.P1, (b, d, P) => { P.boardTo = 0; pavSay(P, PAV_TXT.P1, PV.P2 - PV.P1); }],
+    [PV.P2, (b, d, P) => { P.pose = 'wave'; P.bye = true; pavSay(P, PAV_TXT.P2, PV.LEAVE - PV.P2); }], // some antes de ele cruzar com ela
+    [PV.LEAVE, (b, d, P) => pavLeave(P, PV.OUT)],
+    [PV.RESUME, (b, d, P) => { P.pause = false; d.pose = 'hold'; d.poseT = 0; say(b, PAV_TXT.E3, 1.5); d.chatT = Math.max(d.chatT, 4); d.pavHoldT = PV.POST; }],
+  ];
+  // TEXTÃO NELE!: leque de 7 textões saindo do celular dela para cima e para a esquerda; eles fazem a curva e
+  // caem na placa levantada (bem longe do Zé, lá em cima)
+  function pavFire(b, P) {
+    const q = phoneXY(b), up = -PI / 2;
+    for (let i = 0; i < PV.N; i++) {
+      const a = up - 0.1 - (1.0 * i) / (PV.N - 1); // de quase vertical até 'cima-esquerda'
+      P.proj.push({ x: q[0], y: q[1], a, v: PV.SPD, st: 0, t: 0 });
+    }
+    sfx('enemy_shot2');
+  }
+  function steer(o, tx, ty, turn, dt) {
+    let da = Math.atan2(ty - o.y, tx - o.x) - o.a;
+    da = ((da + PI) % TAU + TAU) % TAU - PI;
+    const m = turn * dt;
+    o.a += clamp(da, -m, m);
+  }
+  function pavProj(b, P, dt) {
+    const d = b.data, L = P.proj, bt = pavBoard(P), ex = b.x, ey = b.y + PY - 4;
+    for (let i = L.length - 1; i >= 0; i--) {
+      const o = L[i];
+      o.t += dt;
+      if (o.st === 0) {
+        steer(o, bt[0] + 6, bt[1] - 4, PV.TURN * (1 + 3 * o.t), dt); // a mira aperta com o tempo: sempre chega
+        o.x += Math.cos(o.a) * o.v * dt; o.y += Math.sin(o.a) * o.v * dt;
+        if ((Math.abs(o.x - bt[0]) < 38 && Math.abs(o.y - bt[1]) < 18) || o.t > 1.3) {
+          // bateu na placa: volta para ela (dourado = devolvido)
+          o.st = 1; o.t = 0; o.v = PV.BACK_SPD; o.a = PI - o.a + M.rand(-0.25, 0.25);
+          G.burst(o.x, o.y, 5, { colors: ['#ffffff', '#ffd23f'], speed: 160, life: 0.3 });
+          sfx('tink');
+          if (!P.bounced++) { G.text(P.x + 6, P.y + P.bob + 78, PAV_TXT.BACK, { size: 12, color: '#ffd23f', stroke: true, life: 1.2, vy: -14 }); P.laughT = 0.9; }
+        }
+      } else {
+        steer(o, ex, ey, PV.BACK_TURN * (1 + 3 * o.t), dt);
+        o.x += Math.cos(o.a) * o.v * dt; o.y += Math.sin(o.a) * o.v * dt;
+        if (M.dist2(o.x, o.y, ex, ey) < 26 * 26 || o.t > 1.4) {
+          L.splice(i, 1);
+          // acertou a Erika: dano modesto (G.hitBoss: armadura e cansaço valem) e o susto de 0,8 s
+          G.hitBoss(b, d.pavDmg);
+          if (d.pav !== P) return; // o golpe derrubou a chefona (onDeath já limpou a cena)
+          G.burst(o.x, o.y, 6, { colors: ['#ffffff', '#ff2a4a', '#ffd23f'], speed: 170, life: 0.35 });
+          G.part({ x: o.x, y: o.y, vx: M.rand(-40, 40), vy: -60, type: 'paper', size: 4, life: 0.8, color: '#ffffff', drag: 0.94, grav: 120, rot: M.rand(0, TAU), vr: M.rand(-10, 10) });
+          if (!P.hits++) { d.pavFlinchT = PV.FLINCH; G.shake(2); sfx('boss_hit'); }
+        }
+      }
+    }
+  }
+  // sai voando para a direita (passa por trás dela)
+  function pavLeave(P, dur) { P.st = 'out'; P.ot = 0; P.outDur = dur; P.x0 = P.x; P.y0 = P.y; P.ex = G.W + 90; sfx('whoosh'); }
+  // cena interrompida (tonto, troca de turno, Zé caiu): os textões somem, a Erika volta na hora e ele vai embora já,
+  // com a fala da saída se ainda não falou; gone = some numa fumacinha (morte da chefona)
+  function pavAbort(b, gone) {
+    const d = b.data, P = d.pav;
+    d.pavReq = false; d.pavFlinchT = 0;
+    if (!P) return;
+    for (const o of P.proj) G.burst(o.x, o.y, 4, { colors: ['#ffffff', '#c9d3e6'], speed: 110, life: 0.3 });
+    P.proj.length = 0;
+    if (P.pause) { P.pause = false; d.pose = 'hold'; d.poseT = 0; }
+    if (gone) {
+      G.burst(P.x, P.y, 10, { colors: ['#ffffff', pavBlue(), '#ffd23f'], speed: 140, life: 0.45 });
+      G.part({ x: P.x, y: P.y, type: 'smoke', size: 14, life: 0.6, color: 'rgba(200,206,220,0.5)', drag: 0.95 });
+      d.pav = null;
+      return;
+    }
+    P.boardTo = 0; P.laughT = 0; P.ev = PAV_EV.length;
+    if (P.st !== 'out') {
+      if (!P.bye) { P.bye = true; P.pose = 'wave'; pavSay(P, PAV_TXT.P2, PV.FLEE + 0.2); }
+      pavLeave(P, PV.FLEE);
+    }
+  }
+  // a cada quadro da luta (antes das corrotinas). Devolve true enquanto a Erika deve ficar pausada.
+  function pavUpdate(b, dt, st) {
+    const d = b.data;
+    if (d.pavFlinchT > 0) d.pavFlinchT -= dt;
+    if (d.pavHoldT > 0 && !st) d.pavHoldT -= dt; // respiro depois da cena (a última fala dela não é atropelada)
+    let P = d.pav;
+    if (!P) {
+      if (!d.pavReq) return false;
+      if (!pavReady(b)) { if (!st && (d.pavWait += dt) > PV.WAIT_MAX) d.pavReq = false; return false; } // tenta na próxima deixa
+      pavStart(b); P = d.pav;
+    }
+    const p = pl();
+    if (P.pause && (st || !p.alive)) pavAbort(b);
+    P.t += dt; P.bob = Math.sin(P.t * 3.2) * 2;
+    if (P.sayT > 0) P.sayT -= dt;
+    if (P.laughT > 0) P.laughT -= dt;
+    P.board = M.approach(P.board, P.boardTo, dt * 6);
+    if (P.st === 'in') {
+      const u = Math.min(1, P.t / PV.IN);
+      P.x = M.lerp(P.x0, P.tx, M.easeOutCubic(u)); P.y = P.ty - Math.sin(u * PI) * 16;
+      if (u >= 1) P.st = 'on';
+    } else if (P.st === 'out') {
+      P.ot += dt;
+      const u = Math.min(1, P.ot / P.outDur);
+      P.x = M.lerp(P.x0, P.ex, u * u); P.y = P.y0 - u * 30;
+    }
+    while (P.ev < PAV_EV.length && P.t >= PAV_EV[P.ev][0]) PAV_EV[P.ev++][1](b, d, P);
+    pavProj(b, P, dt);
+    if (d.pav !== P) return false;
+    if (P.st === 'out' && P.ot >= P.outDur && !P.proj.length) {
+      if (P.pause) { P.pause = false; d.pose = 'hold'; d.poseT = 0; }
+      d.pav = null;
+      return false;
+    }
+    return P.pause;
+  }
+  // desenho: ele (atrás da Erika: na saída passa por trás dela) ...
+  function drawPav(c, b, t) {
+    const P = b.data.pav, x = P.x, y = P.y + P.bob;
+    const up = P.board > 0.25, pose = up ? 'up' : P.pose;
+    c.save(); c.translate(x, y);
+    // hélices do drone (borrão)
+    c.fillStyle = 'rgba(225,232,245,0.65)';
+    for (const sx of [-1, 1]) { c.beginPath(); K.E(c, sx * 46, 34, 11, 1.6 + Math.abs(Math.sin(t * 40 + sx)) * 0.9); c.fill(); }
+    G.Art.person(c, 0, 0, PAV_SIZE, PAV, { t: P.t, pose, mood: P.laughT > 0 ? 'laugh' : 'smug', mouth: P.sayT > 0 ? 0.35 + 0.3 * Math.sin(P.t * 16) : 0,
+      lookX: 1, lookY: 0, autoLook: false });
+    // broche azul e amarelo na lapela
+    c.beginPath(); K.O(c, -14.5 * PAV_SC, 19 * PAV_SC, 2.3); K.inked(c, pavBlue(), 0.9);
+    c.beginPath(); K.O(c, -14.5 * PAV_SC, 19 * PAV_SC, 1); c.fillStyle = '#ffd23f'; c.fill();
+    blit(c, palqSpr(), 0, 0);
+    c.restore();
+    // a placa (com o cabo quando levantada)
+    const bt = pavBoard(P);
+    if (P.board > 0.6) {
+      const h = K.hand(PAV_SIZE, 'up', P.t, PAV.seed, true, 1), cb = Math.cos(bt[2]), sb = Math.sin(bt[2]);
+      c.beginPath(); c.moveTo(x + h.x, y + h.y); c.lineTo(bt[0] + 8 * cb - 16 * sb, bt[1] + 8 * sb + 16 * cb); stroke2(c, 3.6, '#b07a40', 2);
+    }
+    c.save(); c.translate(bt[0], bt[1]); if (bt[2]) c.rotate(bt[2]); blit(c, boardSpr(), 0, 0); c.restore();
+  }
+  // ... e por cima dela: os textões da cena e o balão de fala dele (por baixo dos tiros, como os balões do jogo)
+  function drawPavTop(c, b) {
+    const P = b.data.pav;
+    for (const o of P.proj) {
+      const spr = BS.sprite('erk_textao', o.st ? COL.gold : COL.red), s = spr._s;
+      c.save(); c.translate(o.x, o.y); c.rotate(o.a); c.drawImage(spr, -s / 2, -s / 2, s, s); c.restore();
+    }
+    if (P.sayT > 0 && P.sayText) pavBubble(c, P.x, P.y + P.bob - 30, P.sayText);
+  }
+  // balão de fala no mesmo desenho do core (G.say só desenha balão de inimigo e de chefão)
+  function pavBubble(c, x, y, text) {
+    c.save();
+    c.font = '700 12px ' + G.FONT_BODY;
+    const w = Math.min(200, textW(c, text) + 16), h = 22;
+    const bx = clamp(x - w / 2, 4, G.W - w - 4), by = Math.max(4, y - h - 8);
+    c.fillStyle = '#ffffff'; c.strokeStyle = INK; c.lineWidth = 2;
+    K.rr(c, bx, by, w, h, 8); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(clamp(x - 5, bx + 8, bx + w - 14), by + h - 1); c.lineTo(clamp(x, bx + 10, bx + w - 8), by + h + 7); c.lineTo(clamp(x + 6, bx + 14, bx + w - 4), by + h - 1); c.fill();
+    c.fillStyle = INK; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(text, bx + w / 2, by + h / 2 + 1, w - 10);
+    c.restore();
   }
 
   // ======================================================================
@@ -19129,11 +19434,13 @@ body.in-play #toasts { opacity: 0; }
       d.prop = null; d.cal = '6x1'; d.cal2 = '6x1'; d.flip = 0; d.flipTo = 0; d.surf = false;
       d.chatT = M.rand(7, 10); d.cutSayT = 0; d.flopT = 0; d.flickT = 0; d.ringFlashT = 0; d.leaveSaid = false; d.lv = null;
       d.S = { look: [0, 0] }; d.warmI = 0;
+      d.pav = null; d.pavReq = false; d.pavDone = false; d.pavWait = 0; d.pavArmT = null; d.pavStuns0 = null; d.pavFlinchT = 0; d.pavHoldT = 0; d.pavDmg = 0; // participação especial
       K.mechInit(b, 'fio');
       if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
       b.hitboxes = HB_A;
       K.warmPeople(b, 'p1', K.poses(ERIKA, ERK_SIZE, ['idle', 'hold', 'point', 'up', 'shrug', 'wave']).concat(K.poses(ERIKA, ERK_SIZE, ['fist'])));
-      K.warmShots(b, ERK_SHOTS);
+      K.warmShots(b, ERK_SHOTS.concat([['erk_textao', COL.gold]]));
+      K.warmPeople(b, 'pav', PAV_WARM);
     },
     updateEnter(b) {
       const d = b.data;
@@ -19156,19 +19463,23 @@ body.in-play #toasts { opacity: 0; }
       K.updFx(b, dt);
       // tonto = pausa: sem corrotina, relógio, movimento, conversa nem rig novo (os celulares continuam)
       const st = K.stunUpdate(b, dt);
+      // participação especial em cena: a Erika fica pausada como no tonto (a manha dos fios continua)
+      const pz = pavUpdate(b, dt, st);
       if (!st) {
-        d.clk += dt;
+        if (!pz) {
+          d.clk += dt;
+          if (d.demo && d.demoT > 0 && (d.demoT -= dt) <= 0) d.demo = false;
+          K.runCo(b, dt);
+          if (d.mv) { d.mv(b, d, dt); K.glide(b, dt, 2.4); }
+          if ((d.chatT -= dt) <= 0) { if (!(b.sayT > 0)) say(b, M.pick(CHAT), 1.6); d.chatT = M.rand(7, 10); }
+          if (d.poseT > 0 && (d.poseT -= dt) <= 0) d.pose = 'hold';
+        } else if (b.x < b.homeX) { d.tx = b.homeX; d.ty = b.y; K.glide(b, dt, 2.4); } // à esquerda do meio: abre espaço para ele
         if (d.mechCd > 0) d.mechCd -= dt;
-        if (d.demo && d.demoT > 0 && (d.demoT -= dt) <= 0) d.demo = false;
-        K.runCo(b, dt);
-        if (d.mv) { d.mv(b, d, dt); K.glide(b, dt, 2.4); }
-        if ((d.chatT -= dt) <= 0) { if (!(b.sayT > 0)) say(b, M.pick(CHAT), 1.6); d.chatT = M.rand(7, 10); }
         if (d.rigT > 0 && (d.rigT -= dt) <= 0) rigStart(b);
-        if (d.poseT > 0 && (d.poseT -= dt) <= 0) d.pose = 'hold';
       }
       rigUpdate(b, dt, K.stunning(b));
-      // VIRALIZOU: muito engajamento com os fios no ar (fora da chuva da 6x1, do tonto e da demonstração)
-      if (!K.stunning(b) && !d.viral && !d.rainOn && !d.demo && d.eng >= FI.ENG_MAX) { d.viral = true; K.co(b, erkViral(b), 2); }
+      // VIRALIZOU: muito engajamento com os fios no ar (fora da chuva da 6x1, do tonto, da demonstração e da participação especial)
+      if (!K.stunning(b) && !d.viral && !d.rainOn && !d.demo && !(d.pav && d.pav.pause) && !(d.pavHoldT > 0) && d.eng >= FI.ENG_MAX) { d.viral = true; K.co(b, erkViral(b), 2); }
       K.fatigue(b, 'VOU FAZER DETOX DIGITAL...');
       if (d.cutSayT > 0) d.cutSayT -= dt;
       // 'FLOPOU!' em 0,40H, mas sempre abaixo do '0 CURTIDAS' do tonto (tela baixa: 360x640) e subindo devagar
@@ -19191,6 +19502,9 @@ body.in-play #toasts { opacity: 0; }
       if (idx === 2) K.warmPeople(b, 'p3', K.poses(ERIKA_SWEAT, ERK_SIZE, ['fist', 'up', 'wave']));
       // a manha: os celulares somem numa fumacinha; um rig novo do turno entra 1 s depois (ou no fim do tonto)
       rigClear(b, true);
+      // participação especial no meio: ele vai embora; se ela ainda não aconteceu, o 3º turno pede de novo (erkP3)
+      if (d.pav) pavAbort(b);
+      d.pavReq = false;
       if (K.stunning(b)) { d.stunT = Math.min(d.stunT, 2.0); d.live.st = 'down'; }
       else { d.live.st = null; d.rigT = FI.RIG_GAP; d.armor = 1; d.armorTag = null; }
       K.co(b, null, 2); d.viral = false; d.viralWarn = 0; d.threadOn = false;
@@ -19213,6 +19527,7 @@ body.in-play #toasts { opacity: 0; }
       d.stunT = 0; d.stunOnEnd = null; d.viral = false; d.viralWarn = 0; d.demo = false;
       d.week.show = false; d.week.mode = 'idle'; d.rainOn = false; d.armor = 1; d.armorTag = null;
       K.clearGoal(b); b.hudTag = null;
+      pavAbort(b, true);
       say(b, 'ATAQUE À DEMOCRACIA!', 2.2);
       if (b.x < 40 || b.x > G.W - 40) b.x = clamp(b.x, 60, G.W - 60);
     },
@@ -19223,13 +19538,19 @@ body.in-play #toasts { opacity: 0; }
       if (fight && d.week.show && !st) drawWeekTint(ctx, b, t);
       if (fight) drawRig(ctx, b, t);
       K.drawFx(ctx, b, 'under');
+      const cam = fight && d.pav;
+      if (cam) drawPav(ctx, b, t);
+      const face = cam && d.pav.pause ? -1 : 1;
       const S = d.S;
       S.t = t; S.fl = G.isFlash(b); S.vec = false;
       S.spec = hpF < 0.6 || dying || leaving ? ERIKA_SWEAT : ERIKA;
-      S.mood = dying ? 'hurt' : leaving ? 'laugh' : st ? 'shock' : d.postT > 0 ? 'laugh' : b.phase === 2 && fight ? 'angry' : d.fat > 0 ? 'tired' : 'smug';
+      S.mood = dying ? 'hurt' : leaving ? 'laugh' : st ? 'shock' : d.pavFlinchT > 0 && fight ? 'shock' : face < 0 ? 'angry' : d.postT > 0 ? 'laugh' : b.phase === 2 && fight ? 'angry' : d.fat > 0 ? 'tired' : 'smug';
       S.mouth = b.state === 'talk' ? 0.3 + 0.3 * Math.sin(t * 10) : d.mouth;
       S.pose = dying || st ? 'shrug' : leaving ? 'wave' : b.state === 'fight' ? d.pose : 'hold';
       const lk = K.lookAt(b.x, b.y + PY); S.look[0] = lk[0]; S.look[1] = lk[1];
+      // virada para o Pavanatto: olha para ele (no desenho espelhado o olhar também espelha)
+      S.face = face;
+      if (face < 0) { S.look[0] = clamp((d.pav.x - b.x) / 120, -1, 1) * face; S.look[1] = 0; }
       S.stun = st;
       // ring light: aceso ao vivo; pisca ao cair e fica escuro no tonto (e na queda)
       S.lit = !(dying || st) || (st && d.flickT > 0 && ((t * 14) | 0) % 2 === 0);
@@ -19243,6 +19564,8 @@ body.in-play #toasts { opacity: 0; }
       S.pillY = st ? b.y + STUN_PILL_DY : Math.max(76, b.y + HY - RING_R - 10);
       let x = b.x, y = b.y;
       if (st) x += Math.sin(t * 15) * 1.6;
+      // susto dos textões devolvidos: recua e treme (0,8 s; não é tonto)
+      if (d.pavFlinchT > 0 && fight) { const k = d.pavFlinchT / PV.FLINCH; x += (5 + Math.sin(t * 38) * 2.2) * k; y -= 2 * k; }
       if (leaving) {
         // a tribuna cai e os drones da live levam a deputada embora (ainda filmando e acenando)
         if (!d.lv) d.lv = { x: b.x, y: b.y };
@@ -19267,6 +19590,7 @@ body.in-play #toasts { opacity: 0; }
         if (fight && d.armor < 1 && !st) drawBubble(ctx, b, t);
         drawErika(ctx, x, y, S);
       }
+      if (cam) drawPavTop(ctx, b);
       if (st) {
         // selo SEM SINAL logo acima dos olhos, sempre abaixo da ponta do balão (o balão fica em y >= 104,
         // ponta em b.y - b.bubbleY - 1); as estrelinhas giram em volta do selo
@@ -21292,6 +21616,8 @@ body.in-play #toasts { opacity: 0; }
     'URGENTE: Centrão anuncia apoio a quem estiver pagando',
     'Dilmãe promete dobrar a meta assim que encontrar a meta',
     'Erika Viralton faz live de 6 horas contra a escala 6x1. O Zé assistiu trabalhando',
+    'Fim da 6x1 aprovado na live. Quem paga a folga? O Zé.',
+    'Pavanatto, o mais votado de SP: 3 milhões. A live da Erika: 12 mil.',
     'Lule garante que a picanha está chegando. De novo',
     'Leão da Receita é visto rondando a Esplanada. Está com fome',
     'Fusca 78 com motor a jato é taxado como item de luxo',
@@ -21401,6 +21727,7 @@ body.in-play #toasts { opacity: 0; }
     ['O Centrão', 'base aliada de quem pagar'],
     ['Dilmãe', 'estocando vento'],
     ['Erika Viralton', 'ao vivo, seguindo o fio'],
+    ['Lucas Pavanatto', 'o mais votado, com a placa na mão'],
     ['Lule', 'com picanha (prometida)'],
     ['Leão da Receita', 'mordendo a sua parte (e a do Lule)'],
     ['Fusca 78', 'motor a jato, freio na fé'],
