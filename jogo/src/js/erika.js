@@ -47,13 +47,17 @@
   // mais perto do Zé (HOP_PULL do caminho na horizontal, metade do caminho até HOP_Y·H na vertical).
   // Os arrays por turno têm 5 entradas (o 5º é o ÚLTIMO RECURSO, Live de 24 Horas: rig de drones como no 4º;
   // CONNECT_P4 e STUN_P4 valem do 4º turno em diante).
-  const FI = {
+  // MODO CPI (SPEC-CPI §1): os valores escritos aqui são os do MODO CPI. Blocos registrados em G.tune: 'erika.T'
+  // (vida, cansaço, velocidade), 'erika.FI' (a manha), 'erika.PAT' (os padrões) e 'erika.PV' (a cena do Pavanatto).
+  // O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada de copiar um desses números no carregamento).
+  const tune = G.tune || ((id, o) => o);
+  const FI = tune('erika.FI', {
     CUT_R: 10, PHONE_R: 12, REGROW: [11, 10, 6, 9, 9], CONNECT: 1.4, CONNECT_P4: 1.2, LOAD: 2.0, STUN: 4.0, STUN_P4: 4.5, MUL: 2.4,
     ARMOR: [1, 0.9, 0.8, 0.75, 0.7], ENG_MAX: 20, VIRAL_N: 28,
     REGROW_L1: 2.5, REGROW_L2: 0.8, PHONES_L1: [2, 2, 3, 3, 3], STUN_L1K: 1.25, LOAD_L1: 1.4,
     HOP_T: 4.5, HOP_DUR: 0.7, HOP_PULL: 0.55, HOP_Y: 0.76, STUN_GAP_L1: 3, PHONE_DY_L1: 0.05,
     REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
-  };
+  });
   // Padrões (SPEC §5.4; afinados com o humanbot para a escada de mortes Centrão < Dilmãe < Erika < Lule).
   // THREAD_* = fileiras de textão (DX = espaço entre tiras, GAP = fresta, WALK = quanto a fresta anda por fileira),
   // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3; *_L2 = 2º mandato),
@@ -62,7 +66,7 @@
   // PRESSÃO (SPEC5 §2.3, travada por turno em d.pl / d.pR): +tiros nos leques mirados e braços da espiral (mesma
   // fresta entre tiros), anéis ×(1 + 0,25 R), esperas entre ataques ×0,9 / ×0,82; as fileiras de textão e as faixas
   // da 6x1 são paredes (noPress: nem velocidade nem contagem mudam).
-  const PAT = {
+  const PAT = tune('erika.PAT', {
     LIKE_N: 5, LIKE_N_L2: 7, LIKE_SPD: 108, LIKE_SPREAD: 0.62, NOTIF_P1: 2.2, NOTIF_P3: 2.4, NOTIF_SPD: 112, ADI_SPD: 100,
     THREAD_ROWS: 7, THREAD_DX: 32, THREAD_GAP: 80, THREAD_WALK: 24, THREAD_SPD: 92, THREAD_SPD_L2: 106, THREAD_EVERY: 0.66,
     RAIN_SPD: 150, RAIN_EVERY: 0.32, RAIN_EVERY_L2: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.05, RAIN_DBL_L2: 1.15,
@@ -70,11 +74,12 @@
     SWAY: [45, 20, 60, 50, 55], // balanço lateral por turno (px)
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
     P5_SPD_K: 1.2, P5_STEP: 0.12, P5_HEARTS: 5.0,
-  };
+  });
   // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,07 na chegada). Rodada 4 era 4700 / 3400 (a arma no
   // máximo resolvia a luta em ~73 s); agora a luta boa no nv.5 fica em ~100–130 s com a cena do Pavanatto.
   // HP_L2 = base do 2º mandato (o core ainda põe ×1,25). FAT_START = cansaço (s de luta; já inclui os ~6,5 s da cena).
-  const HP = 8400, HP_L2 = 6100, FAT_START = 175;
+  // SPD_K = multiplicador dos tiros (def.spdK). O def lê estes valores na hora (getters hp / fatStart / spdK).
+  const T = tune('erika.T', { HP: 8400, HP_L2: 6100, FAT_START: 175, SPD_K: 1.15 });
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -600,8 +605,15 @@
   }
   const loadT = () => (L2() ? FI.LOAD : FI.LOAD_L1);
   function liveCount(Lv) { let n = 0; for (const ph of Lv.phones) if (!ph.cut) n++; return n; }
-  // texto exato (×0,75 não vira ×0,8): 'EM ALTA ×0,9' / '×0,8' / '×0,75' / '×0,7'
-  const ARMOR_TAG = FI.ARMOR.map((a) => ({ text: 'EM ALTA ×' + String(a).replace('.', ','), color: PINK }));
+  // texto exato (×0,75 não vira ×0,8): 'EM ALTA ×0,9' / '×0,8' / '×0,75' / '×0,7'. Feito na hora a partir de
+  // FI.ARMOR (segue o modo) e guardado por índice: o mesmo objeto enquanto o valor não muda.
+  const ARMOR_TAG = [];
+  function armorTag(i) {
+    const a = FI.ARMOR[i];
+    let t = ARMOR_TAG[i];
+    if (!t || t.a !== a) t = ARMOR_TAG[i] = { text: 'EM ALTA ×' + String(a).replace('.', ','), color: PINK, a };
+    return t;
+  }
   // o rig liga (fio cortável). 1ª live da partida (1º mandato) = demonstração: 2,5 s sem tiro
   function rigOn(b) {
     const d = b.data;
@@ -687,7 +699,7 @@
     }
     if (st) return;
     const n = Lv.st === 'loading' || Lv.st === 'on' ? liveCount(Lv) : 0;
-    if (n > 0) { d.armor = FI.ARMOR[Math.min(4, n)]; d.armorTag = ARMOR_TAG[Math.min(4, n)]; d.eng += dt * n; d.engTot += dt * n; }
+    if (n > 0) { d.armor = FI.ARMOR[Math.min(4, n)]; d.armorTag = armorTag(Math.min(4, n)); d.eng += dt * n; d.engTot += dt * n; }
     else { d.armor = 1; d.armorTag = null; }
   }
   // 2º turno: este ponto do fio está num dia de TRAMPO com a chuva de carteiras chegando (aviso ou carteira caindo acima)?
@@ -938,7 +950,7 @@
   }
   // ---------- 2º turno: FIM DA ESCALA 6x1 (a semana do calendário) ----------
   const P2_DY = 28; // ela desce um pouco: a faixa da semana fica livre lá em cima
-  const SAY_RAIN = PAT.SAY_PRE + PAT.RAIN_WARN - 0.05; // fala da semana: some logo antes da 1ª carteira cair
+  const sayRain = () => PAT.SAY_PRE + PAT.RAIN_WARN - 0.05; // fala da semana: some logo antes da 1ª carteira cair
   function lanesFolga(list) { const w = [1, 1, 1, 1, 1, 1, 1]; for (const i of list) w[i] = 0; return w; }
   function folga3() {
     // 3 folgas, pelo menos duas lado a lado
@@ -982,7 +994,7 @@
   // balão); a semana já conta como chuva (nada de VIRALIZOU começando na fresta)
   function* weekSay(b, line) {
     b.data.rainOn = true;
-    say(b, line, SAY_RAIN);
+    say(b, line, sayRain());
     yield PAT.SAY_PRE;
   }
   function* erkP2(b) {
@@ -1169,12 +1181,14 @@
   // (TURN rad/s de mira), na volta BACK_SPD/BACK_TURN; DMG = dano total (fração da vida, antes do multiplicador);
   // FLINCH = susto (s); POST = respiro da Erika depois da cena (sem VIRALIZOU) para a última fala;
   // FORCE_DELAY = s entre a troca de turno e a cena; LOWER = s da faixa de TV.
-  const PV = {
+  // Registrado em 'erika.PV' sem X / Y (lugar do palanque na tela: desenho, não jogo).
+  const PV = tune('erika.PV', {
     X: 0.16, Y: 0.30, IN: 0.7, OUT: 0.85, FLEE: 1.1,
     E1: 0.45, E2: 1.65, FIRE: 1.7, P1: 2.5, P2: 3.6, LEAVE: 4.9, RESUME: 5.2,
     N: 7, SPD: 170, TURN: 7, BACK_SPD: 220, BACK_TURN: 9, DMG: 0.025, FLINCH: 0.8, POST: 1.3,
     FORCE_DELAY: 1.2, LOWER: 3.0,
-  };
+  }, ['IN', 'OUT', 'FLEE', 'E1', 'E2', 'FIRE', 'P1', 'P2', 'LEAVE', 'RESUME', 'N', 'SPD', 'TURN', 'BACK_SPD', 'BACK_TURN',
+    'DMG', 'FLINCH', 'POST', 'FORCE_DELAY', 'LOWER']);
   const PV_TAG = { text: 'AO VIVO', color: '#8fc1ff' }; // etiqueta da barra durante a cena
   const PAV_TXT = {
     IN: 'CHEGOU O PAVANATTO!', E1: '1,6 MILHÃO É POUCO?!', E2: 'TEXTÃO NELE!', BACK: 'DEVOLVEU O TEXTÃO!',
@@ -1236,16 +1250,16 @@
     if (b.state === 'fight') { b.invuln = inv; b.invulnT = it; }
   }
   function pavSay(P, s, dur) { P.sayText = s; P.sayT = dur; }
-  // roteiro: [instante, ação]
+  // roteiro: [instante, ação]; o instante é uma função (lê o PV na hora: segue o modo)
   const PAV_EV = [
-    [PV.E1, (b, d) => { say(b, PAV_TXT.E1, PV.E2 - PV.E1); d.pose = 'point'; }],
-    [PV.E2, (b) => say(b, PAV_TXT.E2, 0.8)],
-    [PV.FIRE, (b, d, P) => { pavFire(b, P); P.boardTo = 1; }],
-    [PV.FIRE + 0.35, (b, d) => { d.pose = 'hold'; }],
-    [PV.P1, (b, d, P) => { P.boardTo = 0; pavSay(P, PAV_TXT.P1, PV.P2 - PV.P1); }],
-    [PV.P2, (b, d, P) => { P.pose = 'wave'; P.bye = true; pavSay(P, PAV_TXT.P2, PV.LEAVE - PV.P2); }], // some antes de ele cruzar com ela
-    [PV.LEAVE, (b, d, P) => pavLeave(P, PV.OUT)],
-    [PV.RESUME, (b, d, P) => pavResume(b, d, P)],
+    [() => PV.E1, (b, d) => { say(b, PAV_TXT.E1, PV.E2 - PV.E1); d.pose = 'point'; }],
+    [() => PV.E2, (b) => say(b, PAV_TXT.E2, 0.8)],
+    [() => PV.FIRE, (b, d, P) => { pavFire(b, P); P.boardTo = 1; }],
+    [() => PV.FIRE + 0.35, (b, d) => { d.pose = 'hold'; }],
+    [() => PV.P1, (b, d, P) => { P.boardTo = 0; pavSay(P, PAV_TXT.P1, PV.P2 - PV.P1); }],
+    [() => PV.P2, (b, d, P) => { P.pose = 'wave'; P.bye = true; pavSay(P, PAV_TXT.P2, PV.LEAVE - PV.P2); }], // some antes de ele cruzar com ela
+    [() => PV.LEAVE, (b, d, P) => pavLeave(P, PV.OUT)],
+    [() => PV.RESUME, (b, d, P) => pavResume(b, d, P)],
   ];
   // TEXTÃO NELE!: leque de 7 textões saindo do celular dela para cima e para a esquerda; eles fazem a curva e
   // caem na placa levantada (bem longe do Zé, lá em cima)
@@ -1350,7 +1364,7 @@
       const u = Math.min(1, P.ot / P.outDur);
       P.x = M.lerp(P.x0, P.ex, u * u); P.y = P.y0 - u * 30;
     }
-    while (P.ev < PAV_EV.length && P.t >= PAV_EV[P.ev][0]) PAV_EV[P.ev++][1](b, d, P);
+    while (P.ev < PAV_EV.length && P.t >= PAV_EV[P.ev][0]()) PAV_EV[P.ev++][1](b, d, P);
     pavProj(b, P, dt);
     if (d.pav !== P) return false;
     if (P.st === 'out' && P.ot >= P.outDur && !P.proj.length) {
@@ -1492,7 +1506,12 @@
   // A chefona
   // ======================================================================
   G.Bosses.define('erika', {
-    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: FAT_START,
+    // hp / fatStart / spdK lidos na hora do bloco 'erika.T' (o core lê def.hp no spawn; o BossKit, fatStart e spdK).
+    // Quem escrever no def escreve no T (uma fonte só).
+    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, r: 40, homeY: 168,
+    get hp() { return T.HP; }, set hp(v) { T.HP = v; },
+    get fatStart() { return T.FAT_START; }, set fatStart(v) { T.FAT_START = v; },
+    get spdK() { return T.SPD_K; }, set spdK(v) { T.SPD_K = v; },
     score: 220000, pix: 180, music: 'boss', defeatText: 'CANCELADA!',
     phases: [
       { at: 1, name: 'Segue o Fio' },
@@ -1518,7 +1537,7 @@
       d.pl = 0; d.pR = 0; d.p5 = false;
       K.mechInit(b, 'fio');
       b.mech.pav = 0; // 1 quando a cena do Pavanatto termina
-      if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
+      if (L2() && T.HP_L2 !== T.HP) b.hp = b.maxHp = b.maxHp * (T.HP_L2 / T.HP);
       b.hitboxes = HB_A;
       K.warmPeople(b, 'p1', K.poses(ERIKA, ERK_SIZE, ['idle', 'hold', 'point', 'up', 'shrug', 'wave']).concat(K.poses(ERIKA, ERK_SIZE, ['fist'])));
       K.warmShots(b, ERK_SHOTS.concat([['erk_textao', COL.gold]]));

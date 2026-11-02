@@ -61,15 +61,31 @@
   }
   function say(b, s, dur) { G.say(b, s, dur || 2); }
 
+  // ---------- Modos (NORMAL / MODO CPI, SPEC-CPI §1): blocos de números registrados em G.tune ----------
+  // Os valores escritos neste arquivo são os do MODO CPI; o NORMAL só muda pelo G.TUNE_NORMAL (data.js), por id:
+  // 'bosses.KIT', 'bosses.P5', 'bosses.EM' (Centrão), 'bosses.MT' (Dilmãe), 'bosses.centrao' e 'bosses.dilmae'
+  // (hp, fatStart, spdK do def). Tudo é lido na hora: nada de copiar um número registrado numa constante solta.
+  const tune = G.tune || ((id, o) => o);
+  // KIT = números comuns aos chefões do BossKit. FAT_* = cansaço (começa em def.fatStart, ou FAT_START s, e chega a
+  // ×(1 + FAT_MAX) de dano FAT_FULL s depois); MUL_CAP = teto do multiplicador de dano; STUN_L2 = tonto ×0,85 no
+  // 2º mandato; STUN_CD = s sem manha nova depois do tonto; PRESSÃO: +PN3 / +PN5 tiros nos níveis 3 / 5, esperas
+  // ×PW3 / ×PW5, anéis ×(1 + RING_K × R); CPI_* = o leque do nível 5 (a cada pW(CPI_WAIT) s, CPI_N tiros abertos
+  // CPI_SPREAD rad a CPI_SPD px/s).
+  const KIT = tune('bosses.KIT', {
+    FAT_START: 95, FAT_FULL: 90, FAT_MAX: 0.75, MUL_CAP: 4, STUN_L2: 0.85, STUN_CD: 2.0,
+    PN3: 1, PN5: 1, PW3: 0.9, PW5: 0.82, RING_K: 0.25,
+    CPI_WAIT: 3.2, CPI_N: 3, CPI_SPREAD: 0.4, CPI_SPD: 130,
+  });
+
   // ---------- PRESSÃO (SPEC5 §3; o core calcula G.press, aqui só lemos com padrão) ----------
   // Variantes por nível (travadas por turno em b.data.pl / b.data.pR por pLatch): lv ≥ 3 +1 tiro por leque mirado /
-  // jorro / braço de espiral e esperas ×0,9; lv 5 +1 de novo, esperas ×0,82 e o cpiCo. Nunca em telegrafia, aviso,
-  // delay, aviso de laser, fresta de parede nem tempo de manha.
+  // jorro / braço de espiral e esperas ×0,9; lv 5 +1 de novo, esperas ×0,82 e o cpiCo (números no KIT). Nunca em
+  // telegrafia, aviso, delay, aviso de laser, fresta de parede nem tempo de manha.
   const PRESS0 = { R: 0, lv: 0 };
   function press() { return G.press || PRESS0; }
-  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0); }
-  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + 0.25 * (R || 0))); }
-  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? 0.82 : lv >= 3 ? 0.9 : 1); }
+  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? KIT.PN3 : 0) + (lv >= 5 ? KIT.PN5 : 0); }
+  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + KIT.RING_K * (R || 0))); }
+  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? KIT.PW5 : lv >= 3 ? KIT.PW3 : 1); }
   function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; }
   // velocidade de um tiro reapontado à mão (o G.fire já aplica isto no disparo): × (1 + SPD × R), teto SPD_CAP
   function pSpd(v) {
@@ -85,27 +101,34 @@
     const d = b.data;
     for (;;) {
       yield () => d.pl === 5;
-      yield pW(3.2, 5);
+      yield pW(KIT.CPI_WAIT, 5);
       if (d.pl !== 5 || d.stunT > 0 || flagOn(d.demo) || flagOn(d.hold)) continue;
       const x = b.x, y = b.y + 40;
-      fan(x, y, aimFrom(x, y), 3, 0.4, 130, { style: 'small', color: '#ff2a4a' });
+      fan(x, y, aimFrom(x, y), KIT.CPI_N, KIT.CPI_SPREAD, KIT.CPI_SPD, { style: 'small', color: '#ff2a4a' });
     }
   }
-  // ÚLTIMO RECURSO (5º turno, last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×1,5) contra o empate
-  const P5 = {
+  // ÚLTIMO RECURSO (5º turno, last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×P5.MUL) contra o empate.
+  // Registrados: LIMIT e MUL (as etiquetas não; o '×1,5' do TAG2 acompanha o MUL em p5Update).
+  const P5 = tune('bosses.P5', {
     LIMIT: 30, MUL: 1.5, TAG: { text: 'ÚLTIMO RECURSO', color: '#ff2a4a' },
     TAG2: { text: 'SEM SAÍDA ×1,5', color: '#ff2a4a' },
-  };
+  }, ['LIMIT', 'MUL']);
   function lastStand(b) { const d = b.data; d.p5 = true; d.p5T0 = b.ft; d.p5Mul = 1; d.mechCd = 0; }
-  function p5Update(b) { const d = b.data; if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) d.p5Mul = P5.MUL; }
+  function p5Update(b) {
+    const d = b.data;
+    if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) {
+      d.p5Mul = P5.MUL;
+      const T2 = P5.TAG2;
+      if (T2.mul !== P5.MUL) { T2.mul = P5.MUL; T2.text = 'SEM SAÍDA ×' + fmtMul(P5.MUL); }
+    }
+  }
 
   // Cansaço (anti-empate): luta normal termina antes; passou de def.fatStart o político cansa e passa a levar mais
-  // dano (até ×1,75, FAT_FULL s depois). Usa b.ft (tempo de luta de relógio, corre até no tonto).
-  // Multiplicador de dano (todo quadro, teto 4): base × (1 + cansaço) × SEM SAÍDA, base = tonto (d.stunMul) →
-  // armadura da manha (d.armor) → armadura antiga da fase (d.dmgBase) → 1. Escreve também b.hudTag.
-  const FAT_START = 95, FAT_FULL = 90, FAT_MAX = 0.75, MUL_CAP = 4;
+  // dano (até ×1,75, KIT.FAT_FULL s depois). Usa b.ft (tempo de luta de relógio, corre até no tonto).
+  // Multiplicador de dano (todo quadro, teto KIT.MUL_CAP): base × (1 + cansaço) × SEM SAÍDA, base = tonto
+  // (d.stunMul) → armadura da manha (d.armor) → armadura antiga da fase (d.dmgBase) → 1. Escreve também b.hudTag.
   function fatigue(b, line) {
-    const d = b.data, f = FAT_MAX * clamp((b.ft - (b.def.fatStart || FAT_START)) / FAT_FULL, 0, 1);
+    const d = b.data, f = KIT.FAT_MAX * clamp((b.ft - (b.def.fatStart || KIT.FAT_START)) / KIT.FAT_FULL, 0, 1);
     if (f > 0 && !d.fatSaid) { d.fatSaid = 1; say(b, line || 'CANSEI...', 2); G.text(b.x, b.y + 60, 'CANSOU!', { color: G.C.yellow, size: 14, life: 1.4 }); }
     d.fat = f;
     p5Update(b);
@@ -114,7 +137,7 @@
   function applyMul(b) {
     const d = b.data, st = d.stunT > 0;
     const base = st ? d.stunMul : (d.armor != null ? d.armor : (d.dmgBase != null ? d.dmgBase : 1));
-    b.dmgMul = Math.min(MUL_CAP, base * (1 + (d.fat || 0)) * (d.p5Mul || 1));
+    b.dmgMul = Math.min(KIT.MUL_CAP, base * (1 + (d.fat || 0)) * (d.p5Mul || 1));
     b.hudTag = st ? d.stunTag : (d.armorTag || (d.p5 ? (d.p5Mul > 1 ? P5.TAG2 : P5.TAG) : null));
   }
 
@@ -170,8 +193,8 @@
   function stunStart(b, dur, mul, o) {
     o = o || {};
     const d = b.data;
-    if (L2()) dur *= 0.85;
-    mul = Math.min(MUL_CAP, mul + pressStun() * (press().R || 0));
+    if (L2()) dur *= KIT.STUN_L2;
+    mul = Math.min(KIT.MUL_CAP, mul + pressStun() * (press().R || 0));
     d.stunT = d.stunT0 = dur; d.stunMul = mul;
     d.stunTag = { text: (o.tagWord || 'BRECHA') + ' ×' + fmtMul(mul), color: o.color || '#ffd23f' };
     d.stunOnEnd = o.onEnd || null;
@@ -193,7 +216,7 @@
     const d = b.data, f = d.stunOnEnd;
     d.stunT = 0; d.stunOnEnd = null;
     if (f) f(b);
-    d.mechCd = 2.0; // o chefão desconta isso fora do tonto: 2 s até a próxima manha
+    d.mechCd = KIT.STUN_CD; // o chefão desconta isso fora do tonto: 2 s até a próxima manha
     applyMul(b);
   }
   // true enquanto tonto (chama stunEnd quando acaba)
@@ -488,14 +511,15 @@
   // ======================================================================
   // Manha PEGAR A EMENDA (afinação: HP → tempo de tonto → cadência → armadura). Velocidades em px/s, tempos em s.
   // APEX_Y = altura do paraquedas (× H); STUN = tonto por turno; HEAL = cura de emenda perdida (× HP máx).
-  const EM = {
+  // Registrado inteiro em G.tune como 'bosses.EM' (valores do MODO CPI).
+  const EM = tune('bosses.EM', {
     APEX_Y: 0.28, FALL: 50, FALL_L2: 62, FALL_TUT: 40, CATCH_R: 13, SWAY: 18, SWAY_HZ: 0.45,
     STUN: [3.5, 4.0, 4.0, 3.5, 3.5], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
     FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9, RACE_DY: 100,
     // 5º turno FUNDÃO ELEITORAL: giro das cabeças ×1,15, espiral de moedas (braços, passo, px/s, rad por passo),
     // leque mirado de cédulas (a cada P5_FAN s antes do pW), 2 emendas a cada P5_EM s (a 1ª P5_EM0 s depois do banner)
     P5_ORBIT: 1.15, P5_ARMS: 4, P5_STEP: 0.13, P5_SPD: 95, P5_TURN: 0.11, P5_FAN: 3.2, P5_FAN_SPD: 130, P5_EM: 6, P5_EM0: 1.0,
-  };
+  });
   const SIDE = [
     { main: '#e63946', dark: '#9e1b28', acc: '#ffffff', name: 'vermelho' },
     { main: '#c9b48a', dark: '#8f7a52', acc: '#f2e6c4', name: 'em cima do muro' },
@@ -1685,7 +1709,8 @@
   G.Bosses.define('centrao', {
     // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
     // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140,
+    // spdK 1 = tiros na velocidade escrita (como antes, sem o campo); registrado com hp e fatStart ('bosses.centrao')
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140, spdK: 1,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -1867,6 +1892,8 @@
       }
     },
   });
+  // MODO CPI: os números do def lidos no spawn (vida, cansaço, velocidade dos tiros) entram no registro
+  tune('bosses.centrao', G.Bosses.defs.centrao, ['hp', 'fatStart', 'spdK']);
   // animação (cabeças, braços, squash, maleta, reflexo)
   function cenAnim(b, dt) {
     const d = b.data;
@@ -1910,7 +1937,8 @@
   // ======================================================================
   // Manha FICAR NA META (afinação: HP → tempo de tonto → cadência → armadura). R = raio (px), NEED = segundos
   // dentro para encher, LIFE = prazo (s), OPEN = armadura da META ABERTA, GAP_* = espera até a próxima meta.
-  const MT = {
+  // Registrado inteiro em G.tune como 'bosses.MT' (valores do MODO CPI; LVL é trocado no lugar, lido a cada meta).
+  const MT = tune('bosses.MT', {
     R0: 38, R_MIN: 28, R_K: 0.9, NEED: 2.2, NEED_L2: 2.5, LIFE: 10, STUN: 3.0, MUL: 2.2, OPEN: 0.8, GAP_OK: 3.0, GAP_FAIL: 2.5,
     FIRST: 3.0, P4_SPD: 55, P4_JUMP: 120, P4_EVERY: 3.0,
     R0_L2: 35, DEMO: 2, P2_R: 36, P2_NEED: 2.4, STUN_L3: 4.0, MUL_L3: 2.3, P4_R: 40, P4_LIFE: 9,
@@ -1921,7 +1949,7 @@
     // a cada P5_FAN s (antes do pW) e anel de P5_RING sementes a cada P5_RING_T s
     P5_STUN: 3.5, P5_MUL: 2.2, P5_GAP: 2.0, P5_FLIP: 4.0, P5_WARN: 1.0, P5_FAN: 1.6, P5_FAN_SPD: 140, P5_FAN_SPR: 0.5,
     P5_RING: 12, P5_RING_T: 3.0, P5_RING_SPD: 100,
-  };
+  });
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
     glowOn(x, c, 8);
@@ -2954,6 +2982,8 @@
     // por cima dos tiros: o contorno das metas (55%) e a carga
     drawOver(ctx, b) { if (b.state === 'fight') dilMetaDraw(ctx, b, true); },
   });
+  // MODO CPI: os números do def lidos no spawn (vida, cansaço, velocidade dos tiros) entram no registro
+  tune('bosses.dilmae', G.Bosses.defs.dilmae, ['hp', 'fatStart', 'spdK']);
   // seta de aviso do vento (1 s antes da rajada)
   function windArrow(c, dir, t) {
     const a = 0.45 + 0.4 * Math.abs(Math.sin(t * 12));
@@ -3024,6 +3054,10 @@
     MECH, clk, carNear, carSwept, trackCar, setGoal, clearGoal, mechInit, mechOk, mechMiss,
     stunStart, stunExtend, stunUpdate, stunning, stunEnd, mechHint, mechRing, tealHalo, heartPath, fmtMul,
     // Rodada 5 (SPEC5 §2.2): PRESSÃO e o 5º turno
-    press, pN, pRing, pW, pLatch, cpiCo, P5, lastStand, p5Update, applyMul, FAT_FULL, FAT_MAX,
+    press, pN, pRing, pW, pLatch, cpiCo, P5, lastStand, p5Update, applyMul,
+    // MODO CPI: o bloco registrado ('bosses.KIT'); FAT_FULL / FAT_MAX lidos na hora (seguem o modo)
+    KIT,
+    get FAT_FULL() { return KIT.FAT_FULL; },
+    get FAT_MAX() { return KIT.FAT_MAX; },
   };
 })();
