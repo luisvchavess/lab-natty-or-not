@@ -38,7 +38,7 @@
     'Receita estuda taxar o vento estocado da Dilmãe',
     'Taxad garante: não vai taxar o Pix. Ainda.',
     'Impostômetro bate recorde. De novo. E de novo.',
-    'Blusinha de R$ 30 chega custando R$ 60. A taxa veio de navio',
+    'Blusinha de R$ 30 chega custando R$ 60. A taxa veio de jatinho',
     'Arcabouço fiscal passa na vistoria. Com furo e tudo',
     'Déficit zero é alcançado na calculadora do ministério',
     'Janjinha embarca em missão oficial. Volta em breve',
@@ -54,7 +54,7 @@
     'Melhoria de verdade, não promessa de campanha.',
     'Nota fiscal? Aqui tem, viu, companheiro?',
     'Parcelo em 12x sem juros. Mentira: é à vista.',
-    'Preço com imposto incluso. O Taxad mandou lembranças.',
+    'Nota fiscal com IOF. Cortesia do Taxad.',
   ];
   const BUY_QUIPS = [
     'Negócio fechado! Sem toma lá, dá cá.',
@@ -154,7 +154,7 @@
     ['Dilmãe', 'estocando vento'],
     ['Erika Viralton', 'ao vivo, seguindo o fio'],
     ['Lucas Pavanatto', 'o mais votado, com a placa na mão'],
-    ['Fernando Taxad', 'calculando a sua parte'],
+    ['Fernando Taxad', 'com a calculadora sempre ligada'],
     ['Lule', 'com picanha (prometida)'],
     ['Janjinha', 'em missão oficial'],
     ['Leão da Receita', 'mordendo a sua parte (e a do Lule)'],
@@ -745,9 +745,17 @@
       '<div class="mode-seg" role="radiogroup" aria-describedby="modeLine">' + b('normal', 'NORMAL') + b('cpi', 'MODO CPI') + '</div>' +
       '<p class="mode-line" id="modeLine" aria-live="polite">' + esc(MODE_LINE[m]) + '</p></div>';
   }
-  // selo da faixa do santinho: nota do modo escolhido, cadeado, ou NOVA! (a fase liberada por último)
-  function santBadge(r, i, open_, unlocked) {
-    return r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '';
+  // selo da faixa do santinho: nota do modo escolhido, cadeado, ou NOVA! (fase aberta ainda não jogada)
+  function santBadge(r, i, open_, unlocked, boss) {
+    return r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : santNew(i, unlocked, boss) ? '<i class="mini-new">NOVA!</i>' : '';
+  }
+  // NOVA!: chefão nunca vencido nem visto e sem nota em nenhum modo. A liberada por último só conta se
+  // veio de vencer a anterior: no save de 4 fases migrado a Fazenda é a nova e o Planalto já estava aberto.
+  function santNew(i, unlocked, boss) {
+    const ach = G.save.achievements || {}, met = uiSave().met || {};
+    const done = (k, b) => !!(ach[b] || ranksOf('normal')[k] || ranksOf('cpi')[k]); // fase vencida
+    if (done(i, boss) || met[boss]) return false;
+    return i < unlocked - 1 || i === 0 || done(i - 1, stageInfo(i - 1).boss);
   }
   function showStages() {
     const n = nStages();
@@ -764,7 +772,7 @@
       cards +=
         '<button type="button" class="sant' + (last ? ' last' : '') + (wide ? ' final' : '') + (open_ ? '' : ' locked') + '" data-i="' + i + '" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + ';--i:' + i + '"' +
         ' aria-label="' + esc('FASE ' + (i + 1) + ': ' + s.name + ' · ' + castName(s.boss)) + '">' +
-        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + santBadge(r, i, open_, unlocked) + '</span>' +
+        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + santBadge(r, i, open_, unlocked, s.boss) + '</span>' +
         '<span class="sant-main">' +
         '<span class="sant-photo"><canvas data-boss="' + s.boss + '"></canvas><span class="sant-num"><small>Nº</small>171</span></span>' +
         '<span class="sant-txt">' +
@@ -800,7 +808,7 @@
         if (!band) return;
         const old = q(band, 'i'); // o selo é o único <i> da faixa
         if (old) old.remove();
-        const h = santBadge(rk[i], i, i < unlocked, unlocked);
+        const h = santBadge(rk[i], i, i < unlocked, unlocked, stageInfo(i).boss);
         if (h) band.insertAdjacentHTML('beforeend', h);
       });
     };
@@ -1107,7 +1115,7 @@
       { sep: 'PIX' },
       { k: 'PIX GANHO NA FASE', v: stats.pixStage, money: 1, cls: 'strong pix' },
       { k: '(bônus da nota ' + rank + ')', v: stats.pixBonus, money: 1, cls: 'small' },
-      (gold ? { k: '(Carimbo de Ouro)', v: goldPix, money: 1, cls: 'small rc-goldrow' } : null),
+      (gold ? { k: '(carimbo de ouro)', v: goldPix, money: 1, cls: 'small rc-goldrow' } : null),
     ];
     let html = '';
     for (const r of rows) {
@@ -1539,8 +1547,12 @@
     const fin = once(done);
     const ST = G.STORY || {};
     const panels = (ST.ending || []).slice();
-    // venceu o LULE 5.0: o quadro extra entra antes do último quadro do final
-    if (info.secret === 'won' && ST.endingQuinto && ST.endingQuinto.length) panels.splice(Math.max(0, panels.length - 1), 0, ...ST.endingQuinto);
+    // venceu o LULE 5.0: o quadro extra entra logo depois da fatura entregue (antes do Zé ir dormir)
+    // e o último quadro troca o "quinto mandato" pelo "sexto"
+    if (info.secret === 'won') {
+      if (ST.endingQuintoLast && ST.endingQuintoLast.length && panels.length) panels.splice(panels.length - 1, 1, ...ST.endingQuintoLast);
+      if (ST.endingQuinto && ST.endingQuinto.length) panels.splice(Math.min(1, panels.length), 0, ...ST.endingQuinto);
+    }
     storyScreen(panels, { cls: 'ending' }, () => creditsRoll(info, fin));
   }
   function creditsHTML(roll) {
