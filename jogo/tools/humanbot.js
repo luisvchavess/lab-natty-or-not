@@ -13,28 +13,47 @@
                     Pix, placar, nota. Classifica cada morte com um "oráculo"
                     (dava para escapar com um dedo perfeito a 600 px/s?).
      ttk           tempo para matar cada chefão por arma/nível, atirando do
-                    terço de baixo (god, seguindo o chefão com atraso humano)
-     mid           idem para os 4 chefes intermediários
+                    terço de baixo (god, seguindo o chefão com atraso humano);
+                    PRESSÃO fixa em 0,75 por padrão (--press muda; --press off solta)
+     mid           idem para os 5 chefes intermediários
      dps           dano por segundo de cada arma/nível em alvo único e em grupo
+
+   5 fases / chefões: 0 Rodoviária (centrao) · 1 Esplanada (dilmae) · 2 Paranoá (erika)
+                      3 Fazenda (taxad) · 4 Planalto (lule + Janjinha na 2ª vida; LULE 5.0 na luta secreta)
 
    Exemplos:
      node tools/humanbot.js --profile casual --stage 0 --runs 4
-     node tools/humanbot.js --profile good --stage 0 --through 1 --runs 3 --weapon voto
-     node tools/humanbot.js --mode ttk --bosses centrao,dilmae,erika,lule --weapons voto,boca,panela,jato --levels 1,3,5
-     node tools/humanbot.js --mode ttk --bosses centrao,dilmae --weapons voto --levels 3 --mech 0
+     node tools/humanbot.js --profile good --stage 0 --through 1 --runs 8 --continues 99   # mandato inteiro (withinLimit, oneCC)
+     node tools/humanbot.js --profile good --stage 0,1,2,3,4 --bossOnly 1 --startLv 5 --heat 0.4 --runs 12
+     node tools/humanbot.js --mode ttk --bosses centrao,dilmae,erika,taxad,lule --weapons voto,boca,panela,jato --levels 5
+     node tools/humanbot.js --mode ttk --bosses taxad --weapons voto --levels 3 --press 0.4 --mech 0
+     node tools/humanbot.js --mode ttk --bosses lule --weapons jato --levels 5 --quinto 1   # inclui o LULE 5.0
      node tools/humanbot.js --mode dps
      node tools/humanbot.js --mode mid --levels 1,3,5
    Opções gerais: --page dev|index  --ts 12 (escala de tempo; passo fixo de 1/60, não muda o resultado)
      --seed N  --parallel 3  --out DIR  --fast 1 (desliga a rasterização do canvas: bem mais rápido)
-     --upg "vida:1,bomba:1,turbo:2"  --loop 2 (2º Mandato)  --continues 99  --timeout 1200 (s reais por partida)
+     --upg "vida:1,bomba:1,turbo:2,recurso:1"  --loop 2 (2º Mandato)  --continues 99  --timeout 1200 (s reais por partida)
+     --stage 0..4 ou lista "0,3,4" (modo run: uma série de partidas por fase)
      --weapon voto|boca|panela|jato|any (arma preferida do perfil good; casual pega qualquer cor)
      --bossOnly 1 --startLv 4 --startW voto (pula direto ao chefão com essa arma)
+     --press R (URL press=R: PRESSÃO fixa em R, 0..1)  --heat H (URL heat=H: calor inicial da partida)
+     --quinto 1 (URL quinto=1: libera o LULE 5.0 mesmo sem a partida "sem recurso desde a fase 1")
+     --maxFight S (ttk: desiste do chefão depois de S s de luta; padrão 480, Lule 900)  --maxgt S (modo run, padrão 3600)
      --shots 1 (salva desenho da cena 0,3 s antes de cada morte, em PNG; precisa --fast 0 para o print real)
      --mech 1|0 (padrão 1) faz a "manha" de cada chefão seguindo b.autoGoal (pegar a emenda, ficar na meta,
-       cortar os fios, olé no Leão) com reação humana: o perfil nota cada objeto novo com chance mechNotice e
-       vai até ele mechDelay s depois. --mech 0 ignora a manha e põe mech=0 na URL (o autopiloto também ignora).
-       As tabelas e o summary.json trazem a manha do chefão: ok/miss/stuns (+ objetos vistos/notados no modo run).
-   Saída: <out>/summary.json, uma linha por partida e uma tabela agregada no stdout.
+       cortar os fios, achar o cofre, olé no Leão) com reação humana: o perfil nota cada objeto novo com chance
+       mechNotice e vai até ele mechDelay s depois. --mech 0 ignora a manha e põe mech=0 na URL (o autopiloto
+       também ignora). As tabelas e o summary.json trazem a manha do chefão: ok/miss/stuns (+ objetos
+       vistos/notados no modo run).
+       - why 'cofre' (Taxad): nota com chance min(0,97, mechNotice + 0,3) (o chefão PARA e anuncia a rodada);
+         no embaralhado o perfil perde o cofre certo com chance shellErr × (0,6 + 0,8 × k) (k = dificuldade da
+         rodada, 0..1) e aí segue um dos dois errados (b.autoGoal.alt) até o fim: erra o cofre.
+       - why 'alvo' (Janjinha: atirar nela de baixo): sempre seguido, nunca conta como manha (nem objetos, nem acerto).
+   Saída: <out>/summary.json, uma linha por partida e uma tabela agregada no stdout. No modo run, por fase:
+     PRESSÃO média (R), R no começo do chefão, % do tempo em CPI!, vidas extras; por chefão: começo do ÚLTIMO
+     RECURSO (p5), pav (Erika: a cena do Pavanatto completou), Taxad cofres (rodadas/notadas/erradas, alíquota),
+     janj { ko, left, t } e a linha do tempo do Lule (life1End / reviveT / janjEnd / life2End, quinto);
+     por partida: withinLimit (venceu com recursos <= 2 + upg recurso), oneCC, quinto { reached, won }, Pix.
    ============================================================ */
 const { chromium } = require('playwright');
 const path = require('path');
@@ -44,7 +63,8 @@ const argv = process.argv.slice(2);
 const opt = {
   mode: 'run', profile: 'casual', stage: 0, through: 0, runs: 1, seed: 1, ts: 12, page: 'dev', out: '/tmp/humanbot',
   fast: 1, weapon: 'any', upg: '', continues: 99, timeout: 1200, w: 195, h: 422, loop: 1, parallel: 3, shots: 0,
-  bosses: 'centrao,dilmae,erika,lule', weapons: 'voto,boca,panela,jato', levels: '1,3,5', maxgt: 2400, ty: 0.8, mech: 1,
+  bosses: 'centrao,dilmae,erika,taxad,lule', weapons: 'voto,boca,panela,jato', levels: '1,3,5', maxgt: 3600, ty: 0.8, mech: 1,
+  press: null, heat: null, quinto: 0, maxFight: 0,
 };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -67,9 +87,10 @@ const PROFILES = {
     itemGreed: 0.6, itemRange: 110, bombTrap: 0.35, bombLast: 0.6, bombWorry: 0.35, worryN: 7, colorPicky: false, upper: 0.55,
     lapseRate: 0.2, lapseMin: 0.25, lapseMax: 0.5, endErr: 0.1,
     stratEvery: 0.4, stratLook: 1.2, stratNotice: 0.8, stratW: 0.8,
-    // manha do chefão: nota 60% dos objetos novos (emenda, meta, fio, Leão) e vai até eles 0,45 s depois;
+    // manha do chefão: nota 60% dos objetos novos (emenda, meta, fio, cofre, Leão) e vai até eles 0,45 s depois;
     // aí o dedo vai direto (mechLag s, em vez do followLag) e, numa zona para ficar (META), o objetivo pesa mechHoldW×
-    mechNotice: 0.6, mechDelay: 0.45, mechLag: 0.2, mechHoldW: 4,
+    // shellErr: chance de perder o cofre certo no embaralhado do Taxad (× 0,6..1,4 pela dificuldade da rodada)
+    mechNotice: 0.6, mechDelay: 0.45, mechLag: 0.2, mechHoldW: 4, shellErr: 0.35,
   },
   // jogador bom (já jogou umas vezes): ~190 ms, olha 165 px, raramente deixa passar bala, dedo 700 px/s,
   // fica embaixo do alvo, espera o "P" virar a cor da arma dele, solta bomba quando vê que não tem saída
@@ -80,7 +101,7 @@ const PROFILES = {
     itemGreed: 0.95, itemRange: 170, bombTrap: 0.8, bombLast: 0.95, bombWorry: 0.9, worryN: 5, colorPicky: true, upper: 0.45,
     lapseRate: 0.06, lapseMin: 0.15, lapseMax: 0.3, endErr: 0.05,
     stratEvery: 0.25, stratLook: 1.8, stratNotice: 0.95, stratW: 1.0,
-    mechNotice: 0.92, mechDelay: 0.25, mechLag: 0.12, mechHoldW: 3,
+    mechNotice: 0.92, mechDelay: 0.25, mechLag: 0.12, mechHoldW: 3, shellErr: 0.12,
   },
 };
 
@@ -107,15 +128,26 @@ function pageMain(cfg) {
 
   const P = cfg.prof;
   const HB = (window.__hb = {
-    cfg: { profile: cfg.profile, seed: cfg.seed, stage: cfg.stage, mode: cfg.mode, weapon: cfg.weapon, upgrades: cfg.upgrades, loop: cfg.loop, mech: cfg.mech },
+    cfg: { profile: cfg.profile, seed: cfg.seed, stage: cfg.stage, mode: cfg.mode, weapon: cfg.weapon, upgrades: cfg.upgrades, loop: cfg.loop, mech: cfg.mech,
+      press: cfg.press, heat: cfg.heat, quinto: cfg.quinto },
     stages: [], deaths: [], bombs: [], continues: [], levels: [], cheap: { near: 0, nearList: [], low: 0, lowList: [], offscreen: 0, enemyLow: [] },
     ttk: [], mids: [], dps: null, done: false, err: null, steps: 0, gtTotal: 0, snaps: [],
+    secret: null, cpiSeen: false, rMax: 0, // LULE 5.0 (o maior estado visto de G.run.secret), PRESSÃO em CPI! alguma vez
   });
   const curStage = () => HB.stages[HB.stages.length - 1];
   const gtNow = () => HB.gtTotal + (G.game ? G.game.t : 0);
+  // Janjinha em cena (b.mech.janj do janjinha.js; sem o módulo, nunca)
+  const janjUp = (b) => !!(b && b.mech && b.mech.janj && b.mech.janj.up);
+  // rótulo do trecho da luta: P<turno> + 'b' (2ª vida do Lule), 'bj' (2ª vida com a Janjinha em cena), 'c' (LULE 5.0);
+  // 'boss:rev' durante a volta do Lule (cinemática, sem tiros)
   function section(g) {
     const b = g.boss;
-    if (b) return b.state === 'fight' || b.state === 'dying' ? 'boss:P' + (b.phase + 1) + (b.id === 'lule' && b.data && b.data.life === 2 ? 'b' : '') : 'boss:' + b.state;
+    if (b && b.data && b.data.reviving && b.state === 'fight') return 'boss:rev';
+    if (b) {
+      if (b.state !== 'fight' && b.state !== 'dying') return 'boss:' + b.state;
+      const life = b.id === 'lule' && b.data ? b.data.life : 1;
+      return 'boss:P' + (b.phase + 1) + (life === 3 ? 'c' : life === 2 ? (janjUp(b) ? 'bj' : 'b') : '');
+    }
     const st = curStage();
     if (st && st.mid && st.mid.alive) return 'mid';
     const after = st && st.mid && st.mid.end != null;
@@ -134,7 +166,8 @@ function pageMain(cfg) {
       Object.defineProperty(v, 'keys', { get() { return myKeys; }, set() {} });
       if (G.save) {
         G.save.upgrades = Object.assign({}, cfg.upgrades || {});
-        G.save.unlocked = 4;
+        G.save.unlocked = 5;
+        G.save.saveV = 5; // (a migração do save de 4 fases não roda em cima disto)
         Object.assign(G.save.settings, { shake: false, vibrate: false, music: false, sfx: false, hitbox: true });
       }
     },
@@ -183,6 +216,8 @@ function pageMain(cfg) {
         idx: a[0], id: g && g.stage && g.stage.id, deaths: 0, deathsBy: {}, bombs: 0, bossBombs: 0, drops: {}, items: [],
         lvStart: run.level, wStart: run.weapon, livesStart: run.lives, bombsStart: run.bombs, contStart: run.continues, gtStart: +HB.gtTotal.toFixed(1),
         mid: null, boss: null, clear: null, levelEvents: [], pixStolen: 0,
+        // PRESSÃO: R amostrado a cada passo de jogo (rSum/rN), passos em CPI! (lv 5), maior R; vidas extras na fase
+        rSum: 0, rN: 0, cpiN: 0, rMax: 0, extStart: run.extGiven || 0, ext: 0, pixRunStart: run.pix || 0, goldStart: run.gold || 0,
       });
       S.g = null;
       return r;
@@ -195,8 +230,14 @@ function pageMain(cfg) {
       const r = orig.apply(th, a);
       // a nota vem do core (G.rankFor / g.rank), para o relatório nunca divergir das regras do jogo
       const rank = g.rank || (G.rankFor ? G.rankFor(hits, bombs, g.stageIdx) : '?');
-      if (st) st.clear = { t: +g.t.toFixed(1), rank, hits, bombs, grazes, approval: Math.round(approval), pixStage: g.pixStage, pixPickups: pixBefore,
-        score: run.score, scoreBefore, bonus: run.score - scoreBefore, level: lv, weapon: w, lives: run.lives, continues: run.continues };
+      // R̄ do core (média de R nos quadros "ativos" da fase: a que paga a nota e o CARIMBO DE OURO)
+      const rAvg = g.pressT > 0 ? +(g.pressSum / g.pressT).toFixed(3) : null;
+      if (st) {
+        st.ext = (run.extGiven || 0) - st.extStart;
+        st.clear = { t: +g.t.toFixed(1), rank, hits, bombs, grazes, approval: Math.round(approval), pixStage: g.pixStage, pixPickups: pixBefore,
+          score: run.score, scoreBefore, bonus: run.score - scoreBefore, level: lv, weapon: w, lives: run.lives, continues: run.continues,
+          rAvg, gold: (run.gold || 0) > (st.goldStart || 0) };
+      }
       return r;
     });
     wrap('continueRun', (orig, th, a) => {
@@ -215,16 +256,89 @@ function pageMain(cfg) {
     for (const id in G.Bosses.defs) {
       const def = G.Bosses.defs[id];
       const w2 = (name, fn) => { const orig = def[name]; def[name] = function () { const r = orig ? orig.apply(this, arguments) : undefined; try { fn.apply(this, arguments); } catch (e) { HB.err = 'bosswrap: ' + e.stack; } return r; }; };
-      w2('start', (b) => { const st = curStage(); if (!st) return; st.boss = { id, start: +G.game.t.toFixed(1), lv: G.run.level, w: G.run.weapon, lives: G.run.lives, bombs: G.run.bombs, phases: [{ idx: 0, ft: 0 }], deaths: 0, deathsBy: {}, end: null, fat: 0, cont0: G.run.continues, mech: null, goals: 0, noticed: 0, takeT: 0, inT: 0 }; snapMech(st.boss, b); });
+      w2('start', (b) => {
+        const st = curStage(); if (!st) return;
+        const pr = G.press || { R: 0, lv: 0 };
+        st.boss = { id, start: +G.game.t.toFixed(1), lv: G.run.level, w: G.run.weapon, lives: G.run.lives, bombs: G.run.bombs, phases: [{ idx: 0, ft: 0 }], deaths: 0, deathsBy: {}, end: null, fat: 0, cont0: G.run.continues, mech: null, goals: 0, noticed: 0, takeT: 0, inT: 0,
+          rStart: +pr.R.toFixed(3), lvP: pr.lv | 0, press0: b.press0 != null ? +(+b.press0).toFixed(3) : null, hp: Math.round(b.maxHp),
+          cf: id === 'taxad' ? { rounds: 0, noticed: 0, wrong: 0 } : null, alvoT: 0, tl: bossTL(b) };
+        snapMech(st.boss, b);
+      });
       w2('onPhase', (b, idx) => { const st = curStage(); if (st && st.boss) st.boss.phases.push({ idx, ft: +b.ft.toFixed(1), life: b.data && b.data.life }); });
-      w2('onDeath', (b) => { const st = curStage(); if (st && st.boss) { snapMech(st.boss, b); st.boss.end = +b.ft.toFixed(1); st.boss.fat = +((b.data && b.data.fat) || 0).toFixed(2); st.boss.contUsed = G.run.continues - st.boss.cont0; } });
+      w2('onDeath', (b) => {
+        const st = curStage();
+        tlUpdate(b, true);
+        if (st && st.boss) { snapMech(st.boss, b); st.boss.end = +b.ft.toFixed(1); st.boss.fat = +((b.data && b.data.fat) || 0).toFixed(2); st.boss.contUsed = G.run.continues - st.boss.cont0; }
+      });
     }
   }
-  // cópia de b.mech ({ kind, ok, miss, stuns }) no registro (sem alocar a cada quadro)
+  // cópia de b.mech ({ kind, ok, miss, stuns } + pav da Erika, aliq do Taxad, life e janj do Lule) no registro
+  // (sem alocar a cada quadro)
   function snapMech(rec, b) {
     const m = b && b.mech; if (!rec || !m) return;
     const o = rec.mech || (rec.mech = { kind: m.kind, ok: 0, miss: 0, stuns: 0 });
     o.kind = m.kind; o.ok = m.ok | 0; o.miss = m.miss | 0; o.stuns = m.stuns | 0;
+    if (m.pav != null) o.pav = m.pav | 0;
+    if (m.aliq != null) { o.aliq = m.aliq | 0; o.aliqMax = Math.max(o.aliqMax | 0, m.aliq | 0); }
+    if (m.life != null) o.life = m.life | 0;
+    if (m.janj) { const j = o.janj || (o.janj = { up: false, ko: false, left: false, t: 0 }); j.up = !!m.janj.up; j.ko = !!m.janj.ko; j.left = !!m.janj.left; j.t = +(+m.janj.t || 0).toFixed(1); }
+  }
+  // ---------------- linha do tempo da luta (b.ft, s de luta) ----------------
+  // p5: começo do ÚLTIMO RECURSO (1º turno last: true; no Lule, um por vida em p5s); o Lule: life1End (começo da volta),
+  // reviveT (duração da volta, com a entrada e o diálogo da Janjinha), life2Start, janjStart/janjEnd (ela em cena:
+  // entra na volta, sai no nocaute ou no embarque) + janj { ko, left, t } (t = relógio de luta dela), life2End,
+  // e na luta secreta life3Start/life3End e quinto 'on' | 'won' | 'lost'
+  function bossTL(b) {
+    return b._hbTL || (b._hbTL = { id: b.id, p5: null, p5s: [], life1End: null, reviveT: null, life2Start: null, janjStart: null, janjEnd: null, janj: null,
+      life2End: null, life3Start: null, life3End: null, quinto: null, end: null, _rev: false, _life: 1, _p5: false, _jUp: false });
+  }
+  function tlUpdate(b, dead) {
+    if (!b || !b.data) return;
+    const T = bossTL(b), d = b.data, ft = +(b.ft || 0).toFixed(1);
+    if (b.state !== 'fight' && !dead) return;
+    const life = d.life || 1, rev = !!d.reviving;
+    const ph = b.phases && b.phases[b.phase];
+    const p5 = !rev && !!(d.p5 || (ph && ph.last));
+    if (p5 && !T._p5) { if (T.p5 == null) T.p5 = ft; T.p5s.push({ life, ft }); }
+    T._p5 = p5;
+    if (rev && !T._rev) { if (life === 1) T.life1End = ft; else if (life === 2) { T.life2End = ft; T.quinto = 'on'; } }
+    if (!rev && T._rev) {
+      if (life === 2) { T.life2Start = ft; T.reviveT = T.life1End != null ? +(ft - T.life1End).toFixed(1) : null; }
+      else if (life === 3) { T.life3Start = ft; T.revive3T = T.life2End != null ? +(ft - T.life2End).toFixed(1) : null; }
+    }
+    T._rev = rev; T._life = life;
+    const jm = b.mech && b.mech.janj;
+    if (jm) {
+      if (jm.up && !T._jUp && T.janjStart == null) T.janjStart = ft;
+      if (!jm.up && T._jUp && T.janjEnd == null) T.janjEnd = ft;
+      const j = T.janj || (T.janj = { ko: false, left: false, t: 0 });
+      j.ko = !!jm.ko; j.left = !!jm.left; j.t = +(+jm.t || 0).toFixed(1);
+      T._jUp = !!jm.up;
+    }
+    if (dead) {
+      T.end = ft;
+      if (life === 1 && T.life1End == null) T.life1End = ft;
+      if (life === 2 && T.life2End == null) T.life2End = ft;
+      if (life === 3) { T.life3End = ft; }
+      if (T._jUp && T.janjEnd == null) T.janjEnd = ft;
+      const sec = G.run && G.run.secret;
+      if (sec) T.quinto = sec;
+    }
+  }
+  // tempos derivados (para as tabelas): vida 1, volta, Janjinha (relógio dela), resto da vida 2, LULE 5.0
+  function tlDerive(T) {
+    if (!T) return null;
+    const o = { p5: T.p5, life1: T.life1End };
+    if (T.id === 'lule') {
+      o.revive = T.reviveT;
+      o.janj = T.janj ? T.janj.t : null; o.janjKo = T.janj ? T.janj.ko : null; o.janjLeft = T.janj ? T.janj.left : null;
+      const from = T.janjEnd != null && T.life2Start != null ? Math.max(T.janjEnd, T.life2Start) : T.life2Start;
+      o.life2Rest = T.life2End != null && from != null ? +(T.life2End - from).toFixed(1) : null;
+      o.life2 = T.life2End != null && T.life2Start != null ? +(T.life2End - T.life2Start).toFixed(1) : null;
+      o.life3 = T.life3End != null && T.life3Start != null ? +(T.life3End - T.life3Start).toFixed(1) : null;
+      o.quinto = T.quinto;
+    }
+    return o;
   }
   function noteBullet(b) {
     const g = G.game; if (!g) return;
@@ -244,7 +358,7 @@ function pageMain(cfg) {
       }
     }
   }
-  const MIDS = { trio: 1, lobista_mor: 1, servidor: 1, comitiva: 1 };
+  const MIDS = { trio: 1, lobista_mor: 1, servidor: 1, impostometro: 1, comitiva: 1 };
   function noteEnemy(e) {
     const g = G.game; if (!g) return;
     if (MIDS[e.kind]) { const st = curStage(); if (st) st.mid = { kind: e.kind, t0: +g.t.toFixed(1), alive: true, end: null, fled: null, hp: e.maxHp, ref: e, deaths: 0, lv: G.run.level, w: G.run.weapon }; }
@@ -328,6 +442,11 @@ function pageMain(cfg) {
   }
 
   window.__oracle = (b, v) => oracle(b, v); window.__ring = () => ring;
+  // fim da partida: tempos derivados de cada luta (também das que não terminaram) e o estado final da luta secreta
+  window.__hbFinish = () => {
+    for (const st of HB.stages) if (st.boss && st.boss.tl) st.boss.d = tlDerive(st.boss.tl);
+    if (G.run && G.run.secret) HB.secret = G.run.secret;
+  };
   // ---------------- morte ----------------
   function onDeath() {
     const g = G.game, p = g.player, run = G.run, st = curStage();
@@ -398,6 +517,14 @@ function pageMain(cfg) {
       if (it.type === 'power') it._rec.color = it.wtype;
     }
     const st = curStage();
+    // PRESSÃO (G.press do core; sem ele, 0)
+    const pr = G.press;
+    if (st && pr && G.state === 'play') {
+      st.rSum += pr.R; st.rN++; if (pr.lv === 5) { st.cpiN++; HB.cpiSeen = true; }
+      if (pr.R > st.rMax) st.rMax = pr.R; if (pr.R > HB.rMax) HB.rMax = pr.R;
+    }
+    if (run.secret && (HB.secret == null || run.secret !== 'on')) HB.secret = run.secret;
+    if (g.boss) tlUpdate(g.boss, false);
     if (st && st.boss && g.boss && g.boss.id === st.boss.id) snapMech(st.boss, g.boss);
     if (st && st.mid && st.mid.alive && st.mid.ref.dead) {
       st.mid.alive = false; st.mid.end = +g.t.toFixed(1); st.mid.fled = !!st.mid.ref.escaped || st.mid.ref.hp > 0; st.mid.dur = +(st.mid.end - st.mid.t0).toFixed(1); delete st.mid.ref;
@@ -445,7 +572,10 @@ function pageMain(cfg) {
     moveFinger(g, p, P.vmax, P.amax, P.jitter);
     // tempo fazendo a manha / dentro do raio do objetivo (diagnóstico da manha no modo run)
     const B = g.boss, AG = S.take && B && B.state === 'fight' ? B.autoGoal : null, st = curStage();
-    if (AG && st && st.boss && AG.why !== 'stun') { st.boss.takeT += 1 / 60; if ((p.x - AG.x) ** 2 + (p.y - AG.y) ** 2 < Math.max(8, AG.r) ** 2) st.boss.inT += 1 / 60; }
+    if (AG && st && st.boss) {
+      if (AG.why === 'alvo') st.boss.alvoT += 1 / 60; // atirando na Janjinha (não é manha)
+      else if (AG.why !== 'stun') { st.boss.takeT += 1 / 60; if ((p.x - AG.x) ** 2 + (p.y - AG.y) ** 2 < Math.max(8, AG.r) ** 2) st.boss.inT += 1 / 60; }
+    }
   }
   function wantWeapon(run) { return cfg.weapon && cfg.weapon !== 'any' ? cfg.weapon : run.weapon; }
   function computeGoal(g, p, run) {
@@ -466,32 +596,48 @@ function pageMain(cfg) {
     }
     // manha do chefão (b.autoGoal): cada objeto novo (id novo) é notado com chance mechNotice e,
     // se notado, vira o objetivo mechDelay s depois (tempo de "entender" o que é); o desvio continua valendo
-    const AG = cfg.mech !== 0 && B && B.state === 'fight' ? B.autoGoal : null;
+    // 'alvo' (a Janjinha: atirar nela de baixo) não é manha: sempre seguido (com o mesmo atraso), nunca contado.
+    // Com --mech 0 o alvo continua valendo (é só "mirar em quem está batendo"), como o autopiloto do core faz.
+    const AG0 = B && B.state === 'fight' ? B.autoGoal : null;
+    const AG = AG0 && (cfg.mech !== 0 || AG0.why === 'alvo') ? AG0 : null;
     if (AG) {
       const key = B.id + ':' + AG.id;
       if (S.mechKey !== key) {
         // o "SAI!" do Leão é o mesmo Leão que a pessoa já estava olhando: mantém a decisão (só reage de novo, mechDelay)
         const cont = S.mechWhy === 'leao-alinha' && AG.why === 'leao-sai';
         S.mechKey = key; S.mechWhy = AG.why; S.mechAt = g.t + P.mechDelay;
-        if (!cont) {
-          S.mechTake = rnd() < P.mechNotice;
+        S.cfWrong = false;
+        if (AG.why === 'alvo') S.mechTake = true;
+        else if (!cont) {
           const st = curStage();
+          if (AG.why === 'cofre') {
+            // o Taxad para tudo e grita "CADÊ O SEU DINHEIRO?": quase todo mundo nota; no embaralhado,
+            // perde o cofre certo com chance shellErr × (0,6 + 0,8 k) e segue um dos dois errados até o fim
+            S.mechTake = rnd() < Math.min(0.97, P.mechNotice + 0.3);
+            S.cfWrong = rnd() < (P.shellErr || 0) * (0.6 + 0.8 * (AG.k || 0));
+            S.cfAlt = rnd() < 0.5 ? 0 : 1;
+            if (st && st.boss && st.boss.cf) { st.boss.cf.rounds++; if (S.mechTake) { st.boss.cf.noticed++; if (S.cfWrong) st.boss.cf.wrong++; } }
+          } else S.mechTake = rnd() < P.mechNotice;
           if (st && st.boss && AG.why !== 'stun') { st.boss.goals++; if (S.mechTake) st.boss.noticed++; }
         }
       }
     }
     const take = (S.take = !!(AG && S.mechTake && g.t >= S.mechAt));
     S.takeR = take ? AG.r || 0 : 0;
-    if (take) { gx = AG.x; gy = clamp(AG.y, H * 0.42, H - 40); }
-    else gx = W / 2 + (gx - W / 2) * P.follow;
+    if (take) {
+      gx = AG.x; gy = AG.y;
+      // cofre errado: o b.autoGoal.alt traz os dois errados (mesmo y do certo)
+      if (AG.why === 'cofre' && S.cfWrong && AG.alt && AG.alt.length >= 4) { gx = AG.alt[2 * S.cfAlt]; gy = AG.alt[2 * S.cfAlt + 1]; }
+      gy = clamp(gy, H * 0.42, H - 40);
+    } else gx = W / 2 + (gx - W / 2) * P.follow;
     // camada estratégica: "procurar a brecha" — olha a tela inteira (cortinas, colunas, o L girando)
     // e puxa o objetivo para a faixa da linha do carro que vai ficar livre nos próximos ~1,5 s
     // (fazendo a manha, só larga o objetivo quando a faixa está bem pior)
     if (g.t >= (S.stratT || 0)) { S.stratT = g.t + P.stratEvery; S.strat = strategy(g, p); }
     const dz = take ? 2.2 : 1.2;
     if (S.strat && S.strat.danger > dz) gx = M_lerp(gx, S.strat.x, Math.min(1, P.stratW * (S.strat.danger - dz) / 2 + 0.5));
-    // itens (não durante a manha)
-    const it = take ? null : pickItem(g, p, run);
+    // itens (não durante a manha; atirando na Janjinha, ainda pega um item que passa perto)
+    const it = take && AG.why !== 'alvo' ? null : pickItem(g, p, run);
     if (it) { gx = it.x; gy = clamp(it.y + 26, H * P.upper, H - 40); }
     // fazendo a manha o dedo vai direto (mechLag): seguir o chefão "pela metade" (followLag) não vale para um alvo que se mexe
     const k = 1 - Math.exp(-(P.planEvery / 60) / (take ? Math.min(P.followLag, P.mechLag != null ? P.mechLag : P.followLag) : P.followLag));
@@ -624,9 +770,9 @@ function pageMain(cfg) {
     const off = rnd() * TAU / P.dirs;
     for (let i = 0; i < P.dirs; i++) { const a = off + (i * TAU) / P.dirs, ca = Math.cos(a), sa = Math.sin(a); for (const r of P.dists) C.push(p.x + ca * r, p.y + sa * r); }
     const Hh = P.horizon, K = P.samples, vmax = P.vmax;
-    // manha de FICAR numa zona (objetivo com r >= 20: a META, embaixo do chefão tonto): o objetivo pesa mechHoldW
-    // vezes mais ("fico dentro do anel"), senão o ruído de avaliação do casual o tira do anel; o desvio continua valendo.
-    // Alvos de passagem (emenda, fio, Leão: r < 20) mantêm o peso normal.
+    // manha de FICAR numa zona (objetivo com r >= 20: a META, embaixo do chefão tonto, embaixo da Janjinha 'alvo'):
+    // o objetivo pesa mechHoldW vezes mais ("fico dentro do anel"), senão o ruído de avaliação do casual o tira do anel;
+    // o desvio continua valendo. Alvos de passagem (emenda, fio, cofre, Leão: r < 20) mantêm o peso normal.
     const wG = P.wGoal * (S.take && S.takeR >= 20 ? P.mechHoldW || 1 : 1);
     let bx = p.x, by = p.y, bc = 1e18, bHit = 9;
     for (let c = 0; c < C.length; c += 2) {
@@ -688,8 +834,9 @@ function pageMain(cfg) {
     let gy = H * cfg.ty;
     if (cfg.mode === 'ttk' && g.boss && g.boss.state === 'fight') {
       gx = g.boss.x;
-      // manha do chefão: vai no b.autoGoal (emenda, meta, fio, Leão, embaixo do chefão tonto)
-      const goal = cfg.mech !== 0 ? g.boss.autoGoal : null;
+      // manha do chefão: vai no b.autoGoal (emenda, meta, fio, cofre certo, Leão, embaixo do chefão tonto);
+      // o 'alvo' (embaixo da Janjinha) vale até com --mech 0: não é manha, é mirar em quem está batendo
+      const ag = g.boss.autoGoal, goal = ag && (cfg.mech !== 0 || ag.why === 'alvo') ? ag : null;
       if (goal && goal.x != null) { gx = goal.x; if (goal.y != null) gy = goal.y; }
     }
     if (cfg.mode === 'mid') { const st = curStage(); const e = st && st.mid && st.mid.ref; if (e && !e.dead) gx = e.x; }
@@ -704,11 +851,18 @@ function pageMain(cfg) {
   let ttkRec = null;
   function ttkTrack(g) {
     const b = g.boss;
-    if (b && b.state === 'fight' && !ttkRec) ttkRec = { id: b.id, w: cfg.forceWeapon, lv: cfg.forceLevel, start: g.t, phases: [], hp: b.maxHp };
+    if (b && b.state === 'fight' && !ttkRec) {
+      const pr = G.press || { R: 0, lv: 0 };
+      ttkRec = { id: b.id, w: cfg.forceWeapon, lv: cfg.forceLevel, start: g.t, phases: [], hp: b.maxHp, R: +pr.R.toFixed(3), plv: pr.lv | 0,
+        press0: b.press0 != null ? +(+b.press0).toFixed(3) : null, tl: bossTL(b) };
+    }
     if (ttkRec && !ttkRec.done && b && b.mech) snapMech(ttkRec, b);
     if (ttkRec && b && b.state === 'fight') { if (ttkRec.lastPh !== b.phase + '/' + (b.data && b.data.life)) { ttkRec.lastPh = b.phase + '/' + (b.data && b.data.life); ttkRec.phases.push(+b.ft.toFixed(1)); } ttkRec.ft = b.ft; ttkRec.fat = (b.data && b.data.fat) || 0; }
-    if (ttkRec && !ttkRec.done && (!b || b.state === 'dying' || b.state === 'leaving')) { ttkRec.done = true; ttkRec.time = +((ttkRec.ft || 0)).toFixed(1); HB.ttk.push(ttkRec); HB.done = 'ttk'; }
-    if (ttkRec && !ttkRec.done && b && b.ft > cfg.maxFight) { ttkRec.done = true; ttkRec.time = null; ttkRec.hpLeft = +(b.hp / b.maxHp).toFixed(2); HB.ttk.push(ttkRec); HB.done = 'ttk-timeout'; }
+    if (ttkRec && !ttkRec.done && (!b || b.state === 'dying' || b.state === 'leaving')) { ttkRec.done = true; ttkRec.time = +((ttkRec.ft || 0)).toFixed(1); ttkRec.d = tlDerive(ttkRec.tl); HB.ttk.push(ttkRec); HB.done = 'ttk'; }
+    if (ttkRec && !ttkRec.done && b && b.ft > cfg.maxFight) {
+      ttkRec.done = true; ttkRec.time = null; ttkRec.hpLeft = +(b.hp / b.maxHp).toFixed(2); ttkRec.lifeLeft = b.data && b.data.life; ttkRec.d = tlDerive(ttkRec.tl);
+      HB.ttk.push(ttkRec); HB.done = 'ttk-timeout';
+    }
   }
   function dpsTrack(g) {
     const D = HB.dps; if (!D) return;
@@ -728,7 +882,7 @@ function pageMain(cfg) {
       const kind = cfg.midKind;
       g.script = { gen: (function* () {
         yield 1.0;
-        if (cfg.mode === 'mid') { const pos = { trio: [180, -110], lobista_mor: [180, -100], servidor: [180, -100], comitiva: [-40, 90] }[kind]; G.spawnEnemy(kind, pos[0], pos[1]); }
+        if (cfg.mode === 'mid') { const pos = { trio: [180, -110], lobista_mor: [180, -100], servidor: [180, -100], impostometro: [180, -60], comitiva: [-40, 90] }[kind]; G.spawnEnemy(kind, pos[0], pos[1]); }
         else {
           HB.dps = { t0: G.game.t, dmg: 0, layout: cfg.layout };
           const H = G.H;
@@ -746,10 +900,20 @@ function pageMain(cfg) {
 // ------------------------------------------------------------------
 // Runner
 // ------------------------------------------------------------------
-const STAGE_OF = { centrao: 0, dilmae: 1, erika: 2, lule: 3 };
+const STAGE_OF = { centrao: 0, dilmae: 1, erika: 2, taxad: 3, lule: 4 };
 const MECH = opt.mech === 0 || opt.mech === '0' || opt.mech === 'false' ? 0 : 1;
-const MID_STAGE = { trio: 0, lobista_mor: 1, servidor: 2, comitiva: 3 };
+const MID_STAGE = { trio: 0, lobista_mor: 1, servidor: 2, impostometro: 3, comitiva: 4 };
 function parseUpg(s) { const o = {}; if (!s) return o; for (const kv of String(s).split(',')) { const [k, v] = kv.split(':'); if (k) o[k.trim()] = +v || 1; } return o; }
+// PRESSÃO na URL: --press R (o modo ttk usa 0,75 se nada vier; --press off solta), --heat H, --quinto 1
+const OFF = (v) => v === 'off' || v === 'none' || v === 'auto' || v === 'false';
+function pressFor(mode) {
+  if (opt.press != null && opt.press !== '' && !OFF(opt.press) && isFinite(+opt.press)) return Math.max(0, Math.min(1, +opt.press));
+  if (opt.press == null && mode === 'ttk') return 0.75;
+  return null;
+}
+const HEAT = opt.heat != null && opt.heat !== '' && isFinite(+opt.heat) ? Math.max(0, Math.min(1, +opt.heat)) : null;
+const QUINTO = opt.quinto === 1 || opt.quinto === '1' || opt.quinto === 'true' ? 1 : 0;
+const maxFightFor = (id) => +opt.maxFight || (id === 'lule' ? 900 : 480);
 
 async function runOne(browser, job) {
   const ctx = await browser.newContext({ viewport: { width: opt.w, height: opt.h }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
@@ -757,12 +921,17 @@ async function runOne(browser, job) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(String(e.stack || e.message).slice(0, 400)));
-  const cfg = Object.assign({ prof: PROFILES[job.profile] || PROFILES.casual, fast: opt.fast, shots: opt.shots, continues: opt.continues, ty: opt.ty, maxFight: 300, mech: MECH }, job);
+  const press = pressFor(job.mode);
+  const cfg = Object.assign({ prof: PROFILES[job.profile] || PROFILES.casual, fast: opt.fast, shots: opt.shots, continues: opt.continues, ty: opt.ty,
+    maxFight: maxFightFor(job.bossId), mech: MECH, press, heat: HEAT, quinto: QUINTO }, job);
   await page.addInitScript({ content: '(' + pageMain.toString() + ')(' + JSON.stringify(cfg) + ');' });
   const q = new URLSearchParams({ stage: String(job.stage), loop: String(job.loop || 1), skipui: '1', autocontinue: '1', ts: String(opt.ts), quality: String(opt.quality || 'high') });
   if (job.mode !== 'run') q.set('god', '1');
   if (job.mode === 'ttk' || job.bossOnly) q.set('boss', '1');
   if (cfg.mech === 0) q.set('mech', '0'); // o autopiloto do core também ignora a manha
+  if (press != null) q.set('press', String(press)); // PRESSÃO fixa (core: G.debug.pressFix)
+  if (HEAT != null) q.set('heat', String(HEAT));    // calor inicial (core: run.heat no startRun)
+  if (QUINTO) q.set('quinto', '1');                  // LULE 5.0 liberado (core: G.debug.forceQuinto)
   const file = path.resolve(__dirname, '..', (opt.page === 'index' ? 'index' : 'dev') + '.html');
   await page.goto('file://' + file + '?' + q.toString());
   const t0 = Date.now();
@@ -782,7 +951,14 @@ async function runOne(browser, job) {
     if (Math.abs(s.gt - lastGt) < 0.01) { if (++stall > 20) break; } else stall = 0;
     lastGt = s.gt;
   }
-  const data = await page.evaluate(() => { const g = window.G; return JSON.stringify({ hb: __hb, gErrors: g ? g.errors.slice(0, 10) : [], state: g && g.state, score: g && g.run && g.run.score, pix: g && g.run && g.run.pix, lives: g && g.run && g.run.lives, continues: g && g.run && g.run.continues, level: g && g.run && g.run.level, weapon: g && g.run && g.run.weapon, gt: __hb.gtTotal + (g && g.game ? g.game.t : 0) }); });
+  const data = await page.evaluate(() => {
+    const g = window.G, run = g && g.run;
+    try { if (window.__hbFinish) __hbFinish(); } catch (e) { if (!__hb.err) __hb.err = 'finish: ' + (e.stack || e); }
+    return JSON.stringify({ hb: __hb, gErrors: g ? g.errors.slice(0, 10) : [], errorCount: g ? g.errorCount || g.errors.length : 0, state: g && g.state, score: run && run.score, pix: run && run.pix,
+      lives: run && run.lives, continues: run && run.continues, level: run && run.level, weapon: run && run.weapon, gt: __hb.gtTotal + (g && g.game ? g.game.t : 0),
+      startStage: run && run.startStage, secret: run ? run.secret : null, extGiven: run ? run.extGiven || 0 : 0, gold: run ? run.gold || 0 : 0,
+      recurso: g && g.upg ? g.upg('recurso') : 0, savePix: g && g.save ? g.save.pix : null });
+  });
   const out = JSON.parse(data);
   out.pageErrors = pageErrors;
   out.real = Math.round((Date.now() - t0) / 1000);
@@ -834,7 +1010,46 @@ async function pool(jobs, n, fn) {
 }
 
 const mean = (a) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : NaN);
+const median = (a) => { const v = a.filter((x) => x != null && !isNaN(x)).sort((x, y) => x - y); if (!v.length) return NaN; const m = v.length >> 1; return v.length & 1 ? v[m] : (v[m - 1] + v[m]) / 2; };
 const f1 = (v) => (v == null || isNaN(v) ? '-' : (+v).toFixed(1));
+const f2 = (v) => (v == null || isNaN(v) ? '-' : (+v).toFixed(2));
+const nn = (a) => a.filter((x) => x != null && !isNaN(x));
+
+// Resumo de uma partida (modo run). cleared: com --through 1, chegou ao final (G.finishGame); senão, passou da fase pedida.
+// withinLimit: venceu usando no máximo o limite REAL de recursos (2 + upg 'recurso'; o bot joga com --continues 99).
+// oneCC: venceu sem nenhum recurso (com --through 1, numa partida começada na fase 1). quinto: a luta secreta.
+function runSummary(r) {
+  const hb = r.hb, job = r.job;
+  const st = hb.stages.find((s) => s.idx === job.stage);
+  const cleared = job.through ? hb.done === 'ending' || r.state === 'ending' : !!(st && st.clear);
+  const recurso = (job.upgrades && job.upgrades.recurso) | 0;
+  const limit = 2 + recurso;
+  // uma fase só: o runner pode ver o comecinho da fase seguinte antes de parar; conta só a fase pedida
+  const one = !job.through && st;
+  const cont = one ? (st.clear ? st.clear.continues : r.continues | 0) - st.contStart : r.continues | 0;
+  const deaths = one ? hb.deaths.filter((d) => d.stage === job.stage).length : hb.deaths.length;
+  const pix = one ? (st.clear ? st.clear.pixStage : (r.pix | 0) - st.pixRunStart) : r.pix | 0;
+  const sec = hb.secret || r.secret || null;
+  return {
+    cleared, continues: cont, limit, withinLimit: cleared && cont <= limit,
+    oneCC: cleared && cont === 0 && (!job.through || job.stage === 0),
+    deaths, extends: one ? st.ext | 0 : r.extGiven | 0, gold: one ? (st.clear && st.clear.gold ? 1 : 0) : r.gold | 0, pix, score: r.score | 0,
+    cpi: !!hb.cpiSeen, rMax: +(+hb.rMax || 0).toFixed(3),
+    quinto: { reached: sec === 'on' || sec === 'won' || sec === 'lost', won: sec === 'won', state: sec },
+    errors: (r.gErrors ? r.gErrors.length : 0) + (r.pageErrors ? r.pageErrors.length : 0) + (hb.err ? 1 : 0),
+  };
+}
+function summarizeRunTotals(results) {
+  const R = results.filter((r) => r && r.hb).map((r) => r.run || (r.run = runSummary(r)));
+  const n = R.length, cnt = (f) => R.filter(f).length;
+  return {
+    runs: n, cleared: cnt((x) => x.cleared), withinLimit: cnt((x) => x.withinLimit), oneCC: cnt((x) => x.oneCC),
+    contMean: +mean(R.map((x) => x.continues)).toFixed(2), deathsMean: +mean(R.map((x) => x.deaths)).toFixed(1),
+    extendsMedian: median(R.map((x) => x.extends)), goldMean: +mean(R.map((x) => x.gold)).toFixed(2),
+    pixMean: Math.round(mean(R.map((x) => x.pix))), pixMin: n ? Math.min(...R.map((x) => x.pix)) : null, pixMax: n ? Math.max(...R.map((x) => x.pix)) : null,
+    cpi: cnt((x) => x.cpi), quintoReached: cnt((x) => x.quinto.reached), quintoWon: cnt((x) => x.quinto.won), errors: R.reduce((s, x) => s + x.errors, 0),
+  };
+}
 
 function summarizeRuns(results) {
   const byStage = {};
@@ -843,8 +1058,35 @@ function summarizeRuns(results) {
     for (const st of r.hb.stages) {
       if (!r.job.through && st.idx !== r.job.stage) continue;
       const k = st.idx;
-      const S = byStage[k] || (byStage[k] = { runs: 0, deaths: [], bossDeaths: [], midDeaths: [], bombs: [], bossTime: [], midTime: [], midFled: 0, cleared: 0, pix: [], score: [], ranks: {}, lvBoss: [], lvStart: [], cont: [], killers: {}, bossSecs: {}, unavoidable: 0, deathsTotal: 0, pDrops: [], pGot: [], lifeDrops: 0, bombDrops: 0, stolen: [], mOk: [], mMiss: [], mStuns: [], mGoals: [], mNoticed: [], mTake: [], mIn: [], mKind: null });
+      const S = byStage[k] || (byStage[k] = { runs: 0, deaths: [], bossDeaths: [], midDeaths: [], bombs: [], bossTime: [], midTime: [], midFled: 0, cleared: 0, pix: [], score: [], ranks: {}, lvBoss: [], lvStart: [], cont: [], killers: {}, bossSecs: {}, unavoidable: 0, deathsTotal: 0, pDrops: [], pGot: [], lifeDrops: 0, bombDrops: 0, stolen: [], mOk: [], mMiss: [], mStuns: [], mGoals: [], mNoticed: [], mTake: [], mIn: [], mKind: null,
+        // PRESSÃO e recompensas
+        rMean: [], rAvgCore: [], rBoss: [], cpiN: 0, rN: 0, ext: [], gold: 0, bossFat: 0, bossP5: 0, bossFights: 0,
+        // por chefão: ÚLTIMO RECURSO, Pavanatto, cofres do Taxad, Janjinha e a linha do tempo do Lule
+        p5: [], pav: 0, pavFights: 0, cf: { rounds: 0, noticed: 0, wrong: 0 }, aliqMax: [], janjKo: 0, janjLeft: 0, janjT: [], janjFights: 0,
+        life1: [], revive: [], life2: [], life2Rest: [], life3: [], quintoReached: 0, quintoWon: 0, alvoT: [] });
       S.runs++;
+      if (st.rN) { S.rMean.push(st.rSum / st.rN); S.cpiN += st.cpiN; S.rN += st.rN; }
+      if (st.clear) { if (st.clear.rAvg != null) S.rAvgCore.push(st.clear.rAvg); S.ext.push(st.ext | 0); if (st.clear.gold) S.gold++; }
+      if (st.boss) {
+        const B = st.boss, d = B.d || {}, m = B.mech || {};
+        S.bossFights++;
+        if (B.rStart != null) S.rBoss.push(B.rStart);
+        if (B.fat > 0) S.bossFat++;
+        if (d.p5 != null) { S.p5.push(d.p5); S.bossP5++; }
+        if (B.id === 'erika') { S.pavFights++; if (m.pav === 1) S.pav++; }
+        if (B.cf) { S.cf.rounds += B.cf.rounds; S.cf.noticed += B.cf.noticed; S.cf.wrong += B.cf.wrong; }
+        if (m.aliqMax != null) S.aliqMax.push(m.aliqMax);
+        if (B.id === 'lule') {
+          if (d.janj != null && (B.tl && B.tl.janjStart != null)) { S.janjFights++; S.janjT.push(d.janj); if (d.janjKo) S.janjKo++; if (d.janjLeft) S.janjLeft++; }
+          if (d.life1 != null) S.life1.push(d.life1);
+          if (d.revive != null) S.revive.push(d.revive);
+          if (d.life2 != null) S.life2.push(d.life2);
+          if (d.life2Rest != null) S.life2Rest.push(d.life2Rest);
+          if (d.life3 != null) S.life3.push(d.life3);
+          if (d.quinto) { S.quintoReached++; if (d.quinto === 'won') S.quintoWon++; }
+          S.alvoT.push(B.alvoT || 0);
+        }
+      }
       S.deaths.push(st.deaths); S.bombs.push(st.bombs);
       S.lvStart.push(st.lvStart);
       if (st.boss && st.boss.mech) { S.mKind = st.boss.mech.kind; S.mOk.push(st.boss.mech.ok); S.mMiss.push(st.boss.mech.miss); S.mStuns.push(st.boss.mech.stuns); S.mGoals.push(st.boss.goals || 0); S.mNoticed.push(st.boss.noticed || 0); S.mTake.push(st.boss.takeT || 0); S.mIn.push(st.boss.inT || 0); }
@@ -880,6 +1122,37 @@ function printRunTable(byStage, label) {
         ' | acerto ' + (S.mechRate != null ? Math.round(S.mechRate * 100) + '%' : '-') + ' | objetos vistos/notados méd ' + f1(mean(S.mGoals)) + '/' + f1(mean(S.mNoticed)) + ' | s na manha/no alvo ' + f1(mean(S.mTake)) + '/' + f1(mean(S.mIn)) +
         ' | por partida ' + S.mOk.map((v, i) => v + '/' + S.mMiss[i] + '/' + S.mStuns[i]).join(' '));
     }
+    console.log('     PRESSÃO: R méd ' + f2(mean(S.rMean)) + ' (R̄ do core ' + f2(mean(S.rAvgCore)) + ') | R no chefão ' + f2(mean(S.rBoss)) +
+      ' | CPI! ' + (S.rN ? Math.round((S.cpiN / S.rN) * 1000) / 10 : 0) + '% do tempo | vidas extras ' + f1(mean(S.ext)) + ' | carimbo de ouro ' + S.gold + '/' + S.cleared);
+    if (S.bossFights) {
+      let s = '     chefão: tempo mediana ' + f1(median(S.bossTime)) + ' s | mortes no chefe mediana ' + f1(median(S.bossDeaths)) +
+        ' | ÚLTIMO RECURSO ' + S.bossP5 + '/' + S.bossFights + ' (começa méd ' + f1(mean(S.p5)) + ' s) | cansou ' + S.bossFat + '/' + S.bossFights;
+      if (S.pavFights) s += ' | Pavanatto ' + S.pav + '/' + S.pavFights;
+      if (S.cf.rounds) s += ' | cofres: rodadas ' + S.cf.rounds + ', notadas ' + S.cf.noticed + ', perdeu o cofre ' + S.cf.wrong + ' | alíquota máx méd ' + f1(mean(S.aliqMax));
+      console.log(s);
+      if (S.life1.length) {
+        console.log('     Lule: vida 1 ' + f1(median(S.life1)) + ' s | volta ' + f1(median(S.revive)) + ' s | Janjinha ' + S.janjFights + ' lutas, t méd ' + f1(mean(S.janjT)) +
+          ' s, nocaute ' + S.janjKo + ' / embarcou sozinha ' + S.janjLeft + ' | vida 2 ' + f1(median(S.life2)) + ' s (resto sem ela ' + f1(median(S.life2Rest)) + ') | LULE 5.0 ' + S.quintoReached +
+          (S.quintoReached ? ' (venceu ' + S.quintoWon + ', vida 3 ' + f1(median(S.life3)) + ' s)' : '') + ' | s mirando nela ' + f1(mean(S.alvoT)) + '   (medianas)');
+      }
+    }
+  }
+}
+function printRunTotals(T, label) {
+  console.log('--- ' + label + ' (partidas): venceu ' + T.cleared + '/' + T.runs + ' | withinLimit ' + T.withinLimit + '/' + T.runs + ' | oneCC ' + T.oneCC + '/' + T.runs +
+    ' | recursos méd ' + f2(T.contMean) + ' | mortes méd ' + f1(T.deathsMean) + ' | vidas extras (mediana) ' + f1(T.extendsMedian) + ' | carimbos méd ' + f2(T.goldMean) +
+    ' | Pix méd R$ ' + T.pixMean + ' (' + T.pixMin + '-' + T.pixMax + ') | CPI! ' + T.cpi + '/' + T.runs + ' | LULE 5.0 ' + T.quintoReached + '/' + T.runs + ' (venceu ' + T.quintoWon + ') | erros ' + T.errors);
+}
+// ttk: mediana das armas por chefão/nível (+ vida 1 / Janjinha / resto da vida 2 do Lule)
+function printTtkMedians(rows) {
+  const by = {};
+  for (const r of rows) { const k = r.boss + ' L' + r.lv; (by[k] || (by[k] = [])).push(r); }
+  console.log('\nmedianas (armas) | chefão | nv | tempo (s) min-max | timeouts | cansou | P5 começa | manha ok/miss/stuns | Lule vida1 / Janjinha / vida2 resto / LULE 5.0');
+  for (const k of Object.keys(by)) {
+    const a = by[k], t = nn(a.map((r) => r.time));
+    const lu = a[0].boss === 'lule' ? ' | ' + f1(median(a.map((r) => r.d && r.d.life1))) + ' / ' + f1(median(a.map((r) => r.d && r.d.janj))) + ' / ' + f1(median(a.map((r) => r.d && r.d.life2Rest))) + ' / ' + f1(median(a.map((r) => r.d && r.d.life3))) : '';
+    console.log([k, f1(median(t)) + ' (' + (t.length ? Math.min(...t) + '-' + Math.max(...t) : '-') + ')', a.filter((r) => r.time == null).length, a.filter((r) => r.fat > 0).length + '/' + a.length,
+      f1(median(a.map((r) => r.d && r.d.p5))), f1(median(a.map((r) => r.ok))) + '/' + f1(median(a.map((r) => r.miss))) + '/' + f1(median(a.map((r) => r.stuns)))].join(' | ') + lu);
   }
 }
 
@@ -891,11 +1164,15 @@ function printRunTable(byStage, label) {
   const upgrades = parseUpg(opt.upg);
   if (opt.mode === 'run') {
     const profs = String(opt.profile).split(',');
-    for (const pf of profs) for (let r = 0; r < opt.runs; r++) jobs.push({ mode: 'run', profile: pf, stage: +opt.stage, through: +opt.through, seed: opt.seed + r, weapon: opt.weapon, upgrades, loop: opt.loop,
+    const stages = String(opt.stage).split(',').map(Number).filter((s) => s >= 0 && s <= 4);
+    for (const pf of profs) for (const sg of stages) for (let r = 0; r < opt.runs; r++) jobs.push({ mode: 'run', profile: pf, stage: sg, through: +opt.through, seed: opt.seed + r, weapon: opt.weapon, upgrades, loop: opt.loop,
       bossOnly: +opt.bossOnly || 0, startLv: +opt.startLv || 0, startW: opt.startW || null });
   } else if (opt.mode === 'ttk') {
-    for (const id of String(opt.bosses).split(',')) for (const w of String(opt.weapons).split(',')) for (const lv of String(opt.levels).split(',').map(Number))
-      jobs.push({ mode: 'ttk', profile: 'good', stage: STAGE_OF[id], seed: opt.seed, forceWeapon: w, forceLevel: lv, upgrades, loop: opt.loop, bossId: id });
+    for (const id of String(opt.bosses).split(',')) {
+      if (STAGE_OF[id] == null) { console.log('chefão desconhecido: ' + id + ' (use ' + Object.keys(STAGE_OF).join(',') + ')'); continue; }
+      for (const w of String(opt.weapons).split(',')) for (const lv of String(opt.levels).split(',').map(Number))
+        jobs.push({ mode: 'ttk', profile: 'good', stage: STAGE_OF[id], seed: opt.seed, forceWeapon: w, forceLevel: lv, upgrades, loop: opt.loop, bossId: id });
+    }
   } else if (opt.mode === 'mid') {
     for (const kind of Object.keys(MID_STAGE)) for (const w of String(opt.weapons).split(',')) for (const lv of String(opt.levels).split(',').map(Number))
       jobs.push({ mode: 'mid', profile: 'good', stage: MID_STAGE[kind], seed: opt.seed, forceWeapon: w, forceLevel: lv, midKind: kind, upgrades, loop: opt.loop });
@@ -908,10 +1185,15 @@ function printRunTable(byStage, label) {
     try { r = await runOne(browser, job); } catch (e) { r = { job, err: String(e.stack || e) }; }
     const tag = job.mode + ' ' + (job.profile || '') + ' s' + job.stage + ' seed' + job.seed + (job.forceWeapon ? ' ' + job.forceWeapon + job.forceLevel : '') + (job.midKind ? ' ' + job.midKind : '') + (job.layout ? ' ' + job.layout : '');
     if (job.mode === 'run' && r.hb) {
-      const st = r.hb.stages.map((s) => 'F' + (s.idx + 1) + ':' + s.deaths + 'm' + (s.boss ? '/chefe ' + s.boss.deaths + 'm ' + (s.boss.end != null ? s.boss.end + 's' : 'x') : '') + (s.clear ? ' ' + s.clear.rank + ' R$' + s.clear.pixStage : ''));
-      console.log('[' + (i + 1) + '/' + jobs.length + '] ' + tag + ' -> ' + st.join(' | ') + ' | recont ' + r.continues + ' | ' + r.real + 's real | err ' + (r.hb.err || r.gErrors.length || r.pageErrors.length ? JSON.stringify([r.hb.err, r.gErrors[0], r.pageErrors[0]]) : 0));
+      r.run = runSummary(r);
+      const st = r.hb.stages.map((s) => 'F' + (s.idx + 1) + ':' + s.deaths + 'm' + (s.boss ? '/chefe ' + s.boss.deaths + 'm ' + (s.boss.end != null ? s.boss.end + 's' : 'x') : '') + (s.clear ? ' ' + s.clear.rank + ' R$' + s.clear.pixStage : '') +
+        (s.rN ? ' R' + (s.rSum / s.rN).toFixed(2) : ''));
+      const R = r.run;
+      console.log('[' + (i + 1) + '/' + jobs.length + '] ' + tag + ' -> ' + st.join(' | ') + ' | recont ' + R.continues + (R.withinLimit ? ' (no limite ' + R.limit + ')' : '') + (R.oneCC ? ' 1CC' : '') +
+        (R.quinto.reached ? ' | LULE 5.0 ' + R.quinto.state : '') + ' | R$ ' + R.pix + ' | ' + r.real + 's real | err ' + (r.hb.err || r.gErrors.length || r.pageErrors.length ? JSON.stringify([r.hb.err, r.gErrors[0], r.pageErrors[0]]) : 0));
     } else if (r.hb) {
-      const v = job.mode === 'ttk' ? JSON.stringify(r.hb.ttk[0] || null) : job.mode === 'dps' ? JSON.stringify(r.hb.dps && r.hb.dps.dps) : JSON.stringify(r.hb.stages[0] && r.hb.stages[0].mid);
+      // (a linha do tempo inteira fica no summary.json; aqui só os tempos derivados)
+      const v = job.mode === 'ttk' ? JSON.stringify(r.hb.ttk[0] || null, (k, val) => (k === 'tl' || k === 'lastPh' || k[0] === '_' ? undefined : val)) : job.mode === 'dps' ? JSON.stringify(r.hb.dps && r.hb.dps.dps) : JSON.stringify(r.hb.stages[0] && r.hb.stages[0].mid);
       console.log('[' + (i + 1) + '/' + jobs.length + '] ' + tag + ' -> ' + v + (r.hb.err ? ' ERR ' + r.hb.err.slice(0, 200) : ''));
     } else console.log('[' + (i + 1) + '/' + jobs.length + '] ' + tag + ' FAILED ' + (r.err || '').slice(0, 300));
     return r;
@@ -921,16 +1203,32 @@ function printRunTable(byStage, label) {
   if (opt.mode === 'run') {
     const profs = String(opt.profile).split(',');
     summary.byProfile = {};
-    for (const pf of profs) { const bs = summarizeRuns(results.filter((r) => r && r.job && r.job.profile === pf)); summary.byProfile[pf] = bs; printRunTable(bs, pf); }
-  } else if (opt.mode === 'ttk') {
-    summary.ttk = results.map((r) => { const t = r.hb && r.hb.ttk[0]; return { boss: r.job.bossId, w: r.job.forceWeapon, lv: r.job.forceLevel, mech: MECH, time: t ? t.time : null, hpLeft: t && t.hpLeft, fat: t && t.fat, phases: t && t.phases, ok: t && t.mech ? t.mech.ok : null, miss: t && t.mech ? t.mech.miss : null, stuns: t && t.mech ? t.mech.stuns : null, errors: r.gErrors ? r.gErrors.length : null, pageErrors: r.pageErrors ? r.pageErrors.length : null }; });
-    console.log('\nmanha: ' + (MECH ? 'faz (--mech 1)' : 'ignora (--mech 0, mech=0 na URL)'));
-    console.log('chefe | arma | nv | tempo (s) | fases (ft) | cansaço | manha ok/miss/stuns');
-    for (const r of results) {
-      const t = r.hb && r.hb.ttk[0], m = t && t.mech;
-      console.log([r.job.bossId, r.job.forceWeapon, r.job.forceLevel, t ? (t.time != null ? t.time : '>' + 300 + ' (sobra ' + t.hpLeft + ')') : 'ERR', t ? t.phases.join(',') : '', t ? t.fat.toFixed(2) : '',
-        m ? m.kind + ' ' + m.ok + '/' + m.miss + '/' + m.stuns : '-'].join(' | '));
+    summary.byProfileRuns = {};
+    for (const pf of profs) {
+      const rs = results.filter((r) => r && r.job && r.job.profile === pf);
+      const bs = summarizeRuns(rs); summary.byProfile[pf] = bs; printRunTable(bs, pf);
+      const T = summarizeRunTotals(rs); summary.byProfileRuns[pf] = T; printRunTotals(T, pf);
     }
+  } else if (opt.mode === 'ttk') {
+    summary.ttk = results.map((r) => {
+      const t = r.hb && r.hb.ttk[0], m = t && t.mech;
+      return { boss: r.job.bossId, w: r.job.forceWeapon, lv: r.job.forceLevel, mech: MECH, press: pressFor('ttk'), R: t ? t.R : null, press0: t ? t.press0 : null, hp: t ? Math.round(t.hp) : null,
+        time: t ? t.time : null, hpLeft: t && t.hpLeft, fat: t && t.fat, phases: t && t.phases, ok: m ? m.ok : null, miss: m ? m.miss : null, stuns: m ? m.stuns : null,
+        pav: m && m.pav != null ? m.pav : null, aliqMax: m && m.aliqMax != null ? m.aliqMax : null, janj: m && m.janj ? m.janj : null, d: t ? t.d : null,
+        errors: r.gErrors ? r.gErrors.length : null, pageErrors: r.pageErrors ? r.pageErrors.length : null, err: r.hb ? r.hb.err : r.err };
+    });
+    console.log('\nmanha: ' + (MECH ? 'faz (--mech 1)' : 'ignora (--mech 0, mech=0 na URL)') + ' | PRESSÃO ' + (pressFor('ttk') != null ? 'fixa em ' + pressFor('ttk') : 'livre'));
+    console.log('chefe | arma | nv | tempo (s) | fases (ft) | cansaço | P5 começa | manha ok/miss/stuns | extra');
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i], t = r.hb && r.hb.ttk[0], m = t && t.mech, s = summary.ttk[i], d = s.d || {};
+      let extra = '';
+      if (s.pav != null) extra += 'pav ' + s.pav + ' ';
+      if (s.aliqMax != null) extra += 'alíquota máx ' + s.aliqMax + ' ';
+      if (r.job.bossId === 'lule' && t) extra += 'vida1 ' + f1(d.life1) + ' volta ' + f1(d.revive) + ' Janjinha ' + f1(d.janj) + (d.janjKo ? ' (nocaute)' : d.janjLeft ? ' (embarcou)' : '') + ' vida2 ' + f1(d.life2) + ' (resto ' + f1(d.life2Rest) + ')' + (d.life3 != null ? ' LULE 5.0 ' + f1(d.life3) + ' ' + d.quinto : '');
+      console.log([r.job.bossId, r.job.forceWeapon, r.job.forceLevel, t ? (t.time != null ? t.time : '>' + maxFightFor(r.job.bossId) + ' (sobra ' + t.hpLeft + ')') : 'ERR ' + String(r.err || (r.hb && r.hb.err) || '').slice(0, 120), t ? t.phases.join(',') : '', t ? t.fat.toFixed(2) : '',
+        f1(d.p5), m ? m.kind + ' ' + m.ok + '/' + m.miss + '/' + m.stuns : '-', extra + (s.errors || s.pageErrors ? ' ERROS ' + s.errors + '/' + s.pageErrors : '')].join(' | '));
+    }
+    printTtkMedians(summary.ttk);
   } else if (opt.mode === 'dps') {
     console.log('\nlayout | arma | nv | dps');
     for (const r of results) console.log([r.job.layout, r.job.forceWeapon, r.job.forceLevel, r.hb && r.hb.dps ? r.hb.dps.dps : 'ERR'].join(' | '));

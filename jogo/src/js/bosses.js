@@ -60,22 +60,62 @@
     G.text(x, y, str, { color: color || G.C.yellow, size: 13, life: 2.4, vy: -12 });
   }
   function say(b, s, dur) { G.say(b, s, dur || 2); }
-  // Cansaço (anti-empate): luta normal termina antes; se passar de ~95 s (def.fatStart) o político
-  // cansa e passa a levar mais dano (até 2× 60 s depois). Usa b.ft (tempo de luta de relógio, corre até no tonto).
-  // Multiplicador de dano (todo quadro, teto 4): base × (1 + cansaço), base = tonto (d.stunMul) →
+
+  // ---------- PRESSÃO (SPEC5 §3; o core calcula G.press, aqui só lemos com padrão) ----------
+  // Variantes por nível (travadas por turno em b.data.pl / b.data.pR por pLatch): lv ≥ 3 +1 tiro por leque mirado /
+  // jorro / braço de espiral e esperas ×0,9; lv 5 +1 de novo, esperas ×0,82 e o cpiCo. Nunca em telegrafia, aviso,
+  // delay, aviso de laser, fresta de parede nem tempo de manha.
+  const PRESS0 = { R: 0, lv: 0 };
+  function press() { return G.press || PRESS0; }
+  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0); }
+  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + 0.25 * (R || 0))); }
+  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? 0.82 : lv >= 3 ? 0.9 : 1); }
+  function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; }
+  // velocidade de um tiro reapontado à mão (o G.fire já aplica isto no disparo): × (1 + SPD × R), teto SPD_CAP
+  function pSpd(v) {
+    const P = G.PRESS, cap = (P && P.SPD_CAP) || 250;
+    return v < cap ? Math.min(cap, v * (1 + ((P && P.SPD != null) ? P.SPD : 0.22) * (press().R || 0))) : v;
+  }
+  // + no multiplicador de todo tonto (G.PRESS.STUN; 0,3 se o core não tiver)
+  function pressStun() { const P = G.PRESS; return P && P.STUN != null ? P.STUN : 0.3; }
+  // CPI!: enquanto o turno foi travado no nível 5, um leque mirado de 3 a cada pW(3,2) s do relógio do chefão
+  // (pula no tonto, na demonstração e com d.hold ligado; o d.hold do Centrão é uma lista por cabeça: não conta)
+  const flagOn = (v) => !!v && typeof v !== 'object';
+  function* cpiCo(b) {
+    const d = b.data;
+    for (;;) {
+      yield () => d.pl === 5;
+      yield pW(3.2, 5);
+      if (d.pl !== 5 || d.stunT > 0 || flagOn(d.demo) || flagOn(d.hold)) continue;
+      const x = b.x, y = b.y + 40;
+      fan(x, y, aimFrom(x, y), 3, 0.4, 130, { style: 'small', color: '#ff2a4a' });
+    }
+  }
+  // ÚLTIMO RECURSO (5º turno, last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×1,5) contra o empate
+  const P5 = {
+    LIMIT: 30, MUL: 1.5, TAG: { text: 'ÚLTIMO RECURSO', color: '#ff2a4a' },
+    TAG2: { text: 'SEM SAÍDA ×1,5', color: '#ff2a4a' },
+  };
+  function lastStand(b) { const d = b.data; d.p5 = true; d.p5T0 = b.ft; d.p5Mul = 1; d.mechCd = 0; }
+  function p5Update(b) { const d = b.data; if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) d.p5Mul = P5.MUL; }
+
+  // Cansaço (anti-empate): luta normal termina antes; passou de def.fatStart o político cansa e passa a levar mais
+  // dano (até ×1,75, FAT_FULL s depois). Usa b.ft (tempo de luta de relógio, corre até no tonto).
+  // Multiplicador de dano (todo quadro, teto 4): base × (1 + cansaço) × SEM SAÍDA, base = tonto (d.stunMul) →
   // armadura da manha (d.armor) → armadura antiga da fase (d.dmgBase) → 1. Escreve também b.hudTag.
-  const FAT_START = 95, FAT_FULL = 60, MUL_CAP = 4;
+  const FAT_START = 95, FAT_FULL = 90, FAT_MAX = 0.75, MUL_CAP = 4;
   function fatigue(b, line) {
-    const d = b.data, f = clamp((b.ft - (b.def.fatStart || FAT_START)) / FAT_FULL, 0, 1);
+    const d = b.data, f = FAT_MAX * clamp((b.ft - (b.def.fatStart || FAT_START)) / FAT_FULL, 0, 1);
     if (f > 0 && !d.fatSaid) { d.fatSaid = 1; say(b, line || 'CANSEI...', 2); G.text(b.x, b.y + 60, 'CANSOU!', { color: G.C.yellow, size: 14, life: 1.4 }); }
     d.fat = f;
+    p5Update(b);
     applyMul(b);
   }
   function applyMul(b) {
     const d = b.data, st = d.stunT > 0;
     const base = st ? d.stunMul : (d.armor != null ? d.armor : (d.dmgBase != null ? d.dmgBase : 1));
-    b.dmgMul = Math.min(MUL_CAP, base * (1 + (d.fat || 0)));
-    b.hudTag = st ? d.stunTag : (d.armorTag || null);
+    b.dmgMul = Math.min(MUL_CAP, base * (1 + (d.fat || 0)) * (d.p5Mul || 1));
+    b.hudTag = st ? d.stunTag : (d.armorTag || (d.p5 ? (d.p5Mul > 1 ? P5.TAG2 : P5.TAG) : null));
   }
 
   // ---------- manhas (mecânica de cada chefão além do tiro; ENGINE §5.1) ----------
@@ -125,13 +165,15 @@
   // ×2,2 / ×2 (uma casa, vírgula)
   function fmtMul(m) { const v = Math.round(m * 10) / 10; return v % 1 === 0 ? String(v) : v.toFixed(1).replace('.', ','); }
   // TONTO = PAUSA: nada de corrotina, relógio, movimento nem cronômetro do chefão; objetos da manha continuam.
-  // o = { tag, color, text, textColor, say, clear = true, onEnd, sfx = 'mech_ok' }
+  // o = { tagWord = 'BRECHA', color, text, textColor, say, clear = true, onEnd, sfx = 'mech_ok' }
+  // A PRESSÃO paga: mul + PRESS.STUN × R (teto 4), e a etiqueta sai sempre do mul final ('BRECHA ×2,5').
   function stunStart(b, dur, mul, o) {
     o = o || {};
     const d = b.data;
     if (L2()) dur *= 0.85;
+    mul = Math.min(MUL_CAP, mul + pressStun() * (press().R || 0));
     d.stunT = d.stunT0 = dur; d.stunMul = mul;
-    d.stunTag = { text: o.tag || 'BRECHA ×' + fmtMul(mul), color: o.color || '#ffd23f' };
+    d.stunTag = { text: (o.tagWord || 'BRECHA') + ' ×' + fmtMul(mul), color: o.color || '#ffd23f' };
     d.stunOnEnd = o.onEnd || null;
     if (o.clear !== false) G.clearBullets(true); // os tiros viram Pix
     G.hitstop(0.06); G.shake(5); sfx('stamp'); sfx(o.sfx || 'mech_ok');
@@ -448,8 +490,11 @@
   // APEX_Y = altura do paraquedas (× H); STUN = tonto por turno; HEAL = cura de emenda perdida (× HP máx).
   const EM = {
     APEX_Y: 0.28, FALL: 50, FALL_L2: 62, FALL_TUT: 40, CATCH_R: 13, SWAY: 18, SWAY_HZ: 0.45,
-    STUN: [3.5, 4.0, 4.0, 3.5], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
+    STUN: [3.5, 4.0, 4.0, 3.5, 3.5], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
     FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9, RACE_DY: 100,
+    // 5º turno FUNDÃO ELEITORAL: giro das cabeças ×1,15, espiral de moedas (braços, passo, px/s, rad por passo),
+    // leque mirado de cédulas (a cada P5_FAN s antes do pW), 2 emendas a cada P5_EM s (a 1ª P5_EM0 s depois do banner)
+    P5_ORBIT: 1.15, P5_ARMS: 4, P5_STEP: 0.13, P5_SPD: 95, P5_TURN: 0.11, P5_FAN: 3.2, P5_FAN_SPD: 130, P5_EM: 6, P5_EM0: 1.0,
   };
   const SIDE = [
     { main: '#e63946', dark: '#9e1b28', acc: '#ffffff', name: 'vermelho' },
@@ -965,7 +1010,7 @@
     if (first) G.say(e, 'QUEM PAGA MAIS LEVA!', 1.6);
   }
   G.Enemies.define('bs_apoio', {
-    hp: 6, r: 11, score: 220, pix: 2, harmless: true, keepOffscreen: true,
+    hp: 6, r: 11, score: 220, pix: 2, harmless: true, keepOffscreen: true, noPress: true, // a PRESSÃO não engorda o apoio
     init(e, o) {
       const d = e.data;
       d.spd = o.spd || 48; d.side = o.side || (e.x < G.W / 2 ? -1 : 1); d.v = M.randi(0, 2); d.ph = Math.random() * TAU;
@@ -1057,10 +1102,10 @@
       const i = vis[k % vis.length];
       d.popT[i] = 1; d.warn[i] = 0.45; d.hmood[i] = 'angry'; d.hold[i] = 1.2;
       yield 0.42;
-      const nb = L2() ? 5 : 4;
+      const nb0 = L2() ? 5 : 4, nb = pN(nb0, d.pl), spr = (0.5 * (nb - 1)) / (nb0 - 1); // PRESSÃO: +tiros, mesma fresta
       for (const s of cenSources(b)) {
         const hp = cenHeadPos(b, i, s.ghost ? s.x : null);
-        fan(hp[0], hp[1] + 6, aimFrom(hp[0], hp[1]), nb, 0.5, spd || 138, { style: 'bs_171', color: s.ghost ? COL.violet : COL.pink });
+        fan(hp[0], hp[1] + 6, aimFrom(hp[0], hp[1]), nb, spr, spd || 138, { style: 'bs_171', color: s.ghost ? COL.violet : COL.pink });
       }
       sfx('enemy_shot2');
       d.hmood[i] = 'laugh';
@@ -1071,7 +1116,7 @@
   function* cenBg(b, every) {
     const d = b.data;
     for (;;) {
-      yield every * M.rand(0.8, 1.2);
+      yield pW(every, d.pl) * M.rand(0.8, 1.2);
       if (d.orbit) continue;
       const vis = cenVisible(b).filter((i) => d.hold[i] <= 0);
       if (!vis.length) continue;
@@ -1111,7 +1156,7 @@
       const q = coins[dir > 0 ? j : coins.length - 1 - j];
       if (!q || q.dead) continue;
       const a = aimFrom(q.x, q.y);
-      q.update = null; q.ang = a; q.spd = 50 * g.diff; q.accel = 320; q.maxSpd = 205 * g.diff;
+      q.update = null; q.ang = a; q.spd = pSpd(50 * g.diff); q.accel = 320; q.maxSpd = pSpd(205 * g.diff);
       q.vx = Math.cos(a) * q.spd; q.vy = Math.sin(a) * q.spd;
       sfx('enemy_shot');
       yield 0.075;
@@ -1193,7 +1238,7 @@
     d.emTut = false;
     if (stunning(b)) {
       // P4: a 2ª mala no mesmo tonto estica a brecha
-      if (b.phase === 3) { stunExtend(b, 2, 5); G.text(G.W / 2, G.H * 0.5, 'MAIS VERBA, MAIS BASE!', { color: MECH.GOLD, size: 13, life: 1.4, stroke: true }); }
+      if (b.phase >= 3) { stunExtend(b, 2, 5); G.text(G.W / 2, G.H * 0.5, 'MAIS VERBA, MAIS BASE!', { color: MECH.GOLD, size: 13, life: 1.4, stroke: true }); }
       return;
     }
     cenStun(b);
@@ -1204,9 +1249,9 @@
     d.orbitW = d.orbit ? d.orbit.w : null;
     if (d.orbit) d.orbit.w = 0;
     stunStart(b, EM.STUN[ph] || EM.STUN[0], EM.MUL, {
-      tag: 'BRECHA ×2,2', text: 'BASE DO ZÉ!', say: M.pick(['TÔ CONTIGO, ZÉ!', 'QUEM PAGA MANDA!', 'AGORA SOU BASE DO ZÉ!']), onEnd: cenStunEnd,
+      text: 'BASE DO ZÉ!', say: M.pick(['TÔ CONTIGO, ZÉ!', 'QUEM PAGA MANDA!', 'AGORA SOU BASE DO ZÉ!']), onEnd: cenStunEnd,
     });
-    if (ph === 3) G.text(G.W / 2, G.H * 0.5, 'A BASE PAROU PRA CONTAR!', { color: MECH.GOLD, size: 13, life: 1.6, stroke: true });
+    if (ph >= 3) G.text(G.W / 2, G.H * 0.5, 'A BASE PAROU PRA CONTAR!', { color: MECH.GOLD, size: 13, life: 1.6, stroke: true });
     let first = true;
     for (const e of G.game.enemies) if (!e.dead && e.kind === 'bs_apoio' && !e.data.traitor) { apoioTraitor(e, first); first = false; }
     d.laughT = d.stunT;
@@ -1370,7 +1415,7 @@
     d.armRT = 1;
     sfx('charge');
     yield 0.55;
-    const n = L2() ? 10 : 8;
+    const n = pN(L2() ? 10 : 8, d.pl); // PRESSÃO: mais varreduras (cada leque continua com 4)
     for (let i = 0; i < n; i++) {
       for (const s of cenSources(b)) {
         const a0 = DOWN - s.m * (0.95 - i * 0.18);
@@ -1386,7 +1431,7 @@
     const d = b.data;
     for (let r = 0; r < k; r++) {
       d.sqT = 0.12; d.mouthT = 0.4;
-      const n = L2() ? 24 : 20;
+      const n = pRing(L2() ? 24 : 20, d.pR);
       ring(b.x, b.y + 10, n, 100, { style: 'bs_171', color: r % 2 ? COL.magenta : COL.pink }, Math.random() * TAU);
       sfx('enemy_shot2');
       yield 0.65;
@@ -1427,15 +1472,15 @@
     let loop = 0;
     for (;;) {
       yield* cenHeads(b, 3);
-      yield 0.7;
+      yield pW(0.7, d.pl);
       yield* cenTomaLa(b);
-      yield 0.9;
+      yield pW(0.9, d.pl);
       yield* cenEmendaDrop(b, 1);
-      yield 1.4;
+      yield pW(1.4, d.pl);
       yield* cenHeads(b, 2);
-      yield 0.6;
-      if (loop++ % 2 === 1) { yield* cenRings(b, 2); yield 0.6; }
-      yield 0.6;
+      yield pW(0.6, d.pl);
+      if (loop++ % 2 === 1) { yield* cenRings(b, 2); yield pW(0.6, d.pl); }
+      yield pW(0.6, d.pl);
     }
   }
   function* cenP2(b) {
@@ -1448,19 +1493,19 @@
     hint('reflexo', G.W / 2, G.H * 0.45, 'O REFLEXO NÃO LEVA DANO!', '#ffffff');
     yield* cenSwap(b, true);
     for (;;) {
-      yield 0.4;
+      yield pW(0.4, d.pl);
       yield* cenCurtain(b);
-      yield 0.8;
+      yield pW(0.8, d.pl);
       yield* cenHeads(b, 2, 120);
-      yield 0.5;
+      yield pW(0.5, d.pl);
       yield* cenEmendaDrop(b, 1, { ghost: true });
-      yield 1.6;
+      yield pW(1.6, d.pl);
       yield* cenSwap(b, false);
-      yield 0.3;
+      yield pW(0.3, d.pl);
       yield* cenHeads(b, 2, 120);
-      yield 0.6;
+      yield pW(0.6, d.pl);
       yield* cenTomaLa(b);
-      yield 1.0;
+      yield pW(1.0, d.pl);
       yield* cenSwap(b, false);
     }
   }
@@ -1482,13 +1527,13 @@
     let loop = 0;
     for (;;) {
       yield* cenRings(b, 2);
-      yield 0.7;
+      yield pW(0.7, d.pl);
       yield* cenHeads(b, 3, 122);
-      yield 0.8;
+      yield pW(0.8, d.pl);
       // uma emenda por volta (os deputadinhos correm atrás dela); o TOMA LÁ continua em volta sim, volta não
       yield* cenEmendaDrop(b, 1);
-      yield 1.2;
-      if (loop++ % 2 === 1) { yield* cenTomaLa(b); yield 0.9; }
+      yield pW(1.2, d.pl);
+      if (loop++ % 2 === 1) { yield* cenTomaLa(b); yield pW(0.9, d.pl); }
     }
   }
   function* cenP4(b) {
@@ -1512,7 +1557,7 @@
           shoot(hx, hy, a, 108, { style: 'bs_171', color: i % 2 ? COL.pink : COL.magenta });
         }
         if (k % 4 === 0) sfx('enemy_shot');
-        if (k % 6 === 3) { const a2 = aimFrom(b.x, b.y + 20); fan(b.x, b.y + 20, a2, 5, 0.5, 150, { style: 'bs_moeda', color: COL.gold }); d.mouthT = 0.3; }
+        if (k % 6 === 3) { const a2 = aimFrom(b.x, b.y + 20), nf = pN(5, d.pl); fan(b.x, b.y + 20, a2, nf, 0.125 * (nf - 1), 150, { style: 'bs_moeda', color: COL.gold }); d.mouthT = 0.3; }
         yield L2() ? 0.33 : 0.38;
       }
       // inverte o giro (com aviso); uma inversão sim, outra não: 2 emendas de verdade (terços da tela)
@@ -1523,6 +1568,70 @@
       if (flipT % 2 === 1 && !(d.mechCd > 0) && cenRealLive(b) === 0) cenThrow(b, 2, { fall: L2() ? EM.FALL_P4_L2 : EM.FALL_P4 });
       yield 0.65;
       d.orbit.dir *= -1; d.orbit.w = 1.2 + Math.min(0.4, flipT * 0.1);
+    }
+  }
+  // 5º turno (ÚLTIMO RECURSO) — FUNDÃO ELEITORAL: as cabeças giram e atiram como no 4º (giro ×1,15, sem as emendas
+  // da virada: elas têm relógio próprio), + espiral de moedas (cenFundao), + leque de cédulas (cenCedulas),
+  // + 2 emendas a cada 6 s (cenFundaoEm; a 2ª no mesmo tonto estica a brecha como no 4º, teto 5 s)
+  function* cenP5(b) {
+    const d = b.data, K5 = EM.P5_ORBIT;
+    d.depOn = false; d.ghost = null; d.banner = CEN_BAN[3];
+    say(b, 'É O FUNDÃO, MEU FILHO!', 2.4);
+    d.mv = (bb, dd) => { dd.tx = bb.homeX + Math.sin(clk(bb) * 0.4) * 30; dd.ty = bb.homeY + 12; };
+    if (!d.orbit) d.orbit = { ang: -PI / 2, R: 0, w: 0, dir: 1 };
+    d.orbit.w = 1.2 * K5;
+    sfx('charge');
+    if (d.orbit.R < 86) { const R0 = d.orbit.R; yield* tween(b, 0.9, (u) => { d.orbit.R = R0 + M.easeOutBack(u) * (86 - R0); }); }
+    let flipT = 0;
+    for (;;) {
+      for (let k = 0; k < 12; k++) {
+        for (let i = 0; i < 8; i++) {
+          const a = d.orbit.ang + (i * TAU) / 8;
+          shoot(b.x + Math.cos(a) * d.orbit.R, b.y + Math.sin(a) * d.orbit.R, a, 108, { style: 'bs_171', color: i % 2 ? COL.pink : COL.magenta });
+        }
+        if (k % 4 === 0) sfx('enemy_shot');
+        yield L2() ? 0.33 : 0.38;
+      }
+      // inverte o giro (com o mesmo aviso do 4º)
+      flipT++;
+      for (let i = 0; i < 8; i++) d.warn[i] = 0.6;
+      d.orbit.w = 0;
+      sfx('charge');
+      yield 0.65;
+      d.orbit.dir *= -1; d.orbit.w = (1.2 + Math.min(0.4, flipT * 0.1)) * K5;
+    }
+  }
+  // espiral de moedas do fundão saindo da barriga (braços pela PRESSÃO travada no turno)
+  function* cenFundao(b) {
+    const d = b.data, arms = pN(EM.P5_ARMS, d.pl);
+    let a = Math.random() * TAU, k = 0;
+    yield 0.9;
+    for (;;) {
+      for (let i = 0; i < arms; i++) shoot(b.x, b.y + 10, a + (i * TAU) / arms, EM.P5_SPD, { style: 'bs_moeda', color: COL.gold });
+      a += EM.P5_TURN;
+      if (k++ % 5 === 0) sfx('enemy_shot');
+      yield EM.P5_STEP;
+    }
+  }
+  // leque mirado de 5 cédulas
+  function* cenCedulas(b) {
+    const d = b.data;
+    yield 1.6;
+    for (;;) {
+      const x = b.x, y = b.y + 22;
+      fan(x, y, aimFrom(x, y), 5, 0.6, EM.P5_FAN_SPD, { style: 'bs_cedula', color: COL.red });
+      d.mouthT = 0.3; sfx('enemy_shot2');
+      yield pW(EM.P5_FAN, d.pl);
+    }
+  }
+  // as emendas do fundão: 2 por vez (queda do 4º), a 1ª logo depois do banner, depois a cada 6 s
+  function* cenFundaoEm(b) {
+    const d = b.data;
+    yield EM.P5_EM0;
+    for (;;) {
+      yield () => !(d.mechCd > 0) && cenRealLive(b) === 0;
+      yield* cenEmendaDrop(b, 2, { fall: L2() ? EM.FALL_P4_L2 : EM.FALL_P4 });
+      yield EM.P5_EM;
     }
   }
 
@@ -1547,7 +1656,7 @@
   }
   // libera a memória do turno que passou: corpos com o letreiro de agora e do próximo; reflexo só enquanto existe
   function cenEvict(b) {
-    const d = b.data, ph = b.phase;
+    const d = b.data, ph = Math.min(b.phase, CEN_BAN.length - 1); // o 5º turno continua com o letreiro do 4º
     sprDrop((k) => {
       const p = k.split('|'), bi = CEN_BAN.indexOf(p[3]);
       if (p[0] === 'cen') return bi < ph || bi > ph + 1;
@@ -1571,18 +1680,19 @@
     return out;
   }
   // todo (estilo, cor) que o Centrão atira (o reflexo usa violeta)
-  const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold]];
+  const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold],
+    ['bs_cedula', COL.red], ['small', '#ff2a4a']];
   G.Bosses.define('centrao', {
-    // fatStart menor: é o 1º chefão (ensina); com arma forte a luta acaba antes de ele cansar
-    // HP afinado com a manha (humanbot ttk nv3, mediana das 4 armas: ~69 s pegando a emenda, ~81 s ignorando;
-    // boss-only nv3, 24 partidas: casual ~84 s fazendo a manha / ~97 s ignorando, good ~72 s / ~87 s)
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 3500, r: 46, homeY: 165, fatStart: 85,
+    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
+    // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
-      { at: 0.68, name: 'Muda de Lado' },
-      { at: 0.38, name: 'Fisiologismo' },
-      { at: 0.13, name: 'Base Aliada' },
+      { at: 0.76, name: 'Muda de Lado' },
+      { at: 0.52, name: 'Fisiologismo' },
+      { at: 0.30, name: 'Base Aliada' },
+      { at: 0.13, name: 'Fundão Eleitoral', last: true },
     ],
     init(b) {
       const d = b.data;
@@ -1612,7 +1722,8 @@
     start(b) {
       warmShotsStep(b, 99);
       cenBodySprite(0, true, 0, ''); // sprite do flash (1º acerto)
-      co(b, cenP1(b)); co(b, cenBg(b, 1.5), 1);
+      pLatch(b);
+      co(b, cenP1(b)); co(b, cenBg(b, 1.5), 1); co(b, cpiCo(b), 3);
       say(b, 'TOMA LÁ, DÁ CÁ!', 2);
     },
     update(b, dt, g) {
@@ -1659,8 +1770,9 @@
       const d = b.data;
       // letreiro novo já no 1º quadro do turno; libera os sprites do turno que passou e pede os que faltam
       d.banner = CEN_BAN[idx] || d.banner;
-      if (idx === 2) d.side = d.p3Side;
-      if (idx === 3) d.ghost = null;
+      if (idx >= 2) d.side = d.p3Side; // (pulou o 3º turno: a cor dele vale igual)
+      if (idx >= 3) d.ghost = null;
+      pLatch(b);
       cenEvict(b); cenPlan(b); d.planT = 0.4;
       // próximas fases: cabecinhas suadas (HP < 66%) e os deputadinhos do apoio (fase 3, de gravata vermelha ou bege)
       if (idx === 1) {
@@ -1678,6 +1790,12 @@
       if (idx === 1) { co(b, cenP2(b)); co(b, cenBg(b, 1.9), 1); }
       else if (idx === 2) { co(b, cenP3(b)); co(b, cenBg(b, 1.3), 1); }
       else if (idx === 3) { d.flipX = 1; d.orbitW = null; co(b, cenP4(b)); co(b, null, 1); }
+      else if (idx === 4) {
+        lastStand(b);
+        d.flipX = 1; d.depOn = false;
+        co(b, cenP5(b)); co(b, cenFundao(b), 1); co(b, cenCedulas(b), 2); co(b, cenFundaoEm(b), 4);
+      }
+      co(b, cpiCo(b), 3);
     },
     onHit(b) { b.data.sq = Math.max(b.data.sq, 0.02); },
     // chamado pelo deputadinho quando chega (e, com frac, pela emenda que voltou pra mão: e = a mala)
@@ -1798,6 +1916,11 @@
     R0_L2: 35, DEMO: 2, P2_R: 36, P2_NEED: 2.4, STUN_L3: 4.0, MUL_L3: 2.3, P4_R: 40, P4_LIFE: 9,
     // 3º turno (META DOBRADA): nível 1 / 2 / 3
     LVL: [{ r: 38, need: 1.3, life: 8, ax: 46, ay: 18 }, { r: 32, need: 1.0, life: 8, ax: 24, ay: 10, gap: 120 }, { r: 28, need: 0.7, life: 9, ax: 12, ay: 6 }],
+    // 5º turno META INFINITA: a meta pula como no 4º (P4_R, P4_LIFE, P4_JUMP), tonto P5_STUN ×P5_MUL, a próxima meta
+    // P5_GAP s depois; o vento troca de lado a cada P5_FLIP s (aviso P5_WARN, força do 2º turno); leque de mandiocas
+    // a cada P5_FAN s (antes do pW) e anel de P5_RING sementes a cada P5_RING_T s
+    P5_STUN: 3.5, P5_MUL: 2.2, P5_GAP: 2.0, P5_FLIP: 4.0, P5_WARN: 1.0, P5_FAN: 1.6, P5_FAN_SPD: 140, P5_FAN_SPR: 0.5,
+    P5_RING: 12, P5_RING_T: 3.0, P5_RING_SPD: 100,
   };
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
@@ -2039,7 +2162,7 @@
     yield 0.65;
     d.pose = 'point';
     const hp = dilHand(b), a = aimFrom(hp[0], hp[1]);
-    const n = nOverride || (L2() ? 5 : 4);
+    const n = nOverride || pN(L2() ? 5 : 4, d.pl);
     for (let k = 0; k < n; k++) {
       const ang = a + (k - (n - 1) / 2) * 0.42;
       shoot(hp[0], hp[1], ang, 138, { style: 'bs_mandioca', color: COL.orange, accel: -55, minSpd: 50, data: { split: 0.9 + k * 0.08, n: L2() ? 12 : 10, wnd: d.windy }, update: splitMandioca });
@@ -2054,7 +2177,7 @@
     yield 0.95;
     d.pose = 'point';
     const hp = dilHand(b);
-    shoot(hp[0], hp[1], aimFrom(hp[0], hp[1]), 110, { style: 'bs_mandiocao', color: COL.red, accel: -45, minSpd: 35, data: { split: 1.4, n: L2() ? 22 : 18 }, update: splitMandioca });
+    shoot(hp[0], hp[1], aimFrom(hp[0], hp[1]), 110, { style: 'bs_mandiocao', color: COL.red, accel: -45, minSpd: 35, data: { split: 1.4, n: pRing(L2() ? 22 : 18, d.pR) }, update: splitMandioca });
     sfx('whoosh');
     yield 0.6;
     d.pose = 'idle';
@@ -2082,13 +2205,14 @@
   function* dilBgJars(b, every) {
     const d = b.data;
     for (;;) {
-      yield every * M.rand(0.85, 1.15);
+      yield pW(every, d.pl) * M.rand(0.85, 1.15);
       let side = Math.random() < 0.5 ? 0 : 1;
       if (d.jarT[side] > 0.6) side ^= 1; // o pote da rajada já está aberto: usa o outro
       d.jarT[side] = 0.6;
       yield 0.32;
       const jx = b.x + (side ? 66 : -66), jy = b.y + 16;
-      fan(jx, jy, aimFrom(jx, jy), 3, 0.32, 120, { style: 'bs_vento', color: COL.magenta });
+      const nj = pN(3, d.pl);
+      fan(jx, jy, aimFrom(jx, jy), nj, 0.16 * (nj - 1), 120, { style: 'bs_vento', color: COL.magenta });
       sfx('enemy_shot');
       yield 0.3;
       if (d.jarT[side] === 0.6) d.jarT[side] = 0;
@@ -2096,10 +2220,11 @@
   }
   // fase 3: sementinhas miradas da mão
   function* dilBgSeeds(b, every) {
+    const d = b.data;
     for (;;) {
-      yield every * M.rand(0.85, 1.15);
-      const hp = dilHand(b);
-      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), 3, 0.22, 150, { style: 'bs_semente', color: COL.orange });
+      yield pW(every, d.pl) * M.rand(0.85, 1.15);
+      const hp = dilHand(b), n = pN(3, d.pl);
+      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, 0.11 * (n - 1), 150, { style: 'bs_semente', color: COL.orange });
       sfx('enemy_shot');
     }
   }
@@ -2121,7 +2246,7 @@
       W.target = L2() ? 72 : 60; // (o tonto zera o vento; ele volta junto com a corrotina)
       const a = DOWN + dir * 0.2 + M.rand(-0.55, 0.55);
       shoot(b.x + (jar ? 66 : -66), jy, a, M.rand(100, 132), { style: 'bs_vento', color: i % 2 ? COL.violet : COL.magenta, data: { wnd: 1 } });
-      if (i % 5 === 0) { const hp = dilHand(b); fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), 3, 0.25, 128, { style: 'bs_semente', color: COL.hot, data: { wnd: 1 } }); }
+      if (i % 5 === 0) { const hp = dilHand(b), n = pN(3, d.pl); fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, 0.125 * (n - 1), 128, { style: 'bs_semente', color: COL.hot, data: { wnd: 1 } }); }
       i++;
       yield L2() ? 0.1 : 0.12;
     }
@@ -2132,7 +2257,7 @@
     const d = b.data;
     d.pose = 'up'; d.jarT[0] = d.jarT[1] = 0.4; sfx('charge');
     yield 0.5;
-    const arms = L2() ? 5 : 4, dirr = Math.random() < 0.5 ? 1 : -1;
+    const arms = pN(L2() ? 5 : 4, d.pl), dirr = Math.random() < 0.5 ? 1 : -1;
     for (let k = 0; k < 18; k++) {
       for (let a = 0; a < arms; a++) shoot(b.x, b.y + 4, dirr * k * 0.2 + (a * TAU) / arms, 106, { style: 'bs_vento', color: COL.magenta, data: { wnd: 1 } });
       if (k % 4 === 0) sfx('enemy_shot');
@@ -2179,8 +2304,8 @@
       if (m >= 16) say(b, 'META: ' + m + '!', 1.0);
       yield 0.75;
       yield* dilMetaVolley(b, m);
-      yield m >= 16 ? 1.1 : 0.75;
-      if (m === 8) { yield* dilSaudacao(b, 2); yield 0.5; }
+      yield pW(m >= 16 ? 1.1 : 0.75, d.pl);
+      if (m === 8) { yield* dilSaudacao(b, 2); yield pW(0.5, d.pl); }
     }
     // atingiu a meta? dobra!
     B.glitch = true; B.pop = 1;
@@ -2190,7 +2315,7 @@
     B.glitch = false; B.n = 64; B.pop = 1; sfx('stamp');
     yield 0.5;
     yield* dilMetaVolley(b, 64);
-    yield 1.3;
+    yield pW(1.3, d.pl);
     G.confetti(b.x + B.side * 82, b.y - 14, 10);
     B.n = 2; B.pop = 1;
     yield 0.8;
@@ -2242,7 +2367,7 @@
     if (d.pendingStun) {
       d.pendingStun = false; d.pausaStun = true;
       say(b, 'PEDALEI NA META!', 1.6);
-      dilStun(b, MT.STUN, MT.MUL, { tag: 'BRECHA ×2,2', text: 'RECALCULANDO...', onEnd: dilStunEnd });
+      dilStun(b, MT.STUN, MT.MUL, { text: 'RECALCULANDO...', onEnd: dilStunEnd });
       yield null;
     } else say(b, M.pick(['NÃO FOI PEDALADA!', 'É CONTABILIDADE CRIATIVA!', 'PEDALEI NA META!']), 1.6);
     for (let k = 0; k < 3 && !d.pausaStun; k++) {
@@ -2250,7 +2375,8 @@
       yield 0.45;
       if (d.pausaStun) break; // encheu a meta aqui: tonto na hora, sem as mandiocas que faltam
       const a = aimFrom(b.x, b.y);
-      fan(b.x + 20 * dir, b.y - 4, a, L2() ? 3 : 2, 0.5, 130, { style: 'bs_mandioca', color: COL.orange, accel: -55, minSpd: 50, data: { split: 0.9, n: 7 }, update: splitMandioca });
+      const nf0 = L2() ? 3 : 2, nf = pN(nf0, d.pl);
+      fan(b.x + 20 * dir, b.y - 4, a, nf, (0.5 * (nf - 1)) / (nf0 - 1), 130, { style: 'bs_mandioca', color: COL.orange, accel: -55, minSpd: 50, data: { split: 0.9, n: 7 }, update: splitMandioca });
       sfx('whoosh');
       yield 0.6;
     }
@@ -2400,7 +2526,7 @@
     d.metaR = Math.max(MT.R_MIN, d.metaR * MT.R_K);
     d.metaDrift = Math.min(1.5, d.metaDrift * 1.12);
     d.metaNeed = Math.min(2.8, d.metaNeed + 0.1);
-    d.metaT = MT.GAP_OK;
+    d.metaT = b.phase >= 4 ? MT.P5_GAP : MT.GAP_OK;
     d.sayQ = null;
   }
   const DIL_STUN_LINES = ['PERAÍ, VOU RECALCULAR.', 'É CONTABILIDADE CRIATIVA!', 'A META É ABERTA!'];
@@ -2418,11 +2544,12 @@
       if (!d.inPausa) { d.pendingStun = true; return; }
       say(b, 'PEDALEI NA META!', 1.6);
       d.pausaStun = true;
-      dilStun(b, MT.STUN, MT.MUL, { tag: 'BRECHA ×2,2', text: 'RECALCULANDO...', onEnd: dilStunEnd });
+      dilStun(b, MT.STUN, MT.MUL, { text: 'RECALCULANDO...', onEnd: dilStunEnd });
       return;
     }
     say(b, 'ATINGIU?!', 1.2);
-    dilStun(b, MT.STUN, MT.MUL, { tag: 'BRECHA ×2,2', text: 'RECALCULANDO...', onEnd: dilStunEnd });
+    const p5 = b.phase >= 4; // META INFINITA: tonto mais longo
+    dilStun(b, p5 ? MT.P5_STUN : MT.STUN, p5 ? MT.P5_MUL : MT.MUL, { text: 'RECALCULANDO...', onEnd: dilStunEnd });
     d.sayQ = { t: 1.2, s: M.pick(DIL_STUN_LINES) }; // fala do tonto depois do "ATINGIU?!"
   }
   // 3º turno: cada meta do nível fica verde; com todas cheias, ela se assusta (nível 1-2) ou trava (nível 3)
@@ -2434,10 +2561,10 @@
     if (d.lvl < 3) {
       const nx = d.lvl + 1;
       say(b, 'ATINGIU? DOBRA A META!', 1.6);
-      stunStart(b, 1.2, 1.6, { tag: 'BRECHA ×1,6', clear: false, onEnd: () => { d.lvlNext = nx; d.metaT = 0.8; } });
+      stunStart(b, 1.2, 1.6, { clear: false, onEnd: () => { d.lvlNext = nx; d.metaT = 0.8; } });
     } else {
       G.text(W / 2, H * 0.5, 'ERRO NA META!', { color: '#ffd23f', size: 15, life: 1.4, stroke: true });
-      dilStun(b, MT.STUN_L3, MT.MUL_L3, { tag: 'BRECHA ×2,3', text: 'RECALCULANDO...', onEnd: () => { d.lvlNext = 1; d.metaT = MT.GAP_OK; d.metaN *= 2; } });
+      dilStun(b, MT.STUN_L3, MT.MUL_L3, { text: 'RECALCULANDO...', onEnd: () => { d.lvlNext = 1; d.metaT = MT.GAP_OK; d.metaN *= 2; } });
       d.sayQ = { t: 1.0, s: M.pick(DIL_STUN_LINES) };
     }
   }
@@ -2449,7 +2576,7 @@
     say(b, 'DEIXAMOS A META ABERTA!', 2);
     mechMiss(b);
     d.metaOpen = true; d.armor = MT.OPEN; d.armorTag = { text: 'META ABERTA', color: '#9aa5b8' };
-    d.metaT = MT.GAP_FAIL;
+    d.metaT = b.phase >= 4 ? Math.min(MT.GAP_FAIL, MT.P5_GAP) : MT.GAP_FAIL;
   }
   // agenda (fora de corrotina): nada no tonto, nos 2 s depois dele, nem com outra meta ativa
   function dilMetaSched(b, dt) {
@@ -2465,6 +2592,8 @@
       if (lv > 1) G.text(G.W / 2, G.H * 0.5, lv === 2 ? 'AGORA SÃO 2 METAS!' : 'AGORA SÃO 4 METAS!', { size: 14, color: '#ffd23f', stroke: true, life: 1.4 });
       return;
     }
+    // 5º turno: sempre tem uma meta pulando (a próxima P5_GAP s depois do tonto: conta junto com o respiro de 2 s)
+    if (ph >= 4) { if ((d.metaT -= dt) <= 0) dilMetaReqP4(b); return; }
     if (ph === 3 || d.mechCd > 0) return; // 4º turno: a meta sai no começo de cada par de pedaladas
     if ((d.metaT -= dt) <= 0) dilMetaP12(b);
   }
@@ -2555,13 +2684,13 @@
     if (d.demo) yield () => !d.demo;
     for (;;) {
       yield* dilSaudacao(b);
-      yield 0.9;
+      yield pW(0.9, d.pl);
       yield* dilSaudacao(b);
-      yield 0.7;
+      yield pW(0.7, d.pl);
       yield* dilRaizes(b);
-      yield 1.0;
+      yield pW(1.0, d.pl);
       yield* dilMandiocao(b);
-      yield 1.5;
+      yield pW(1.5, d.pl);
     }
   }
   function* dilP2(b) {
@@ -2576,11 +2705,11 @@
     yield 1.0;
     for (;;) {
       yield* dilGust(b, dir, 2.5);
-      yield 0.6;
+      yield pW(0.6, d.pl);
       yield* dilRedemoinho(b);
-      yield 0.6;
+      yield pW(0.6, d.pl);
       yield* dilSaudacao(b);
-      yield 0.8;
+      yield pW(0.8, d.pl);
       dir = -dir;
     }
   }
@@ -2621,21 +2750,67 @@
       yield 0.1;
     }
   }
+  // 5º turno (ÚLTIMO RECURSO) — META INFINITA: desce da bicicleta e volta pro meio; o vento troca de lado a cada
+  // 4 s (seta de 1 s com o vento parado, depois a força do 2º turno) + leque mirado de mandiocas (dilP5Fans)
+  // + anel de sementes que o vento leva (dilP5Rings); a meta que pula do 4º turno nunca falta (dilMetaSched)
+  function* dilP5(b) {
+    const d = b.data, W = d.wind;
+    d.bike = false; d.board = null; d.pose = 'idle'; d.windy = true; d.jarGlow = true;
+    d.mv = (bb, dd) => { dd.tx = bb.homeX + Math.sin(clk(bb) * 0.35) * 40; dd.ty = bb.homeY; };
+    say(b, 'A META É INFINITA!', 2.2);
+    let dir = pl().x < G.W / 2 ? -1 : 1, n = 0; // a 1ª rajada empurra pro lado mais perto da parede
+    yield 0.5;
+    for (;;) {
+      const jar = dir > 0 ? 0 : 1; // o pote do lado de onde vem o vento abre
+      W.target = 0; W.str = 0; W.dir = dir; W.warn = MT.P5_WARN;
+      d.jarT[jar] = 1; d.jarT[jar ^ 1] = 0;
+      if (n++ % 2 === 1 && !(b.sayT > 0)) say(b, M.pick(['ESTOQUEI O VENTO!', 'É O VENTO, QUERIDO!', 'SEGURA ESSE VENTO!']), 1.4);
+      sfx('wind');
+      yield MT.P5_WARN;
+      sfx('wind');
+      const t0 = clk(b);
+      // (o tonto zera o vento; ele volta junto com a corrotina)
+      while (clk(b) - t0 < MT.P5_FLIP - MT.P5_WARN) { W.target = L2() ? 72 : 60; yield null; }
+      dir = -dir;
+    }
+  }
+  function* dilP5Fans(b) {
+    const d = b.data;
+    yield 1.1;
+    for (;;) {
+      d.pose = 'point';
+      const hp = dilHand(b), n = pN(3, d.pl), spr = (MT.P5_FAN_SPR * (n - 1)) / 2; // +mandiocas, mesma fresta
+      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, spr, MT.P5_FAN_SPD, { style: 'bs_mandioca', color: COL.orange });
+      sfx('whoosh');
+      yield 0.3;
+      d.pose = 'idle';
+      yield Math.max(0.2, pW(MT.P5_FAN, d.pl) - 0.3);
+    }
+  }
+  function* dilP5Rings(b) {
+    yield 2.0;
+    for (;;) {
+      ring(b.x, b.y + 10, MT.P5_RING, MT.P5_RING_SPD, { style: 'bs_semente', color: COL.hot, data: { wnd: 1 } }, Math.random() * TAU);
+      sfx('enemy_shot2');
+      yield MT.P5_RING_T;
+    }
+  }
 
   const DIL_HB = [[0, -16, 30], [0, 24, 25]], DIL_HB_BIKE = [[0, -26, 26], [0, 10, 22], [-26, 38, 16], [26, 38, 16]];
   const DIL_SHOTS = [['bs_semente', COL.hot], ['bs_semente', COL.orange], ['bs_mandioca', COL.orange], ['bs_mandiocao', COL.red],
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
-    ['bs_cedula', COL.red], ['bs_cedula', COL.orange]];
+    ['bs_cedula', COL.red], ['bs_cedula', COL.orange], ['small', '#ff2a4a']];
   G.Bosses.define('dilmae', {
-    // HP afinado com a manha (humanbot ttk nv3, mediana das 4 armas: ~76 s enchendo as metas, ~99 s ignorando com a
-    // META ABERTA; boss-only nv3, 24 partidas: casual ~117 s / ~134 s, good ~86 s / ~108 s)
-    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 2900, r: 40, homeY: 168, spdK: 1.12,
+    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
+    // cansaço depois (155 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
+    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6000, r: 40, homeY: 168, spdK: 1.12, fatStart: 155,
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
-      { at: 0.72, name: 'Vento Estocado' },
-      { at: 0.45, name: 'Meta Dobrada' },
-      { at: 0.18, name: 'Pedalada Fiscal' },
+      { at: 0.76, name: 'Vento Estocado' },
+      { at: 0.52, name: 'Meta Dobrada' },
+      { at: 0.30, name: 'Pedalada Fiscal' },
+      { at: 0.13, name: 'Meta Infinita', last: true },
     ],
     init(b) {
       const d = b.data;
@@ -2662,7 +2837,8 @@
       warmShotsStep(b, 99);
       // 1ª meta da partida (1º mandato): ela só ataca 2 s depois de a meta aparecer
       d.demo = !L2() && !run._metaSeen;
-      co(b, dilP1(b)); co(b, dilBgJars(b, 1.7), 1); say(b, 'SAÚDO A MANDIOCA!', 1.8);
+      pLatch(b);
+      co(b, dilP1(b)); co(b, dilBgJars(b, 1.7), 1); co(b, cpiCo(b), 3); say(b, 'SAÚDO A MANDIOCA!', 1.8);
     },
     update(b, dt, g) {
       const d = b.data;
@@ -2699,7 +2875,8 @@
           if (G.input && G.input.active) G.input.ax += dx;
         }
         const acc = W.dir * W.str * 1.3 * dt;
-        for (const q of g.eb) if (!q.dead && q.data && q.data.wnd) { q.vx = clamp(q.vx + acc, -170, 170); }
+        // (o vento entorta, mas nunca leva um tiro além de 250 px/s: o teto da PRESSÃO)
+        for (const q of g.eb) if (!q.dead && q.data && q.data.wnd) { const vm = Math.min(170, Math.sqrt(Math.max(0, 62500 - q.vy * q.vy))); q.vx = clamp(q.vx + acc, -vm, vm); }
         if (Math.random() < dt * (12 + 18 * decoK())) G.part({ x: W.dir > 0 ? -10 : G.W + 10, y: M.rand(70, G.H - 40), vx: W.dir * M.rand(380, 560), vy: M.rand(-20, 20), type: 'spark', size: 2, life: 0.9, color: 'rgba(255,255,255,0.55)', drag: 1 });
       }
       // hitboxes por pose (tonta na pedalada: em pé ao lado da bicicleta)
@@ -2712,6 +2889,7 @@
     onPhase(b, idx) {
       const d = b.data;
       d.pose = 'idle'; d.glowT = 0;
+      pLatch(b);
       // o que vem a seguir: suada (HP < 60%) e, na pedalada, de bicicleta
       if (idx === 1) warmPeople(b, 'p2', poses(DILMA, DIL_SIZE, ['shrug']).concat(poses(DILMA_SW, DIL_SIZE, ['idle', 'up', 'point', 'shrug']), [{ spec: DILMA_SW, size: DIL_SIZE, mood: 'shock', pose: 'shrug' }]));
       if (idx === 2) warmPeople(b, 'p4', poses(DILMA_SW, DIL_BIKE, ['drive']));
@@ -2727,6 +2905,12 @@
       if (idx === 1) { co(b, dilP2(b)); co(b, dilBgJars(b, L2() ? 2.2 : 2.6), 1); }
       else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.45), 1); }
       else if (idx === 3) { co(b, dilP4(b)); co(b, null, 1); }
+      else if (idx === 4) {
+        lastStand(b); // (a 1ª meta sai 1,5 s depois: d.metaT acima)
+        d.bike = false; d.board = null;
+        co(b, dilP5(b)); co(b, dilP5Fans(b), 1); co(b, dilP5Rings(b), 2);
+      }
+      co(b, cpiCo(b), 3);
     },
     onDeath(b) {
       const d = b.data;
@@ -2752,7 +2936,7 @@
       S.mood = dying ? 'hurt' : leaving ? 'laugh' : st ? 'shock' : b.invulnT > 0 ? 'angry' : d.pose === 'up' ? 'laugh' : hpF < 0.3 ? 'angry' : 'smug';
       S.mouth = b.state === 'talk' ? 0.3 + 0.3 * Math.sin(b.t * 10) : d.mouth;
       S.pose = dying || st ? 'shrug' : d.pose; S.look = lookAt(b.x, b.y);
-      S.jar = b.phase <= 1 && !d.bike ? d.jar : null; S.jarGlow = d.jarGlow; S.board = dying || leaving ? null : d.board;
+      S.jar = (b.phase <= 1 || b.phase >= 4) && !d.bike ? d.jar : null; S.jarGlow = d.jarGlow; S.board = dying || leaving ? null : d.board;
       S.bike = (d.bike && !st) || leaving; S.parked = d.bike && st; S.dir = leaving ? 1 : d.dir; S.glowT = d.glowT; S.k = 1; S.calc = st;
       if (leaving) {
         // foge voando de bicicleta (como no filme)
@@ -2822,8 +3006,10 @@
   });
 
   // ======================================================================
-  // G.BossKit — utilidades dos chefões para os outros módulos (erika.js exige; lule.js usa se tiver).
-  // Contrato: docs/ENGINE.md §5.1. Mesmo comportamento das funções daqui de cima.
+  // G.BossKit — utilidades dos chefões para os outros módulos (erika.js e taxad.js exigem; lule.js usa se tiver).
+  // Contrato: docs/ENGINE.md §5.1 e SPEC5 §2.2. Mesmo comportamento das funções daqui de cima.
+  // PRESSÃO: pLatch(b) no start e em cada onPhase; pN/pW/pRing aceitam o nível travado (b.data.pl / b.data.pR);
+  // co(b, cpiCo(b), slot livre) no start e depois de cada onPhase; lastStand(b) no onPhase do turno last: true.
   // Lembretes: fx() precisa de b.data.fx = [] no init; E/O/heartPath só acrescentam subcaminhos (beginPath antes);
   // stunUpdate NÃO desconta d.mechCd (o chefão desconta fora do tonto); trackCar é a última linha do def.update.
   // ======================================================================
@@ -2837,5 +3023,7 @@
     // novas
     MECH, clk, carNear, carSwept, trackCar, setGoal, clearGoal, mechInit, mechOk, mechMiss,
     stunStart, stunExtend, stunUpdate, stunning, stunEnd, mechHint, mechRing, tealHalo, heartPath, fmtMul,
+    // Rodada 5 (SPEC5 §2.2): PRESSÃO e o 5º turno
+    press, pN, pRing, pW, pLatch, cpiCo, P5, lastStand, p5Update, applyMul, FAT_FULL, FAT_MAX,
   };
 })();

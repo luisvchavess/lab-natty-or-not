@@ -1,8 +1,12 @@
 /* ============================================================
    FUSCA A JATO — enemies.js
    Todos os inimigos comuns (caricaturas genéricas de políticos)
-   e os 4 chefes intermediários. Cada um tem comportamento
-   (update) e desenho (draw). Contrato: docs/ENGINE.md §4.
+   e os 5 chefes intermediários (Trio Elétrico, Lobista-Mor,
+   Ministério da Verdade, Impostômetro, Comitiva dos 38 Ministros).
+   Cada um tem comportamento (update) e desenho (draw).
+   PRESSÃO (G.press, do core): intervalos (ivl/first), leques (nP),
+   anéis (nRing) e a revanche ao cair; a vida e a velocidade dos
+   tiros o core já escala. Contrato: docs/ENGINE.md §4.
    ============================================================ */
 (function () {
   'use strict';
@@ -57,15 +61,53 @@
     x.beginPath(); x.arc(-s * 0.17, -s * 0.16, s * 0.09, 0, TAU); x.fill();
     x.beginPath(); x.arc(s * 0.17, s * 0.17, s * 0.09, 0, TAU); x.fill();
   } });
+  // DARF (guia da Receita): papeleta creme com código de barras preto e borda na cor (vermelha)
+  BS.define('en_darf', { r: 4.2, size: 20, rotate: true, paint(x, s, c) {
+    const w = s * 0.78, h = s * 0.46;
+    glowOn(x, c, 5); x.fillStyle = c; x.fillRect(-w / 2, -h / 2, w, h);
+    x.shadowBlur = 0; x.fillStyle = '#fff1d6'; x.fillRect(-w / 2 + 2.2, -h / 2 + 2.2, w - 4.4, h - 4.4);
+    x.fillStyle = '#101418';
+    const bars = [1, 0.5, 1.4, 0.6, 0.9, 1.6, 0.5, 1.1, 0.7, 1.3];
+    let bx = -w / 2 + 3;
+    for (let i = 0; i < bars.length && bx < w / 2 - 3; i++) { x.fillRect(bx, -h / 2 + 2.6, bars[i], h - 5.2); bx += bars[i] + 0.9; }
+  } });
+  // Taxa do Pix: losango laranja com "IOF" branco
+  BS.define('en_pixtax', { r: 5, size: 18, paint(x, s, c) {
+    const R = s * 0.46;
+    glowOn(x, c, 6); x.fillStyle = c;
+    x.beginPath(); x.moveTo(0, -R); x.lineTo(R, 0); x.lineTo(0, R); x.lineTo(-R, 0); x.closePath(); x.fill();
+    x.shadowBlur = 0; x.strokeStyle = '#ffffff'; x.lineWidth = 1.1; x.stroke();
+    x.fillStyle = '#ffffff'; x.font = '5px ' + G.FONT_DISPLAY; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('IOF', 0, 0.4);
+  } });
 
   // ======================================================================
   // Utilidades
   // ======================================================================
-  // nível de dificuldade: 0 (fase 1) .. 3 (fase 4), +1.5 no 2º Mandato
-  const lvl = () => { const g = G.game; return g ? (g.stageIdx || 0) + (g.loop > 1 ? 1.5 : 0) : 0; };
-  const spd = (v) => v * (1 + 0.065 * lvl());                       // velocidade de tiro por fase
-  const ivl = (v) => v * Math.max(0.55, 1 - 0.1 * lvl());           // intervalo entre ataques por fase
-  const first = (a, b) => M.rand(a, b) * Math.max(0.55, 1 - 0.13 * lvl()); // demora do 1º tiro
+  // nível de dificuldade por fase (5 fases): Rodoviária 0 · Esplanada 1 · Paranoá 2 · Fazenda 2,6 · Planalto 3,2;
+  // +1,5 no 2º Mandato. A mesma tabela escala a vida dos inimigos comuns (define, abaixo).
+  const LVL = [0, 1, 2, 2.6, 3.2];
+  const stageLvl = (g) => { const i = (g && g.stageIdx) || 0; return LVL[Math.min(LVL.length - 1, Math.max(0, i))]; };
+  const lvl = () => { const g = G.game; return g ? stageLvl(g) + (g.loop > 1 ? 1.5 : 0) : 0; };
+  // PRESSÃO (core: G.press = { R 0..1, lv 0..5 }); sem o core novo vale 0
+  const PRESS0 = { R: 0, lv: 0 };
+  const press = () => G.press || PRESS0;
+  const pR = () => { const R = +press().R; return R > 0 ? Math.min(1, R) : 0; };
+  const pLv = () => press().lv | 0;
+  const spd = (v) => v * (1 + 0.065 * lvl());                       // velocidade de tiro por fase (a PRESSÃO entra no G.fire)
+  const ivl = (v) => v * Math.max(0.5, 1 - 0.1 * lvl() - 0.22 * pR());          // intervalo entre ataques
+  const first = (a, b) => M.rand(a, b) * Math.max(0.5, 1 - 0.13 * lvl() - 0.22 * pR()); // demora do 1º tiro
+  // densidade: leque mirado +1 tiro em CRISE (lv 3) e +1 em CPI! (lv 5); anel ×(1 + 0,25 R)
+  const nP = (n) => n + (pLv() >= 3 ? 1 : 0) + (pLv() >= 5 ? 1 : 0);
+  const nRing = (n) => Math.round(n * (1 + 0.25 * pR()));
+  // Leque mirado com a PRESSÃO: os tiros extras abrem o leque no MESMO passo angular
+  // (o vão entre dois tiros nunca encolhe). odd = mantém o nº ímpar (o tiro do meio vem em você).
+  function pFan(x, y, n, spread, speed, o, odd) {
+    let n2 = nP(n);
+    if (odd && (n2 - n) % 2) n2++;
+    const sp2 = n > 1 ? Math.min(2.4, (spread * (n2 - 1)) / (n - 1)) : spread;
+    return G.pat.aimedFan(x, y, n2, sp2, speed, o);
+  }
   const loop2 = () => !!(G.game && G.game.loop > 1);
   const player = () => G.game && G.game.player;
   const bossDying = () => !!(G.game && G.game.boss && G.game.boss.state === 'dying');
@@ -90,12 +132,24 @@
     g._enTalk = g.t + (force ? 1.4 : 2.6);
   }
 
-  // Revanche no 2º Mandato: alguns inimigos soltam tiros ao cair
+  // Revanche no 2º Mandato: alguns inimigos soltam tiros ao cair (marca e.data.rev: a revanche
+  // genérica da PRESSÃO, no define, não sai junto — nunca mais de uma rajada por morte)
   function revenge(e, n, speed) {
     if (!loop2() || bossDying() || !okShot(e, 115)) return;
+    e.data.rev = true;
     const o = { style: 'small', color: COL.pink };
     if (n <= 1) G.pat.aimed(e.x, e.y, spd(speed || 105), o);
     else G.pat.aimedFan(e.x, e.y, n, 0.55, spd(speed || 95), o);
+  }
+  // Revanche da PRESSÃO (todos os comuns, pelo define): CRISE+ 50% de 1 tiro; CPI! sempre um leque de 3
+  const REV_O = { style: 'small', color: '#ff3d7f' };
+  function pressRevenge(e, opts) {
+    const lv = pLv();
+    if (lv < 3 || (opts && opts.silent) || e.big || e.data.rev || bossDying()) return;
+    const g = G.game, p = player();
+    if (!g || g.eb.length >= 300 || !okShot(e, 115) || (p && (p.inv > 0 || p.bombT > 2.0))) return;
+    if (lv >= 5) G.pat.aimedFan(e.x, e.y, 3, 0.5, spd(95), REV_O);
+    else if (Math.random() < 0.5) G.pat.aimed(e.x, e.y, spd(95), REV_O);
   }
 
   // Mão de um personagem (para encaixar adereços)
@@ -111,6 +165,29 @@
     G.Art.person(ctx, e.x + (dx || 0), e.y + (dy || 0), size, spec, o);
   }
   const fcol = (c, fl) => (fl ? '#ffffff' : c);
+  // Sprites prontos (adereços que não são G.Art.person): um canvas por chave, refeitos quando a
+  // resolução do canvas muda. box = [x, y, w, h] em px lógicos, relativo à âncora.
+  const devRes = () => (G.canvas && G.W ? G.canvas.width / G.W : 1);
+  const SPR = new Map();
+  let sprRes = 0;
+  function sprite(key, box, paint) {
+    const r = devRes();
+    if (r !== sprRes) { SPR.clear(); sprRes = r; }
+    let s = SPR.get(key);
+    if (s) return s;
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(box[2] * r)); cv.height = Math.max(1, Math.ceil(box[3] * r));
+    const x = cv.getContext('2d');
+    if (x) {
+      x.scale(r, r); x.translate(-box[0], -box[1]); x.lineJoin = 'round'; x.lineCap = 'round';
+      try { paint(x); } catch (err) { G.reportError(err, 'enemies sprite ' + key); }
+    }
+    s = { cv, box };
+    if (SPR.size > 80) SPR.delete(SPR.keys().next().value);
+    SPR.set(key, s);
+    return s;
+  }
+  function blit(c, s, x, y) { const B = s.box; c.drawImage(s.cv, x + B[0], y + B[1], B[2], B[3]); }
   function rrect(ctx, x, y, w, h, r) { G.roundRect(ctx, x, y, w, h, r); }
   function inked(ctx, fill, lw) { ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = INK; ctx.lineWidth = lw || 1.5; ctx.stroke(); }
 
@@ -236,6 +313,8 @@
     ministro: ['MINISTRO', 'são 38. Por enquanto.'],
     motoqueiro: ['MOTOBOY DA PICANHA', 'passa atirando e nunca entrega'],
     drone: ['DRONE DA LIVE', 'o REC piscou? Saia da mira'],
+    fiscal: ['FISCAL DA RECEITA', 'CPF na nota? A malha fina tem furo'],
+    maquininha: ['MAQUININHA DA TAXA', 'cada Pix, uma taxinha'],
   };
   // Uma etiqueta por vez: várias espécies novas entrando juntas (fases 3 e 4 pelo menu) se
   // cobriam umas às outras. A espécie que ficou na fila se apresenta num inimigo dela que ainda
@@ -340,10 +419,10 @@
   }
   // Define com moldura: chama introdução, desenha carregador/etiqueta em volta do desenho próprio
   function define(kind, def) {
-    const draw = def.draw, update = def.update, init = def.init;
+    const draw = def.draw, update = def.update, init = def.init, onDeath = def.onDeath;
     def.init = function (e, o, g) {
       // fases mais adiantadas: inimigos comuns mais resistentes (o Zé também chega mais forte)
-      if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * (g.stageIdx || 0); e.hp *= k; e.maxHp = e.hp; }
+      if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * stageLvl(g); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
       introduce(e, g);
@@ -365,6 +444,11 @@
       // a etiqueta sai por cima de todos os inimigos (por baixo dos tiros, que o core desenha depois):
       // quem a desenha é o último inimigo vivo da lista neste quadro
       if (g && g._tagE && e === lastDrawn(g)) { const o = g._tagE; if (!o.dead && o.data.tag) drawTag(ctx, o); }
+    };
+    // revanche da PRESSÃO depois do onDeath próprio (que pode ter soltado a revanche do 2º Mandato)
+    def.onDeath = function (e, g, opts) {
+      if (onDeath) onDeath.call(this, e, g, opts);
+      if (!def.noRevenge) pressRevenge(e, opts);
     };
     def.__tagDraw = true;
     G.Enemies.define(kind, def);
@@ -450,7 +534,7 @@
         d.ft = ivl(M.rand(2.3, 3.1)) / d.fire;
         if (okShot(e)) {
           const o = { style: 'santinho', color: COL.red };
-          if (lvl() >= 2 && Math.random() < 0.5) G.pat.aimedFan(e.x, e.y, 3, 0.38, spd(92), o);
+          if (lvl() >= 2 && Math.random() < 0.5) pFan(e.x, e.y, 3, 0.38, spd(92), o);
           else G.pat.aimed(e.x, e.y, spd(92), o);
           sfx('enemy_shot');
           talk(e, CABO_LINES, 0.1);
@@ -508,7 +592,7 @@
           if (d.stT <= 0) {
             d.st = 'on'; d.stT = ivl(2.6); d.shot2 = false; d.alpha = 1;
             if (okShot(e, 85)) {
-              const n = Math.round(10 + lvl() * 1.6);
+              const n = nRing(Math.round(10 + lvl() * 1.6));
               G.pat.ring(e.x, e.y, n, spd(78), { style: 'orb', color: COL.violet }, Math.random() * TAU);
               if (lvl() >= 2.5) G.pat.ring(e.x, e.y, n, spd(62), { style: 'small', color: COL.magenta }, Math.random() * TAU);
               sfx('enemy_shot2');
@@ -597,7 +681,7 @@
         d.ft = ivl(1.55);
         if (okShot(e)) {
           const many = lvl() >= 2;
-          G.pat.aimedFan(e.x, e.y + 4, many ? 5 : 3, many ? 0.62 : 0.34, spd(112), { style: 'rice', color: COL.pink });
+          pFan(e.x, e.y + 4, many ? 5 : 3, many ? 0.62 : 0.34, spd(112), { style: 'rice', color: COL.pink });
           sfx('enemy_shot2');
           talk(e, DEP_LINES, 0.22);
         }
@@ -806,7 +890,7 @@
         d.ft -= dt;
         if (d.ft <= 0) {
           d.ft = ivl(2.6);
-          if (okShot(e)) { G.pat.aimedFan(e.x, e.y, 5, 0.9, spd(84), { style: 'star', color: COL.magenta }); sfx('enemy_shot2'); }
+          if (okShot(e)) { pFan(e.x, e.y, 5, 0.9, spd(84), { style: 'star', color: COL.magenta }); sfx('enemy_shot2'); }
           talk(e, MKT_LINES, 0.3);
         }
       }
@@ -961,10 +1045,11 @@
       const d = e.data;
       d.beat = Math.max(0, d.beat - dt * 2.6);
       d.ft -= dt;
-      const n = 20 + Math.round(lvl()) * 2;
+      const n0 = 20 + Math.round(lvl()) * 2, n = nRing(n0);
       // anel com brecha; a 2ª batida ("tum-TUM") sai com metade dos tiros, encaixada nos vãos
+      // (a brecha é medida no nº base: a PRESSÃO adensa o anel sem fechar a saída)
       const fire = (off, half) => {
-        const gapHalf = (2.6 * TAU) / n, step = TAU / n;
+        const gapHalf = (2.6 * TAU) / n0, step = TAU / n;
         if (!half) d.gapA = aim(e) + M.rand(-0.7, 0.7);
         for (let i = 0; i < n; i++) {
           if (half && i % 2) continue;
@@ -1023,8 +1108,11 @@
           // nº ímpar: o grão do meio vem em você e as 3 rajadas saem nas MESMAS direções (corredores):
           // um passo pro lado e você fica no vão. No 2º Mandato a rajada do meio sai desencontrada (rede).
           const L2 = loop2();
-          const n = 9 + (lvl() >= 2 ? 2 : 0) + (L2 && lvl() >= 3.5 ? 2 : 0), spread = 1.45;
-          const off = L2 && d.burst % 2 ? spread / (n - 1) / 2 : 0;
+          const n0 = 9 + (lvl() >= 2 ? 2 : 0) + (L2 && lvl() >= 3.5 ? 2 : 0), step = 1.45 / (n0 - 1);
+          // PRESSÃO: mais grãos no mesmo passo (leque mais largo), sempre em nº ímpar
+          let n = nP(n0); if ((n - n0) % 2) n++;
+          const spread = Math.min(2.4, step * (n - 1));
+          const off = L2 && d.burst % 2 ? step / 2 : 0;
           if (okShot(e, 90)) G.pat.fan(e.x, e.y + 6, d.aimA + off, n, spread, spd(100 + d.burst * 9), { style: 'rice', color: COL.orange });
           d.burst++; d.bt = 0.24;
           if (d.burst >= 3) { d.cyc = 'wait'; d.ct = ivl(2.0); }
@@ -1177,7 +1265,7 @@
           e.y = M.lerp(e.y, d.ty, 1 - Math.pow(0.1, dt)) + Math.sin(d.stT * 8) * 0.4;
           if (!d.fired && d.stT > 0.7) {
             d.fired = true;
-            if (okShot(e, 110)) { G.pat.aimedFan(e.x, e.y + 4, lvl() >= 3 ? 5 : 3, 0.5, spd(100), { style: 'en_imposto', color: COL.orange }); sfx('enemy_shot'); }
+            if (okShot(e, 110)) { pFan(e.x, e.y + 4, lvl() >= 3 ? 5 : 3, 0.5, spd(100), { style: 'en_imposto', color: COL.orange }); sfx('enemy_shot'); }
           }
           if (d.stT > d.prowlT && p && p.alive && !p.entering) {
             if (d.pounces >= d.maxP) { d.st = 'flee'; talk(e, ['Até o próximo IR!', 'Volto em abril!', 'Depois é a vez do Lule!'], 1, 1.6, true); break; }
@@ -1478,6 +1566,189 @@
   });
 
   // ======================================================================
+  // FISCAL DA RECEITA (fase 4, Fazenda) — desce, paira e ergue o carimbo (aviso de 0,6 s);
+  // alterna a MALHA FINA (rede de DARFs caindo, com um furo) e um leque mirado de DARFs. Sai de lado.
+  // ======================================================================
+  const FISCAL = { skin: '#e0b089', hair: 'short', hairColor: '#2a221c', body: 'suit', suit: '#5d6470', shirt: '#f2f2f2', tie: '#1b3fa0', face: 'oval', brows: 'normal', seed: 40 };
+  const FIS_SIZE = 44, FIS_TELL = 0.6, MALHA_DX = 18;
+  const DARF_O = { style: 'en_darf', color: COL.red };
+  // Redes vivas na tela (de todos os fiscais): uma rede nova nunca nasce na mesma altura de outra
+  // que cubra a mesma faixa de x (duas redes coladas fechariam o furo uma da outra).
+  function netsBusy(g, x, y, halfW) {
+    const l = g._nets || (g._nets = []);
+    for (let i = l.length - 1; i >= 0; i--) {
+      const n = l[i], ny = n.y0 + n.vy * (g.t - n.t0);
+      if (ny > G.H + 30 || g.t - n.t0 > 14) { l.splice(i, 1); continue; }
+      if (Math.abs(n.x - x) < n.hw + halfW + 22 && Math.abs(ny - y) < 46) return true;
+    }
+    return false;
+  }
+  function fireMalha(e, g) {
+    const n = loop2() ? 9 : 7, hw = ((n - 1) * MALHA_DX) / 2;
+    const x0 = e.x, y = e.y + 20;
+    if (netsBusy(g, x0, y, hw)) return false;
+    // o furo: um encaixe de dentro da rede (nunca a ponta), que esteja dentro da tela
+    const opts = [];
+    for (let i = 1; i < n - 1; i++) { const x = x0 - hw + i * MALHA_DX; if (x > 16 && x < G.W - 16) opts.push(i); }
+    const gap = opts.length ? M.pick(opts) : (n / 2) | 0;
+    let vy = 0;
+    for (let i = 0; i < n; i++) {
+      if (i === gap) continue;
+      const b = G.fire(x0 - hw + i * MALHA_DX, y, DOWN, spd(75), DARF_O);
+      if (b && !vy) vy = b.vy;
+    }
+    g._nets.push({ x: x0, y0: y, t0: g.t, vy: vy || spd(75), hw });
+    return true;
+  }
+  function drawClipboard(ctx, x, y, fl) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(-0.12);
+    rrect(ctx, -5.5, -7, 11, 14, 1.5); inked(ctx, fcol('#9a6a3a', fl), 1);
+    ctx.fillStyle = fcol('#ffffff', fl); ctx.fillRect(-4.2, -5, 8.4, 10.5);
+    ctx.fillStyle = fcol('#c9cdd3', fl); ctx.fillRect(-2.2, -8, 4.4, 2.4);
+    if (!fl) {
+      ctx.fillStyle = '#1b3fa0'; ctx.font = '4px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('IRPF', 0, -2.2);
+      ctx.fillStyle = '#7a8090'; ctx.fillRect(-3.2, 0.4, 6.4, 0.8); ctx.fillRect(-3.2, 2, 5, 0.8);
+      ctx.fillStyle = COL.red; ctx.fillRect(-3.2, 3.6, 6.4, 0.9);
+    }
+    ctx.restore();
+  }
+  function drawStamp(ctx, x, y, up, fl, glint) {
+    ctx.save(); ctx.translate(x, y); if (up) ctx.rotate(0.25);
+    ctx.beginPath(); ctx.arc(0, -6.5, 2.6, 0, TAU); inked(ctx, fcol('#7a4a22', fl), 1);
+    ctx.fillStyle = fcol('#7a4a22', fl); ctx.fillRect(-1.1, -5, 2.2, 4);
+    rrect(ctx, -4.5, -1.5, 9, 4.5, 1); inked(ctx, fcol('#3a3f4b', fl), 1);
+    ctx.fillStyle = fcol('#e63946', fl); ctx.fillRect(-4.2, 2.6, 8.4, 1.6);
+    if (glint > 0 && !fl) {
+      // brilho de 4 pontas: o carimbo vai descer
+      const k = 3 + glint * 4;
+      ctx.fillStyle = '#ffffff'; ctx.globalAlpha = 0.6 + 0.4 * glint;
+      ctx.beginPath(); ctx.moveTo(0, -6.5 - k); ctx.lineTo(1, -7.5); ctx.lineTo(k, -6.5); ctx.lineTo(1, -5.5); ctx.lineTo(0, -6.5 + k); ctx.lineTo(-1, -5.5); ctx.lineTo(-k, -6.5); ctx.lineTo(-1, -7.5); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+  define('fiscal', {
+    hp: 18, r: 15, score: 700, pix: 6,
+    init(e, o) {
+      initMove(e, o, { path: 'stop', ty: M.rand(110, 160), hold: 7, inT: 1.4, exit: 'side', sway: 12 });
+      const d = e.data;
+      d.cyc = 'wait'; d.ct = first(1.2, 2.0); d.tell = 0; d.malha = M.chance(0.5);
+    },
+    update(e, dt, g) {
+      move(e, dt);
+      const d = e.data;
+      if (d.mv !== 'hold') { if (d.cyc === 'tell') d.cyc = 'wait'; return; }
+      if (d.cyc === 'wait') {
+        d.ct -= dt;
+        if (d.ct <= 0) { d.cyc = 'tell'; d.tell = FIS_TELL; talk(e, 'CPF NA NOTA?', 0.3); }
+      } else if (d.cyc === 'tell') {
+        d.tell -= dt;
+        if (d.tell <= 0) {
+          d.cyc = 'wait'; d.ct = Math.max(0.4, ivl(2.8) - FIS_TELL);
+          if (okShot(e, 95)) {
+            let net = false;
+            if (d.malha) net = fireMalha(e, g);
+            if (!net) pFan(e.x, e.y + 14, 3, 0.4, spd(120), DARF_O);
+            else talk(e, 'CAIU NA MALHA FINA!', 0.1);
+            d.malha = !net; // depois da rede, o leque; depois do leque (ou rede adiada), tenta a rede
+            sfx(net ? 'stamp' : 'enemy_shot2');
+          }
+        }
+      }
+    },
+    draw(ctx, e) {
+      const d = e.data, fl = G.isFlash(e);
+      const tell = d.cyc === 'tell', pose = tell ? 'wave' : 'idle';
+      person(ctx, e, FIS_SIZE, FISCAL, { pose, mood: tell ? 'angry' : 'smug' });
+      const hl = hand(FIS_SIZE, pose, e.t, FISCAL.seed, false), hr = hand(FIS_SIZE, pose, e.t, FISCAL.seed, true);
+      drawClipboard(ctx, e.x + hl.x - 1, e.y + hl.y - 2, fl);
+      drawStamp(ctx, e.x + hr.x + 1, e.y + hr.y + (tell ? -2 : 1), tell, fl, tell ? 1 - d.tell / FIS_TELL : 0);
+      // distintivo da Receita no peito
+      ctx.beginPath(); ctx.arc(e.x + 5.5, e.y + 9, 2.8, 0, TAU); inked(ctx, fcol('#ffd23f', fl), 0.9);
+      if (!fl) { ctx.fillStyle = INK; ctx.font = '4px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('R', e.x + 5.5, e.y + 9.3); }
+    },
+  });
+
+  // ======================================================================
+  // MAQUININHA DA TAXA (fase 4) — voa em formação (fly/swarm/side, como bot e ministro);
+  // a tela pisca "+R$" (0,5 s) e solta um anel de "IOF"
+  // ======================================================================
+  const MQ_BOX = [-12, -22, 24, 38], MQ_TELL = 0.5;
+  function paintMaq(c, st) {
+    // st: 'n' normal · 't' aviso (+R$) · 'f' flash de dano
+    const fl = st === 'f';
+    // fita do recibo saindo por cima
+    c.beginPath(); c.rect(-4.5, -15.5, 9, 5); inked(c, fl ? '#fff' : '#ffffff', 0.8);
+    if (!fl) { c.fillStyle = '#9aa5b8'; c.fillRect(-3, -14, 6, 0.7); c.fillRect(-3, -12.6, 4.5, 0.7); }
+    // corpo 16×24
+    rrect(c, -8, -12, 16, 24, 3.2); inked(c, fl ? '#fff' : '#2b2f3a', 1.5);
+    c.fillStyle = fl ? '#fff' : '#3a3f4b'; c.fillRect(-6.5, -11, 13, 1.4); // fenda do recibo
+    // tela
+    rrect(c, -6, -8, 12, 7.5, 1.4);
+    c.fillStyle = fl ? '#fff' : st === 't' ? '#fff3a8' : '#3ddc84'; c.fill();
+    if (!fl) {
+      c.fillStyle = st === 't' ? '#c8102e' : '#0d3b22'; c.font = '5px ' + G.FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(st === 't' ? '+R$' : '+%', 0, -4.1);
+      // teclado
+      c.fillStyle = '#c9d3e6';
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) { c.beginPath(); c.arc(-4 + k * 4, 2.6 + r * 3.1, 1, 0, TAU); c.fill(); }
+      c.fillStyle = '#3ddc84'; c.fillRect(2.4, 10.4 - 0.7, 3, 1.3);
+      c.fillStyle = '#ff2a4a'; c.fillRect(-5.4, 10.4 - 0.7, 3, 1.3);
+    }
+    // eixo do rotor
+    c.strokeStyle = INK; c.lineWidth = 1.3; c.beginPath(); c.moveTo(0, -15.5); c.lineTo(0, -19); c.stroke();
+  }
+  function maqSprites() { for (const st of ['n', 't', 'f']) sprite('mq_' + st, MQ_BOX, (c) => paintMaq(c, st)); }
+  define('maquininha', {
+    hp: 5, r: 11, score: 240, pix: 2,
+    init(e, o) {
+      initMove(e, o, { vy: 80 });
+      const d = e.data;
+      d.fire = o.fire != null ? o.fire : 1;
+      d.ft = 1.0; d.tell = 0;
+      d.wob = Math.random() * TAU;
+    },
+    update(e, dt) {
+      move(e, dt);
+      const d = e.data;
+      if (!d.fire || d.leaving) { d.tell = 0; return; }
+      if (d.tell > 0) {
+        d.tell -= dt;
+        if (d.tell <= 0 && okShot(e, 90)) {
+          const n = nRing(loop2() ? 8 : 6);
+          G.pat.ring(e.x, e.y, n, spd(85), { style: 'en_pixtax', color: COL.orange }, Math.random() * TAU);
+          sfx('enemy_shot');
+        }
+        return;
+      }
+      d.ft -= dt;
+      if (d.ft <= 0) {
+        d.ft = ivl(2.2) / d.fire;
+        if (okShot(e, 90)) d.tell = MQ_TELL;
+      }
+    },
+    draw(ctx, e, g) {
+      const d = e.data, fl = G.isFlash(e);
+      const st = fl ? 'f' : d.tell > 0 && ((d.tell * 12) | 0) % 2 === 0 ? 't' : 'n';
+      ctx.translate(e.x, e.y);
+      ctx.rotate(M.clamp(e.vx / 900, -0.22, 0.22) + Math.sin(e.t * 5 + d.wob) * 0.05);
+      blit(ctx, sprite('mq_' + st, MQ_BOX, (c) => paintMaq(c, st)), 0, 0);
+      // rotor
+      const pw = 8.5 * Math.abs(Math.cos(e.t * 38));
+      ctx.strokeStyle = fl ? '#fff' : '#c9d3e6'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-pw, -19.5); ctx.lineTo(pw, -19.5); ctx.stroke();
+      if (d.tell > 0) bang(ctx, 12, -16, g.t, COL.orange);
+    },
+    onDeath(e, g, opts) {
+      if ((opts && opts.silent) || bossDying() || !g) return;
+      // o recibo desenrola
+      for (let i = 0; i < 4; i++) G.part({ x: e.x + M.rand(-3, 3), y: e.y - 12, vx: M.rand(-35, 35), vy: M.rand(-110, -60), type: 'paper', size: M.rand(3, 5), life: M.rand(0.7, 1.1), color: i % 2 ? '#fff1d6' : '#ffffff', drag: 0.95, grav: 160, rot: M.rand(0, TAU), vr: M.rand(-8, 8) });
+      g._mqN = (g._mqN || 0) + 1;
+      if (g._mqN % 4 === 1) G.text(e.x, e.y, 'ESTORNO!', { size: 8 });
+    },
+  });
+
+  // ======================================================================
   // CHEFES INTERMEDIÁRIOS — ciclo comum: entra → luta (padrões) → foge se demorar
   // ======================================================================
   function mbStart(e, o, dur, homeY) {
@@ -1525,7 +1796,7 @@
   function mbFlee(e, text) {
     const d = e.data;
     d.st = 'leave'; d.stT = 0;
-    talk(e, text, 1, 2.2, true);
+    if (text) talk(e, text, 1, 2.2, true);
     G.text(e.x, e.y + 40, 'FUGIU!', { color: G.C.orange, size: 14, life: 1.4, vy: -20 });
   }
   function mbDeath(e, msg) {
@@ -1537,7 +1808,7 @@
   // Zona de acerto extra (invisível) presa a um chefe intermediário largo: repassa o dano ao "pai".
   // Ignora bomba (o pai já leva a dele) e não soma em dobro com o jato d'água (que atravessa tudo).
   define('mb_hit', {
-    hp: 1e9, r: 20, score: 1, pix: 0, harmless: true, keepOffscreen: true, noScale: true, ignoreClear: true,
+    hp: 1e9, r: 20, score: 1, pix: 0, harmless: true, keepOffscreen: true, noScale: true, ignoreClear: true, noPress: true, noRevenge: true,
     init(e, o) { e.data.parent = o.parent; e.data.dx = o.dx || 0; e.data.dy = o.dy || 0; },
     update(e) {
       const P = e.data.parent;
@@ -1557,8 +1828,10 @@
   function mbHitZone(parent, dx, dy, r) { return G.spawnEnemy('mb_hit', parent.x + dx, parent.y + dy, { parent, dx, dy, r }); }
 
   // anel com brecha (ondas sonoras)
-  function gappedRing(x, y, n, speed, color, gapN, gapJit) {
-    const gapA = G.aim(x, y) + M.rand(-gapJit, gapJit), gapHalf = ((gapN / 2) * TAU) / n, step = TAU / n;
+  // (PRESSÃO: anel ×(1 + 0,25 R); a brecha continua do tamanho do anel base)
+  function gappedRing(x, y, n0, speed, color, gapN, gapJit) {
+    const n = nRing(n0);
+    const gapA = G.aim(x, y) + M.rand(-gapJit, gapJit), gapHalf = ((gapN / 2) * TAU) / n0, step = TAU / n;
     const off = Math.random() * step;
     for (let i = 0; i < n; i++) {
       const a = off + i * step;
@@ -1661,7 +1934,7 @@
         d.beat = 1; sfx('enemy_shot2');
       } else if (d.pat === 'santinhos') {
         const big = d.pn % 3 === 2;
-        G.pat.aimedFan(cx, cy, big ? 7 : 5, big ? 0.95 : 0.6, spd(104), { style: 'santinho', color: COL.red });
+        pFan(cx, cy, big ? 7 : 5, big ? 0.95 : 0.6, spd(104), { style: 'santinho', color: COL.red });
         d.pn++; d.pt = 0.42; d.beat = 0.8; sfx('enemy_shot');
       } else if (d.pat === 'notas') {
         d.ang = (d.ang || 0) + 0.24;
@@ -1678,7 +1951,7 @@
     },
   });
   define('trio_caixa', {
-    hp: 110, r: 21, score: 3000, pix: 8, keepOffscreen: true, noScale: true,
+    hp: 110, r: 21, score: 3000, pix: 8, keepOffscreen: true, noScale: true, noRevenge: true,
     init(e, o) { e.data.parent = o.parent; e.data.side = o.side || 1; e.data.beat = 0; },
     update(e, dt) {
       const d = e.data, P = d.parent;
@@ -1766,7 +2039,7 @@
           d.pn++; d.pt = 0.2; sfx('whoosh');
         } else d.pt = 99;
       } else if (d.pat === 'propina') {
-        G.pat.aimedFan(mx, my - 6, 7, 0.95, spd(110), { style: 'en_cedula', color: COL.nota10 });
+        pFan(mx, my - 6, 7, 0.95, spd(110), { style: 'en_cedula', color: COL.nota10 });
         d.pn++; d.pt = 0.5; sfx('enemy_shot2');
       }
     },
@@ -1781,7 +2054,7 @@
   });
   // malinha arremessada: atire nela (vira Pix) antes que estoure em anel
   define('maleta', {
-    hp: 5, r: 10, score: 200, pix: 3, noScale: true,
+    hp: 5, r: 10, score: 200, pix: 3, noScale: true, noRevenge: true,
     init(e, o) {
       const d = e.data;
       d.sx = e.x; d.sy = e.y; d.tx = o.tx != null ? o.tx : e.x; d.ty = o.ty != null ? o.ty : G.H * 0.45;
@@ -1797,7 +2070,7 @@
         e.x = d.tx; e.y = d.ty;
         d.rot = M.lerp(d.rot, 0, 0.2);
         if (e.t >= d.ft + d.fuse) {
-          const n = Math.round(11 + lvl());
+          const n = nRing(Math.round(11 + lvl()));
           G.pat.ring(e.x, e.y, n, spd(82), { style: 'en_cedula', color: COL.nota10, delay: 0.22 }, Math.random() * TAU);
           G.burst(e.x, e.y, 10, { colors: ['#7ed957', '#ffffff', '#8b5a2b'], type: 'paper', speed: 140 });
           sfx('enemy_shot2');
@@ -1958,6 +2231,264 @@
   });
 
   // ----------------------------------------------------------------------
+  // O IMPOSTÔMETRO (fase 4, Fazenda) — painel de LED voador "R$ 1.171.171.171".
+  //  A) O NÚMERO CAI: uma casa pisca branco (0,7 s) e despenca como um DÍGITO de 7 segmentos
+  //     feito de tiros (3 por segmento, caixa 30×50); no máximo 3 dígitos na tela, centros ≥ 74 px.
+  //  B) ARRECADAÇÃO: leque mirado de DARFs.
+  //  C) abaixo de 50%: "MAIS UM DÍGITO!" — o painel ganha uma casa, caem 2 dígitos por vez e
+  //     a cada 4 s sai um anel de DARFs com um vão de 3 tiros.
+  //  Os dígitos do painel são sprites prontos (sem fillText por quadro).
+  // ----------------------------------------------------------------------
+  const SEG7 = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
+  // segmentos a..g de uma caixa ±hw × ±hh: [x0, y0, x1, y1] em unidades de hw/hh
+  const SEGS = [[-1, -1, 1, -1], [1, -1, 1, 0], [1, 0, 1, 1], [-1, 1, 1, 1], [-1, 0, -1, 1], [-1, -1, -1, 0], [-1, 0, 1, 0]];
+  const IMP = {
+    CW: 11, CH: 19, CG: 1, DOT: 4, RS: 18, PAD: 6, PH: 52,
+    BLINK: 0.7, DIG_W: 30, DIG_H: 50, DIG_MIN_DX: 74, MAX_DIG: 3,
+    A: 2.4, A_L2: 2.0, B: 1.5, C: 4.0, FALL: 80, FALL_L2: 92, DUR: 55,
+  };
+  // posição x (relativa ao centro) de cada casa; grupos de 3 contados da direita
+  function impLayout(N) {
+    const xs = [];
+    let w = IMP.PAD + IMP.RS;
+    for (let i = 0; i < N; i++) {
+      xs.push(w + IMP.CW / 2);
+      w += IMP.CW;
+      if (i < N - 1) w += IMP.CG + ((N - 1 - i) % 3 === 0 ? IMP.DOT : 0);
+    }
+    w += IMP.PAD;
+    const PW = w + 9;
+    for (let i = 0; i < N; i++) xs[i] -= PW / 2 - 4.5;
+    return { xs, PW };
+  }
+  const IMP_L = { 10: impLayout(10), 11: impLayout(11) };
+  const IMP_CY = 5; // linha dos dígitos (relativa ao centro do painel)
+  function segPath(c, mask, hw, hh, lw, lit) {
+    for (let s = 0; s < 7; s++) {
+      if (!!(mask & (1 << s)) !== lit) continue;
+      const q = SEGS[s];
+      c.moveTo(q[0] * hw, q[1] * hh); c.lineTo(q[2] * hw, q[3] * hh);
+    }
+  }
+  // uma casa do painel: fundo escuro, segmentos apagados e acesos ('w' = piscando branco, 'b' = vazia)
+  function paintCell(c, v) {
+    const w = IMP.CW, h = IMP.CH;
+    c.fillStyle = v === 'w' ? '#ffffff' : '#1a0507'; rrect(c, -w / 2, -h / 2, w, h, 1.5); c.fill();
+    if (v === 'w') return;
+    const hw = 3.1, hh = 6.4;
+    c.lineCap = 'round'; c.lineWidth = 1.9;
+    c.strokeStyle = 'rgba(255,42,74,0.13)'; c.beginPath(); segPath(c, 0, hw, hh, 0, false); c.stroke();
+    if (v === 'b') return;
+    const m = SEG7[v];
+    c.shadowColor = '#ff2a4a'; c.shadowBlur = 3;
+    c.strokeStyle = '#ff4d4d'; c.beginPath(); segPath(c, m, hw, hh, 0, true); c.stroke();
+    c.shadowBlur = 0; c.strokeStyle = '#ffd0d0'; c.lineWidth = 0.7; c.stroke();
+  }
+  const cellSpr = (v) => sprite('imp_c' + v, [-IMP.CW / 2, -IMP.CH / 2, IMP.CW, IMP.CH], (c) => paintCell(c, v));
+  function paintPanel(c, N, zero) {
+    const PW = IMP_L[N].PW, PH = IMP.PH;
+    // jatos (suportes)
+    for (const sx of [-1, 1]) { rrect(c, sx * 48 - 7, PH / 2 - 3, 14, 9, 2); inked(c, '#5b6375', 1.4); }
+    rrect(c, -PW / 2, -PH / 2, PW, PH, 7); inked(c, '#ff8c1a', 2.4);
+    rrect(c, -PW / 2 + 3, -PH / 2 + 3, PW - 6, PH - 6, 5); c.fillStyle = '#0b0d12'; c.fill();
+    c.fillStyle = '#ffd23f'; c.font = '8px ' + G.FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('IMPOSTÔMETRO', 0, -PH / 2 + 10);
+    c.fillStyle = 'rgba(255,140,26,0.55)'; c.fillRect(-PW / 2 + 10, -PH / 2 + 16, PW - 20, 1);
+    const L = IMP_L[N];
+    c.fillStyle = '#ff4d4d'; c.font = '9px ' + G.FONT_DISPLAY; c.textAlign = 'left';
+    if (zero) {
+      // "R$ 0": o placar zerado (só no fim)
+      c.textAlign = 'center'; c.fillText('R$', -10, IMP_CY + 0.5);
+      c.save(); c.translate(10, IMP_CY); paintCell(c, 0); c.restore();
+      return;
+    }
+    c.fillText('R$', L.xs[0] - IMP.CW / 2 - IMP.RS + 1, IMP_CY + 0.5);
+    // pontos de milhar
+    c.fillStyle = '#ff4d4d';
+    for (let i = 0; i < N - 1; i++) if ((N - 1 - i) % 3 === 0) { c.beginPath(); c.arc(L.xs[i] + IMP.CW / 2 + (IMP.CG + IMP.DOT) / 2, IMP_CY + IMP.CH / 2 - 2, 1.2, 0, TAU); c.fill(); }
+  }
+  const panelSpr = (N, zero) => { const PW = IMP_L[N].PW; return sprite('imp_p' + N + (zero ? 'z' : ''), [-PW / 2 - 2, -IMP.PH / 2 - 2, PW + 4, IMP.PH + 16], (c) => paintPanel(c, N, zero)); };
+  function impSprites() { for (const N of [10, 11]) { panelSpr(N); panelSpr(N, true); } for (let v = 0; v < 10; v++) cellSpr(v); cellSpr('w'); cellSpr('b'); }
+  function drawImpPanel(ctx, e, cells, N, blinkMask, fl, zero, alpha) {
+    const t = e.t;
+    if (alpha != null) ctx.globalAlpha = alpha;
+    // chamas dos jatos
+    if (!fl) {
+      for (const sx of [-1, 1]) {
+        const fh = 9 + Math.sin(t * 40 + sx) * 3;
+        ctx.fillStyle = 'rgba(255,140,26,0.85)';
+        ctx.beginPath(); ctx.moveTo(e.x + sx * 48 - 5, e.y + IMP.PH / 2 + 6); ctx.lineTo(e.x + sx * 48 + 5, e.y + IMP.PH / 2 + 6); ctx.lineTo(e.x + sx * 48, e.y + IMP.PH / 2 + 10 + fh); ctx.closePath(); ctx.fill();
+      }
+    }
+    blit(ctx, panelSpr(N, zero), e.x, e.y);
+    if (!zero) {
+      const L = IMP_L[N], blink = ((t * 9) | 0) % 2 === 0;
+      for (let i = 0; i < N; i++) {
+        const v = (blinkMask & (1 << i)) && blink ? 'w' : cells[i];
+        blit(ctx, cellSpr(v), e.x + L.xs[i], e.y + IMP_CY);
+      }
+    }
+    if (fl) { ctx.globalAlpha = (alpha != null ? alpha : 1) * 0.55; ctx.fillStyle = '#ffffff'; rrect(ctx, e.x - IMP_L[N].PW / 2, e.y - IMP.PH / 2, IMP_L[N].PW, IMP.PH, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+  // forma de tiros de um dígito: 3 tiros por segmento aceso, todos caindo juntos (forma rígida)
+  function dropDigit(x, y, v, vy, color) {
+    const hw = IMP.DIG_W / 2, hh = IMP.DIG_H / 2, m = SEG7[v], list = [];
+    const o = { style: 'small', color, delay: 0.22 };
+    for (let s = 0; s < 7; s++) {
+      if (!(m & (1 << s))) continue;
+      const q = SEGS[s];
+      for (let k = 0; k < 3; k++) {
+        const u = (2 * k + 1) / 6;
+        const bx = x + (q[0] + (q[2] - q[0]) * u) * hw, by = y + (q[1] + (q[3] - q[1]) * u) * hh;
+        const b = G.fire(bx, by, DOWN, vy, o);
+        if (b) list.push(b);
+      }
+    }
+    return list;
+  }
+  function digAlive(dg) {
+    for (const b of dg.b) if (!b.dead && b.y < G.H + 30) { dg.y = b.y; return true; }
+    return false;
+  }
+  define('impostometro', {
+    hp: 1600, r: 46, score: 25000, pix: 55, big: true, keepOffscreen: true,
+    init(e, o) {
+      mbStart(e, o, IMP.DUR, 120);
+      if (!o.drop) e.drop = ['power'];
+      const d = e.data;
+      d.N = 10; d.cells = [1, 1, 7, 1, 1, 7, 1, 1, 7, 1]; d.cnt = 171; d.refill = []; // entra lendo R$ 1.171.171.171
+      d.tA = 1.4; d.tB = 0.9; d.tC = 2.0; d.blink = 0; d.blinkT = 0; d.pick = []; d.digs = []; d.late = false;
+      mbHitZone(e, -58, 4, 24); mbHitZone(e, 58, 4, 24); // painel largo
+      G.banner('IMPOSTÔMETRO', 'NÃO PARA DE SUBIR', { small: true, color: G.C.orange, dur: 2.2 });
+      sfx('charge');
+    },
+    update(e, dt, g) {
+      const d = e.data;
+      // o número não para de subir: as 3 últimas casas giram a cada quadro
+      d.cnt += dt * 431;
+      const c = d.cnt | 0, N = d.N;
+      if (!(d.refill[N - 1] > 0)) d.cells[N - 1] = c % 10;
+      if (!(d.refill[N - 2] > 0)) d.cells[N - 2] = ((c / 10) | 0) % 10;
+      if (!(d.refill[N - 3] > 0)) d.cells[N - 3] = ((c / 100) | 0) % 10;
+      for (let i = 0; i < N; i++) if (d.refill[i] > 0) { d.refill[i] -= dt; if (d.refill[i] <= 0) d.cells[i] = M.randi(2, 9); }
+      if (d.st === 'enter') { e.x = G.W / 2; mbEnter(e, dt, 3.0); return; }
+      if (d.st === 'leave') {
+        d.stT += dt; e.y -= (40 + d.stT * 150) * dt;
+        if (e.y < -140) { e.dead = true; e.escaped = true; }
+        return;
+      }
+      d.fightT += dt;
+      e.x = G.W / 2 + Math.sin(d.fightT * 0.45) * 60;
+      e.y = d.homeY + Math.sin(d.fightT * 1.1) * 4;
+      if (d.fightT > d.dur) { d.blink = 0; mbFlee(e, null); return; }
+      // C) abaixo de 50%: mais uma casa
+      if (!d.late && e.hp / e.maxHp < 0.5) {
+        d.late = true; d.N = 11; d.cells.unshift(1); d.refill.unshift(0);
+        if (d.blink) { d.blink = 0; d.pick.length = 0; } // as casas mudaram de lugar: cancela o aviso
+        G.text(e.x, e.y + 40, 'MAIS UM DÍGITO!', { size: 13, color: '#ffd23f', stroke: true });
+        sfx('warning');
+      }
+      const L2 = loop2();
+      for (let i = d.digs.length - 1; i >= 0; i--) if (!digAlive(d.digs[i])) d.digs.splice(i, 1);
+      // A) O NÚMERO CAI
+      if (d.blink) {
+        d.blinkT -= dt;
+        if (d.blinkT <= 0) {
+          const vy = spd(L2 ? IMP.FALL_L2 : IMP.FALL), L = IMP_L[d.N], y = e.y + IMP.PH / 2 + IMP.DIG_H / 2 + 4;
+          for (const i of d.pick) {
+            const x = M.clamp(e.x + L.xs[i], IMP.DIG_W / 2 + 4, G.W - IMP.DIG_W / 2 - 4);
+            if (!farFromPlayer(x, y, 80)) continue;
+            const v = d.cells[i];
+            d.digs.push({ x, y, b: dropDigit(x, y, v, vy, d.digs.length % 2 ? COL.red : COL.orange) });
+            d.cells[i] = 'b'; d.refill[i] = 0.6;
+          }
+          d.blink = 0; d.pick.length = 0;
+          sfx('enemy_shot2');
+        }
+      } else {
+        d.tA -= dt;
+        if (d.tA <= 0) {
+          d.tA = ivl(L2 ? IMP.A_L2 : IMP.A);
+          const want = Math.min(d.late ? 2 : 1, IMP.MAX_DIG - d.digs.length);
+          if (want > 0 && e.y > 60) {
+            // casas candidatas: cheias, longe (em x) dos dígitos ainda perto do painel e uma da outra
+            const L = IMP_L[d.N], y0 = e.y + IMP.PH / 2 + IMP.DIG_H / 2 + 4, cand = [];
+            for (let i = 0; i < d.N; i++) {
+              if (d.cells[i] === 'b' || d.refill[i] > 0) continue;
+              const x = e.x + L.xs[i];
+              let ok = true;
+              for (const dg of d.digs) if (Math.abs(dg.y - y0) < IMP.DIG_H + 50 && Math.abs(dg.x - x) < IMP.DIG_MIN_DX) { ok = false; break; }
+              if (ok) cand.push(i);
+            }
+            for (let k = 0; k < want && cand.length; k++) {
+              const i = cand.splice(M.randi(0, cand.length - 1), 1)[0];
+              d.pick.push(i);
+              d.blink |= 1 << i;
+              // o 2º dígito da dupla: só casas a ≥ 74 px desta
+              for (let j = cand.length - 1; j >= 0; j--) if (Math.abs(L.xs[cand[j]] - L.xs[i]) < IMP.DIG_MIN_DX) cand.splice(j, 1);
+            }
+            if (d.blink) { d.blinkT = IMP.BLINK; sfx('tink'); }
+          }
+        }
+      }
+      // B) ARRECADAÇÃO
+      d.tB -= dt;
+      if (d.tB <= 0) {
+        d.tB = ivl(IMP.B);
+        if (okShot(e, 100)) { pFan(e.x, e.y + IMP.PH / 2 + 4, 3, 0.42, spd(130), DARF_O); sfx('enemy_shot'); }
+      }
+      // C) anel de DARFs com vão de 3 (o vão é medido no anel base de 14)
+      if (d.late) {
+        d.tC -= dt;
+        if (d.tC <= 0) {
+          d.tC = IMP.C;
+          if (okShot(e, 100)) {
+            const n0 = 14, n = nRing(n0), gapA = aim(e) + M.rand(-0.5, 0.5), gapHalf = (1.5 * TAU) / n0, off = Math.random() * TAU;
+            for (let i = 0; i < n; i++) { const a = off + (i * TAU) / n; if (Math.abs(M.wrapAngle(a - gapA)) >= gapHalf) G.fire(e.x, e.y + IMP.PH / 2 + 4, a, spd(88), DARF_O); }
+            sfx('enemy_shot2');
+          }
+        }
+      }
+    },
+    draw(ctx, e) {
+      const d = e.data;
+      drawImpPanel(ctx, e, d.cells, d.N, d.blink, G.isFlash(e), false);
+      if (d.st === 'fight') mbBar(ctx, e.x, e.y - IMP.PH / 2 - 12, 120, e.hp / e.maxHp, mbLabel(e, null));
+    },
+    onHit(e, dmg) { mbOnHit(e, dmg); },
+    onDeath(e, g) {
+      if (bossDying() || !g) return;
+      mbDeath(e, null);
+      // abaixo do painel, que fica rolando até "R$ 0" (o core escreve o CASSADO! por cima)
+      G.text(e.x, e.y + 64, 'ZEROU O IMPOSTÔMETRO!', { size: 16, color: '#ffd23f', stroke: true, life: 1.8, vy: -8 });
+      // confete de recibos
+      G.burst(e.x, e.y, 22, { colors: ['#ffffff', '#fff1d6', '#ffd23f'], type: 'paper', speed: 220, life: 1.2, grav: 140 });
+      g.impZero = true;
+      // o placar rola até "R$ 0" (enfeite: não leva tiro, não segura a fase)
+      G.spawnEnemy('imp_zero', e.x, e.y, { cells: e.data.cells.slice(), N: e.data.N });
+    },
+  });
+  define('imp_zero', {
+    hp: 1, r: 10, score: 0, pix: 0, harmless: true, keepOffscreen: true, ignoreClear: true, noScale: true, noPress: true, noRevenge: true,
+    init(e, o) { e.invuln = true; e.data.cells = o.cells || [1, 1, 7, 1, 1, 7, 1, 1, 7, 1]; e.data.N = o.N || 10; e.data.c0 = e.data.cells.map((v) => (typeof v === 'number' ? v : 9)); },
+    update(e, dt) {
+      const d = e.data;
+      e.invuln = true;
+      if (e.t < 0.9) { // os dígitos rolam para baixo até zerar
+        const k = (0.9 - e.t) / 0.9;
+        for (let i = 0; i < d.N; i++) d.cells[i] = Math.round(d.c0[i] * k + ((e.t * 30 + i) | 0) % 3) % 10;
+      }
+      if (e.t > 1.7) e.y -= (e.t - 1.7) * 260 * dt;
+      if (e.t > 2.6 || e.y < -80) { e.dead = true; e.escaped = true; }
+    },
+    draw(ctx, e) {
+      const d = e.data, zero = e.t >= 0.9;
+      drawImpPanel(ctx, e, d.cells, d.N, 0, false, zero, e.t > 1.7 ? Math.max(0, 1 - (e.t - 1.7) / 0.9) : 1);
+    },
+  });
+
+  // ----------------------------------------------------------------------
   // COMITIVA DOS 38 MINISTROS (fase 4) — conga de ministros atrás do chefe.
   // Cada ministro é um inimigo. Acertou o chefe? A fila revida em "ola".
   // Derrubou o chefe? Todo mundo é demitido em cadeia.
@@ -2018,7 +2549,7 @@
           d.pause = 2.0; d.photoT = lonely ? 4.5 : 7.5;
           talk(e, 'FOTO OFICIAL! Sorriam!', 1, 1.5, true);
           G.part({ x: e.x, y: e.y, type: 'flash', size: 40, life: 0.18, color: '#ffffff' });
-          if (okShot(e, 90)) G.pat.ring(e.x, e.y, 18, spd(80), { style: 'star', color: COL.magenta }, Math.random() * TAU);
+          if (okShot(e, 90)) G.pat.ring(e.x, e.y, nRing(18), spd(80), { style: 'star', color: COL.magenta }, Math.random() * TAU);
           sfx('stamp');
         }
         if (d.pause > 0) { d.pause -= dt; d.hold = true; }
@@ -2033,8 +2564,8 @@
         if (d.fightT > d.dur) { d.st = 'leave'; talk(e, 'Acabou a viagem oficial!', 1, 2, true); }
         // ataques do chefe
         d.ft -= dt; d.rt -= dt;
-        if (d.ft <= 0) { d.ft = ivl(1.6); if (okShot(e)) { G.pat.aimedFan(e.x, e.y, 3, 0.36, spd(112), { style: 'rice', color: COL.pink }); sfx('enemy_shot2'); } }
-        if (d.rt <= 0) { d.rt = ivl(4.6); if (okShot(e, 90)) { G.pat.ring(e.x, e.y, 14, spd(88), { style: 'orb', color: COL.orange }, Math.random() * TAU); sfx('enemy_shot2'); } }
+        if (d.ft <= 0) { d.ft = ivl(1.6); if (okShot(e)) { pFan(e.x, e.y, 3, 0.36, spd(112), { style: 'rice', color: COL.pink }); sfx('enemy_shot2'); } }
+        if (d.rt <= 0) { d.rt = ivl(4.6); if (okShot(e, 90)) { G.pat.ring(e.x, e.y, nRing(14), spd(88), { style: 'orb', color: COL.orange }, Math.random() * TAU); sfx('enemy_shot2'); } }
         if (Math.random() < dt * 0.2) talk(e, COMI_LINES, 0.6);
       } else { // 'leave': sai por cima e espera a fila toda sair
         e.y -= v * dt;
@@ -2079,7 +2610,7 @@
     },
   });
   define('comitiva_seg', {
-    hp: 15, r: 11, score: 300, pix: 1, keepOffscreen: true, noScale: true,
+    hp: 15, r: 11, score: 300, pix: 1, keepOffscreen: true, noScale: true, noRevenge: true, // a demissão em cadeia não revida
     init(e, o) {
       const d = e.data;
       d.leader = o.leader; d.idx = o.idx || 1; d.v = d.idx % MIN.length; d.facing = 1; d.fireAt = 0; d.dieAt = 0;
@@ -2130,6 +2661,7 @@
     lobista_mor: () => [[LOBMOR, 112, [['hold', 'normal']]]], // ≥ 70 px: o art.js guarda só o corpo
     comitiva: () => [[COMI_CHEF, 46, [['wave', 'smug'], ['up', 'laugh'], ['wave', 'laugh']]],
       [MIN, 28, [['hold', 'normal'], ['up', 'laugh'], ['hold', 'hurt']]]],
+    fiscal: () => [[FISCAL, FIS_SIZE, [['idle', 'smug'], ['wave', 'angry']]]],
   };
   // estilo × cor de cada tipo (inclui os filhos: metades, malinhas, bots do servidor, a fila da comitiva)
   const BULLETS = {
@@ -2150,7 +2682,12 @@
     lobista_mor: [['en_cedula', COL.nota50], ['en_cedula', COL.nota10]],
     servidor: [['needle', COL.red], ['needle', COL.magenta], ['small', COL.magenta]],
     comitiva: [['rice', COL.pink], ['star', COL.magenta], ['orb', COL.orange], ['small', COL.pink]],
+    fiscal: [['en_darf', COL.red]],
+    maquininha: [['en_pixtax', COL.orange], maqSprites],
+    impostometro: [['small', COL.orange], ['small', COL.red], ['en_darf', COL.red], impSprites],
   };
+  // a revanche da PRESSÃO (tiro rosa pequeno) vale para todo mundo
+  const BULLETS_ALL = [['small', '#ff3d7f']];
   const PWQ = [], BWQ = [];   // pedidos esperando a vez
   const pwAsked = {};         // tipos já pedidos (por resolução do canvas)
   let pwRes = 0, pwTimer = 0;
@@ -2166,13 +2703,13 @@
       } else PWQ.length = 0;
       // sprites de tiro: cada um custa 1-6 ms (shadowBlur); no máximo ~2 ms por vez
       const t0 = performance.now();
-      while (BWQ.length && performance.now() - t0 < 2) { const b = BWQ.shift(); BS.sprite(b[0], b[1]); }
+      while (BWQ.length && performance.now() - t0 < 2) { const b = BWQ.shift(); if (typeof b === 'function') b(); else BS.sprite(b[0], b[1]); }
     } catch (err) { PWQ.length = 0; BWQ.length = 0; G.reportError(err, 'enemies.prewarm'); }
     if (PWQ.length || BWQ.length) pwTimer = setTimeout(pwPump, 60);
   }
   function prewarm(kinds) {
     const res = G.canvas && G.W ? G.canvas.width / G.W : 0;
-    if (res !== pwRes) { pwRes = res; for (const k in pwAsked) delete pwAsked[k]; } // o art.js limpou o cache
+    if (res !== pwRes) { pwRes = res; for (const k in pwAsked) delete pwAsked[k]; for (const b of BULLETS_ALL) BWQ.push(b); } // o art.js limpou o cache
     for (const k of [].concat(kinds || [])) {
       if (!k || pwAsked[k]) continue;
       pwAsked[k] = 1;

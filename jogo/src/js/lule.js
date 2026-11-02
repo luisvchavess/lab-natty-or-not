@@ -5,10 +5,18 @@
    (+ retrato do diálogo, estilos de tiro 'lule_' e o sub-inimigo
    'lule_companheiro'). Contrato: docs/ENGINE.md §5.
 
-   1ª vida (4 fases): Picanha e Cervejinha · Taxa das Blusinhas ·
-   Faz o L · Companheirada. Quando o HP zera, onDefeat devolve true:
-   ele desaba, a tela escurece, silêncio... "ELE VOLTOU!".
-   2ª vida (3 fases): Volta por Cima · Picanha Infinita · A Última Picanha.
+   1ª vida (5 turnos): Picanha e Cervejinha · Tudo Taxado · Faz o L ·
+   Companheirada · Discurso Sem Fim (ÚLTIMO RECURSO). Quando o HP zera,
+   onDefeat devolve true: ele desaba, a tela escurece, silêncio... "ELE VOLTOU!".
+   2ª vida (4 turnos): Volta por Cima · Picanha Infinita · A Última Picanha ·
+   Fim de Mandato (ÚLTIMO RECURSO). Na 2ª vida entra a JANJINHA (janjinha.js,
+   opcional: sem ele a luta é a de sempre): enquanto ela está em cena o Lule
+   fica atrás do cordão do CERIMONIAL (dano ×0,3 e piso de HP; o tonto do olé
+   fura o cordão) e o Leão pode morder o cartão dela (CARTÃO BLOQUEADO).
+   3ª vida, secreta (SPEC5 §9.3): quem chega aqui sem nenhum recurso numa
+   partida começada na fase 1 enfrenta o LULE 5.0 — QUINTO MANDATO (1 turno).
+   PRESSÃO (SPEC5 §3): variantes travadas por turno em d.pl / d.pR, cpiCo no CPI!,
+   tonto + 0,3 R. ÚLTIMO RECURSO: depois de 30 s nele, SEM SAÍDA ×1,5.
 
    Manha (ENGINE §5.1): OLÉ — o Leão da Receita entra por baixo, mira no
    Zé e dá o bote. Quem fica entre o Leão e o Lule e sai na hora faz o
@@ -33,13 +41,13 @@
   // 'high' tudo, 'mid' metade das partículas (sem o brilho dourado), 'low' nenhuma partícula decorativa
   const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
 
-  // HP medido com o bot "humano" (tools/humanbot.js --mode ttk, só mirando): VOTO/PANELAÇO/LAVA-JATO nv.5 levam
-  // ~64 s na 1ª vida + ~44 s na 2ª (≈ 110–120 s com a cena da volta) — a luta mais longa do jogo, como deve ser.
-  // Nv.3: 150–210 s. Quem chega fraco não fica preso para sempre: o Lule CANSA (FAT1/FAT2) e leva até 2× de dano.
-  const HP1 = 4400, HP2 = 2850, HOME_Y = 178;
-  // Cansaço (anti-empate), contado por vida: começa aos FAT1 s na 1ª vida / FAT2 s na 2ª, chega a 2× em FAT_RAMP s.
-  // (nv.5 com arma de alvo único termina cada vida antes disso)
-  const FAT1 = 75, FAT2 = 50, FAT_RAMP = 35;
+  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,07 e o ×1,25 do 2º mandato;
+  // d.hpMul = b.maxHp / HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
+  // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
+  const HP1 = 7200, HP2 = 5200, HP3 = 3200, HOME_Y = 178;
+  // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
+  const FAT1 = 140, FAT2 = 170, FAT3 = 60, FAT_RAMP = 90, FAT_MAX = 0.75;
+  const fatStartOf = (life) => (life === 1 ? FAT1 : life === 2 ? FAT2 : FAT3);
   // Lule (G.Art.person) é desenhado com este tamanho, centrado em (0, PY) relativo ao chefão
   const PS = 136, PY = -30, GY = 6; // GY: churrasqueira um pouco mais baixa
 
@@ -62,19 +70,61 @@
   // Falas (≤ 28 caracteres; só slogans e memes públicos)
   const TAUNTS = ['COMPANHEIRO!', 'FAZ O L!', 'O AMOR VENCEU!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!', 'O BRASIL VOLTOU!', 'PICANHA E CERVEJINHA!'];
   const TAUNTS2 = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'O AMOR VENCEU!', 'VOU TAXAR!'];
+  // com a Janjinha em cena: só slogans de governo (SPEC5 §1.1: nada de piada de casal; o "companheiro" fica de fora)
+  const TAUNTS_J = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!'];
+  const TAUNTS3 = ['QUINTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'VOU TAXAR!'];
 
-  // Fases (o core usa 'at' em ordem decrescente)
+  // Fases (o core usa 'at' em ordem decrescente; last: true = ÚLTIMO RECURSO)
   const PH1 = [
     { at: 1, name: 'Picanha e Cervejinha' },
-    { at: 0.74, name: 'Taxa das Blusinhas' },
+    { at: 0.74, name: 'Tudo Taxado' },
     { at: 0.48, name: 'Faz o L' },
-    { at: 0.22, name: 'Companheirada' }, // menor: os companheiros seguram os tiros
+    { at: 0.22, name: 'Companheirada' }, // os companheiros seguram os tiros
+    { at: 0.12, name: 'Discurso Sem Fim', last: true },
   ];
   const PH2 = [
-    { at: 1, name: 'Volta por Cima' },
+    { at: 1, name: 'Volta por Cima' },     // com a Janjinha (piso do cordão: PH2[1].at + 0,03)
     { at: 0.62, name: 'Picanha Infinita' },
-    { at: 0.32, name: 'A Última Picanha' }, // o clímax precisa durar: ~1/3 da 2ª vida
+    { at: 0.32, name: 'A Última Picanha' },
+    { at: 0.12, name: 'Fim de Mandato', last: true },
   ];
+  const PH3 = [{ at: 1, name: 'Quinto Mandato', last: true }]; // LULE 5.0 (luta secreta)
+
+  // ---------- PRESSÃO (SPEC5 §2.2; cópias locais: o lule.js roda sem o bosses.js com mods=lule) ----------
+  // Travadas por turno (pLatch → d.pl / d.pR): lv ≥ 3 +1 tiro por leque mirado / jorro / braço de espiral e esperas ×0,9;
+  // lv 5 +1 de novo, esperas ×0,82 e o cpiCo. Nunca em aviso, telegrafia, delay, aviso de laser, parede nem no Leão.
+  const PRESS0 = { R: 0, lv: 0 };
+  const press = () => G.press || PRESS0;
+  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0); }
+  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + 0.25 * (R || 0))); }
+  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? 0.82 : lv >= 3 ? 0.9 : 1); }
+  // o LULE 5.0 usa as variantes um nível acima (teto 5)
+  function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; if (d.life === 3) d.pl = Math.min(5, d.pl + 1); }
+  const N = (d, n) => pN(n, d.pl), W = (d, s) => pW(s, d.pl), RG = (d, n) => pRing(n, d.pR);
+  const pressStun = () => { const P = G.PRESS; return P && P.STUN != null ? P.STUN : 0.3; };
+  // ÚLTIMO RECURSO (turno last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×1,5) contra o empate
+  const P5 = {
+    LIMIT: 30, MUL: 1.5, TAG: { text: 'ÚLTIMO RECURSO', color: '#ff2a4a' },
+    TAG2: { text: 'SEM SAÍDA ×1,5', color: '#ff2a4a' },
+  };
+  function lastStand(b) { const d = b.data; d.p5 = true; d.p5T0 = b.ft; d.p5Mul = 1; d.mechCd = 0; }
+  function p5Update(b) { const d = b.data; if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) d.p5Mul = P5.MUL; }
+
+  // ---------- JANJINHA (janjinha.js, carrega DEPOIS do lule.js; SPEC5 §2.4) ----------
+  // Lido na hora e sempre com guarda: sem o módulo (mods=lule) o Lule luta como antes. Um erro lá dentro é
+  // registrado uma vez e desliga a Janjinha nesta luta (b.data.jOff), para a luta do Lule nunca travar.
+  const JTAG = { text: 'CERIMONIAL', color: '#ff3d7f' };
+  function jcall(b, name, x, y, z) {
+    const J = G.Janjinha, d = b && b.data;
+    if (!J || typeof J[name] !== 'function' || (d && d.jOff)) return undefined;
+    try { return J[name](x, y, z); } catch (err) {
+      G.reportError(err, 'lule→Janjinha.' + name);
+      if (d) d.jOff = true;
+      return undefined;
+    }
+  }
+  // ela está na luta (a entrada invulnerável conta; saindo/foi embora não)
+  const jUp = (b) => !!(b && b.data && b.data.life === 2 && jcall(b, 'up', b));
 
   // ======================================================================
   // Utilidades
@@ -145,14 +195,16 @@
     c.restore();
   });
 
-  // Ajustes do Leão (ENGINE §9). GAP = intervalo depois do FIM do leão anterior, por fase (ph1..ph7; 0 = sem leão).
+  // Ajustes do Leão (ENGINE §9). GAP = intervalo depois do FIM do leão anterior, por turno (0 = sem leão), índice
+  // (vida 1: 0 · vida 2: 5 · vida 3: 9) + turno → 1ª vida 11/10/0/9/8, 2ª 10/9/8/7, LULE 5.0 8. STUN por vida.
   // 2º mandato: STALK 140, AIM −0,15 (trava 0,85), SPD 660, GAP ×0,9, tonto ×0,85.
   // AIM 1,45 (trava 1,0 s; a spec começava em 1,0 = trava 0,55): com 0,55 s o humanbot casual levava a mordida em 60%
   // dos leões que ele via (reação 0,45 s + o movimento); com 0,75 s (AIM 1,2) o olé dava certo em ~40% dos leões do casual e
   // ~70–80% do good. Rodada 4: AIM 1,45 e o tonto mais curto (STUN 4,0/3,2 → 3,4/2,8) para o tempo de luta não cair.
   const LEAO = {
-    FIRST: 7, GAP: [11, 10, 0, 9, 10, 9, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.45, TRACK: 0.45, SPD: 600,
-    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [3.4, 2.8], MUL: 2.3, PIX: 30, XR: 110, RISE: 256,
+    FIRST: 7, GAP: [11, 10, 0, 9, 8, 10, 9, 8, 7, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.45, TRACK: 0.45, SPD: 600,
+    CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [3.4, 2.8, 2.8], MUL: 2.3, PIX: 30, XR: 110, RISE: 256,
+    LAST_T: 1.5, // no ÚLTIMO RECURSO o próximo leão sai em ≤ 1,5 s (SPEC5 §2.3)
   };
   // XR: o leão nunca passa de x = W − XR (no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas;
   // com 110 nem a juba nem o rabo entram no botão, de 360×640 a 412×915). O Lule anda em x ≤ W − 95, então o bote
@@ -162,14 +214,19 @@
   const lionY = () => G.H - 34; // chão do leão (recalculado todo quadro: a altura da tela muda com a barra do navegador)
   const BITE_LINES = ['AI, MEU BOLSO!', 'ISSO É IMPOSTO?!', 'QUEM TAXA É TAXADO!'];
 
-  // dano × (tonto) × (1 + cansaço), teto 4; a etiqueta da barra mostra a brecha
+  // dano × (tonto | cordão do CERIMONIAL) × (1 + cansaço) × SEM SAÍDA, teto 4; a etiqueta da barra mostra a brecha,
+  // o cordão ou o ÚLTIMO RECURSO. O tonto fura o cordão (o piso de HP continua, no onHit).
   function applyMul(b) {
     const d = b.data, fat = d.fat || 0;
-    b.dmgMul = Math.min(4, (d.stunT > 0 ? d.stunMul : 1) * (1 + fat)); b.hudTag = d.stunT > 0 ? d.stunTag : null;
+    const jm = d.life === 2 && jUp(b) ? (+jcall(b, 'shieldMul', b) || 1) : 1;
+    b.dmgMul = Math.min(4, (d.stunT > 0 ? d.stunMul : jm) * (1 + fat) * (d.p5Mul || 1));
+    b.hudTag = d.stunT > 0 ? d.stunTag : (jm < 1 ? JTAG : (d.p5 ? (d.p5Mul > 1 ? P5.TAG2 : P5.TAG) : null));
   }
   // TONTO = PAUSA (sem recomeçar nada): some tudo que é perigoso e o Lule fica parado, levando ×mul
+  // (PRESSÃO: + 0,3 R no multiplicador, teto 4; a etiqueta mostra o valor final)
   function luleStun(b, dur, mul) {
     const d = b.data, g = G.game;
+    mul = Math.min(4, mul + pressStun() * (press().R || 0));
     d.stunT = d.stunT0 = dur * (L2() ? 0.85 : 1); d.stunMul = mul;
     d.stunTag = { text: 'BRECHA ×' + fmtMul(mul), color: '#ffd23f' };
     d.stunId = 'stun' + (d.lionN || 0);
@@ -223,7 +280,7 @@
   // ---------- o Leão (d.lion) ----------
   // st: enter → stalk (segue o x do Zé embaixo) → aim (mira; trava) → lunge (bote) → hold (pendurado no Lule) | flee
   function lionGap(b) {
-    const d = b.data, i = (d.life === 1 ? 0 : 4) + (b.phase || 0);
+    const d = b.data, i = (d.life === 1 ? 0 : d.life === 2 ? 5 : 9) + (b.phase || 0);
     return (LEAO.GAP[M.clamp(i, 0, LEAO.GAP.length - 1)] || 0) * (L2() ? 0.9 : 1);
   }
   function spawnLion(b) {
@@ -248,6 +305,8 @@
     }
   }
   // Leão em cena antes do fim do bote: carimbo e o L gigante esperam (um aviso de cada vez; ele também espera por eles)
+  // o próximo leão sai em ≤ 1,6 s: os turnos de L gigante sem parar trocam o L pela chuva de L para ele entrar logo
+  const lionDue = (d) => !d.lion && !d.lionOff && d.lionT <= 1.6;
   const lionBusy = (d) => { const L = d.lion; return !!L && (L.st === 'enter' || L.st === 'stalk' || L.st === 'aim' || L.st === 'lunge'); };
   function lionEnd(b) {
     const d = b.data;
@@ -263,16 +322,17 @@
     L.st = 'flee'; L.t = 0; L.gold = false; L.eyes = false; L.locked = false;
     L.vx = (L.x < G.W / 2 ? -1 : 1) * 110; L.vy = 230; L.sx = -1; L.rot = 0;
   }
-  // saiu do bolso do Lule com o saco de dinheiro: para cima e para a direita
+  // saiu do bolso do Lule com o saco de dinheiro (ou com o cartão da Janjinha na boca): para cima e para a direita
   function lionRunOff(b) {
-    const L = b.data.lion; if (!L || L.st !== 'hold') return;
-    L.st = 'flee'; L.t = 0; L.bag = true; L.mouth = 0;
+    const L = b.data.lion; if (!L || L.st === 'flee' || (L.st !== 'hold' && !L.card)) return;
+    L.st = 'flee'; L.t = 0; L.bag = !L.card; L.mouth = 0;
     L.vx = 170; L.vy = -190; L.rot = 0.35; L.sx = 1;
-    G.text(L.x, L.y - 26, 'IMPOSTO PAGO!', { size: 10, color: '#ffd23f' });
+    G.text(L.x, L.y - 26, L.card ? 'CARTÃO APREENDIDO!' : 'IMPOSTO PAGO!', { size: 10, color: '#ffd23f' });
     sfx('whoosh');
   }
   const clampAim = (a) => M.clamp(a, -DOWN - LEAO.CLAMP, -DOWN + LEAO.CLAMP);
-  // raio do bote (do leão até y = 60): índice da 1ª caixa do Lule que ele pega (folga hb.r + 8), ou -1
+  // raio do bote (do leão até y = 60): índice da 1ª caixa do Lule que ele pega (folga hb.r + 8), ou -1.
+  // L.hitJ: a Janjinha está no raio ANTES do Lule (o bote vai no cartão dela: CARTÃO BLOQUEADO). L.gold: vai pegar alguém.
   function lionRay(b, L) {
     const ca = Math.cos(L.a), sa = Math.sin(L.a);
     const len = Math.max(0, L.y - 60) / Math.max(0.2, -sa);
@@ -287,6 +347,11 @@
       }
     }
     L.hit = best;
+    L.hitJ = false;
+    const jb = jUp(b) ? jcall(b, 'box', b) : null;
+    if (jb && M.segDist2(jb.x, jb.y, L.x, L.y, L.ex, L.ey) < (jb.r + 8) * (jb.r + 8)
+      && (jb.x - L.x) * ca + (jb.y - L.y) * sa < bt) L.hitJ = true;
+    L.gold = best !== -1 || L.hitJ;
     return best;
   }
   function lionBiteZe(b, L) {
@@ -305,7 +370,9 @@
     say(b, M.pick(BITE_LINES), 2);
     G.dropPix(b.x, b.y + 40, LEAO.PIX);
     L.st = 'hold'; L.t = 0; L.gold = false; L.locked = false; L.eyes = false; L.sy = 1; L.sx = 1;
-    luleStun(b, LEAO.STUN[d.life === 1 ? 0 : 1], LEAO.MUL);
+    // o tonto fura o cordão do CERIMONIAL (o piso de HP continua)
+    if (jUp(b)) G.text(b.x, b.y + 104, 'O LEÃO FURA O CERIMONIAL!', { size: 12, color: '#ff8c1a', stroke: true });
+    luleStun(b, LEAO.STUN[M.clamp((d.life | 0) - 1, 0, LEAO.STUN.length - 1)], LEAO.MUL);
     G.count('ole');
     mechOk(b);
     d.oleN = (d.oleN || 0) + 1;
@@ -329,6 +396,16 @@
     if (pc && !pc.dead && M.dist2(pc.x, pc.y, L.x, L.y) < LEAO.PIC_R * LEAO.PIC_R) {
       pc.dead = true;
       G.text(L.x, L.y, 'O LEÃO COMEU A PICANHA!', { size: 12, color: G.C.orange });
+    }
+    // 3b) o cartão corporativo da Janjinha (só quando a mira travou nela, antes do Lule): CARTÃO BLOQUEADO
+    if (L.hitJ && fighting(b)) {
+      const jb = jUp(b) ? jcall(b, 'box', b) : null;
+      if (jb && M.dist2(jb.x, jb.y, L.x, L.y) < (jb.r + 10) * (jb.r + 10)) {
+        jcall(b, 'lionBite', b, L);
+        L.card = true;
+        lionRunOff(b);
+        return true;
+      }
     }
     // 4) o bolso do Lule
     if (fighting(b)) {
@@ -388,8 +465,7 @@
         }
         L.sy = L.locked ? 0.85 : 1;
         L.bristle = 1;
-        lionRay(b, L);
-        L.gold = L.hit >= 0;
+        lionRay(b, L); // (também acerta L.gold / L.hitJ)
         if (L.t >= LEAO.AIM - (l2 ? 0.15 : 0)) { L.st = 'lunge'; L.t = 0; L.sy = 1; sfx('whoosh'); }
         break;
       }
@@ -403,7 +479,7 @@
         }
         if (d.lion === L && L.st === 'lunge') {
           if (!L.passed && L.y < p.y - 4) L.passed = true;
-          lionRay(b, L); L.gold = L.hit >= 0;
+          lionRay(b, L);
         }
         break;
       }
@@ -426,10 +502,24 @@
       }
     }
   }
+  // a Janjinha foi nocauteada ("EMBARCOU PRO EXTERIOR!"): o Lule reclama e o cordão cai (o resto é do janjinha.js)
+  function janjKO(b, g) {
+    if (!(b.sayText === 'VOLTA, JANJINHA!' && b.sayT > 0)) say(b, 'VOLTA, JANJINHA!', 2.2);
+    let seen = false;
+    if (g && g.texts) for (const q of g.texts) if (q.str === 'CERIMONIAL DESFEITO!') { seen = true; break; }
+    if (!seen) G.text(b.x, b.y + 90, 'CERIMONIAL DESFEITO!', { size: 13, color: '#ffd23f', stroke: true });
+  }
   // alvo do piloto automático / humanbot (um objeto reaproveitado)
   function luleGoal(b) {
     const d = b.data, L = d.lion, p = pl();
-    if (d.stunT > 0) { setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.78, 'stun', 40, d.stunId || 'stun'); return; }
+    if (d.stunT > 0) {
+      // Janjinha em cena e o Lule já no piso do cordão: tiro nele não tira mais nada, e ela está parada levando ×1,5
+      if (jUp(b)) {
+        const f = +jcall(b, 'floor', b), jg = f > 0 && b.hp <= f + 1 ? jcall(b, 'goal', b) : null;
+        if (jg) { setGoal(b, M.clamp(jg.x, 30, G.W - 30), G.H * 0.80, 'alvo', 30, 'janjinha'); return; }
+      }
+      setGoal(b, M.clamp(b.x, 30, G.W - 30), G.H * 0.78, 'stun', 40, d.stunId || 'stun'); return;
+    }
     if (L && fighting(b)) {
       if (L.st === 'stalk' || (L.st === 'aim' && !L.locked)) {
         // embaixo do Lule; se ele está mais à direita do que o leão pode ir, no ponto da reta leão → Lule
@@ -438,6 +528,11 @@
       }
       // (x fixo na trava: com p.x + 56 recalculado todo quadro o piloto corria até a parede)
       if ((L.st === 'aim' && L.locked) || (L.st === 'lunge' && !L.passed)) { setGoal(b, L.gx != null ? L.gx : p.x + L.s * 56, p.y, 'leao-sai', 10, L.idS); return; }
+    }
+    // Janjinha em cena: atirar nela de baixo (prioridade: tonto > Leão > Janjinha; 'alvo' nunca conta como manha)
+    if (fighting(b) && jUp(b)) {
+      const jg = jcall(b, 'goal', b);
+      if (jg) { setGoal(b, M.clamp(jg.x, 30, G.W - 30), G.H * 0.80, 'alvo', 30, 'janjinha'); return; }
     }
     clearGoal(b);
   }
@@ -611,7 +706,7 @@
   // Sub-inimigo: COMPANHEIRO (estrelinha vermelha que dança a ciranda em volta do Lule)
   // ======================================================================
   G.Enemies.define('lule_companheiro', {
-    hp: 18, r: 13, score: 2000, pix: 1, keepOffscreen: true, ignoreClear: true,
+    hp: 18, r: 13, score: 2000, pix: 1, keepOffscreen: true, ignoreClear: true, noPress: true, // (parte do chefão: a PRESSÃO não engrossa)
     init(e, o) { e.data.i = o.i || 0; e.data.R = 0; e.data.fireT = 2 + (o.i || 0) * 0.45; },
     update(e, dt, g) {
       const b = g.boss, d = e.data;
@@ -962,17 +1057,35 @@
     // Leão: nada no Faz o L (os lasers já ocupam a tela); nas outras fases, no mínimo 3 s depois da troca
     d.lionOff = d.life === 1 && idx === 2;
     d.lionT = Math.max(d.lionT || 0, 3);
-    const list = d.life === 1 ? [ph1, ph2, ph3, ph4] : [ph5, ph6, ph7];
+    d.lionThruL = false; // (o ph1_5 e o ph8 ligam: o relógio do leão anda durante o L gigante)
+    // PRESSÃO: variantes travadas para o turno inteiro
+    pLatch(b);
+    // ÚLTIMO RECURSO: SEM SAÍDA depois de 30 s e o próximo leão logo (≤ 1,5 s)
+    const ph = b.phases && b.phases[idx];
+    if (ph && ph.last) { lastStand(b); d.lionT = Math.min(d.lionT, LEAO.LAST_T); }
+    const list = d.life === 1 ? [ph1, ph2, ph3, ph4, ph1_5] : d.life === 2 ? [ph5, ph6, ph7, ph2_4] : [ph8];
     const fn = list[M.clamp(idx, 0, list.length - 1)];
     co(b, fn(b, d));
     co(b, chatter(b, d));
+    co(b, cpiCo(b, d));
   }
-  // provocações aleatórias de vez em quando
+  // provocações aleatórias de vez em quando (com a Janjinha em cena, só slogans de governo)
   function* chatter(b, d) {
     yield M.rand(7, 9);
     for (;;) {
-      if (!(b.sayT > 0)) say(b, M.pick(d.life === 1 ? TAUNTS : TAUNTS2), 2);
+      if (!(b.sayT > 0)) say(b, M.pick(d.life === 1 ? TAUNTS : d.life === 3 ? TAUNTS3 : jUp(b) ? TAUNTS_J : TAUNTS2), 2);
       yield M.rand(7.5, 10.5);
+    }
+  }
+  // CPI!: com o turno travado no nível 5, um leque mirado de 3 a cada pW(3,2) s do relógio do chefão
+  // (as corrotinas do Lule já param no tonto e na cena da volta)
+  function* cpiCo(b, d) {
+    for (;;) {
+      yield () => d.pl === 5;
+      yield pW(3.2, 5);
+      if (d.pl !== 5 || d.stunT > 0 || !canShoot()) continue;
+      const x = b.x, y = b.y + 40;
+      fan(x, y, G.aim(x, y), 3, 0.4, 130, { style: 'small', color: '#ff2a4a' });
     }
   }
   function* wander(b, d, amp, every) {
@@ -981,6 +1094,28 @@
       d.tx = M.clamp(G.W / 2 + (p.x - G.W / 2) * 0.35 + M.rand(-amp, amp), 95, G.W - 95);
       d.ty = HOME_Y + M.rand(-8, 6);
       yield M.rand(every * 0.8, every * 1.2);
+    }
+  }
+  // espiral de N braços com giro que oscila (mas nunca fecha as brechas); dur em s do relógio (omitido = sem fim)
+  function* spiralArms(b, d, arms, dur) {
+    let a = 0;
+    const tEnd = dur ? clk(b) + dur : Infinity;
+    while (clk(b) < tEnd) {
+      const w = 0.82 + 0.16 * Math.sin(clk(b) * 0.55);
+      for (let i = 0; i < arms; i++) shoot(b.x, b.y + 10, a + (i * TAU) / arms, 120, { style: 'orb', color: COL.red });
+      a += w * 0.12;
+      if (Math.random() < 0.3) sfx('enemy_shot');
+      yield 0.12;
+    }
+  }
+  // chuva de picanha lá do alto, com aviso (aparecem transparentes antes de cair); passo fixo (é chuva, não espera)
+  function* picanhaRain(b, d, step, dur) {
+    let x = M.rand(30, G.W - 30), dx = 47;
+    const tEnd = dur ? clk(b) + dur : Infinity;
+    while (clk(b) < tEnd) {
+      x += dx; if (x > G.W - 24 || x < 24) { dx = -dx; x += 2 * dx; }
+      shoot(x, 52, DOWN, M.rand(125, 150), { style: 'lule_picanha', color: COL.meat, delay: 0.35, spin: M.rand(-5, 5) });
+      yield step;
     }
   }
 
@@ -993,26 +1128,26 @@
     for (;;) {
       // (d.lionTut: o leão-tutorial está em cena; só a picanha mirada, para dar para ler o olé)
       if (!d.lionTut) tossSkewers(b, d, L2() ? 3 : 2, k);
-      yield 0.9;
-      aimedPicanha(b, 3, 0.32, 150);
-      yield 0.8;
-      if (!d.lionTut) canRing(b, L2() ? 14 : 12, 165, k * 0.31);
-      yield 1.1;
-      aimedPicanha(b, 5, 0.6, 145);
-      yield 0.6;
-      if (k % 2 && !d.lionTut) { tossSkewers(b, d, 2, k + 1); yield 0.6; }
+      yield W(d, 0.9);
+      aimedPicanha(b, N(d, 3), 0.32, 150);
+      yield W(d, 0.8);
+      if (!d.lionTut) canRing(b, RG(d, L2() ? 14 : 12), 165, k * 0.31);
+      yield W(d, 1.1);
+      aimedPicanha(b, N(d, 5), 0.6, 145);
+      yield W(d, 0.6);
+      if (k % 2 && !d.lionTut) { tossSkewers(b, d, 2, k + 1); yield W(d, 0.6); }
       k++;
     }
   }
 
-  // ---------- 2. TAXA DAS BLUSINHAS ----------
+  // ---------- 2. TUDO TAXADO ----------
   function* ph2(b, d) {
     say(b, 'VOU TAXAR!', 2);
     d.tx = G.W / 2; d.ty = HOME_Y;
     yield 1.0;
     co(b, wander(b, d, 70, 3));
-    // trilha A: chuva de encomendas em colunas
-    co(b, (function* () { for (;;) { laneRain(d, 2, { spd: L2() ? 210 : 190 }); yield L2() ? 2.3 : 2.7; } })());
+    // trilha A: chuva de encomendas em colunas (parede com espaçamento: a contagem não muda)
+    co(b, (function* () { for (;;) { laneRain(d, 2, { spd: L2() ? 210 : 190 }); yield W(d, L2() ? 2.3 : 2.7); } })());
     // trilha B: carimbo TAXADO!
     // (com o Leão em cena o carimbo espera: o passo do olé, 56 px, não sai da área do carimbo, ±62 px)
     co(b, (function* () {
@@ -1020,7 +1155,7 @@
       for (;;) {
         if (lionBusy(d)) { yield () => !lionBusy(d); yield 0.6; } // e um respiro depois (moedas, "IMPOSTO PAGO!")
         dropStamp(b, d); say(b, 'TAXADO!', 1.2);
-        yield L2() ? 2.7 : 3.2; // (era 3,6/3,0: com o carimbo esperando o leão, a fase perdia ~1/4 dos carimbos)
+        yield W(d, L2() ? 2.7 : 3.2); // (era 3,6/3,0: com o carimbo esperando o leão, a fase perdia ~1/4 dos carimbos)
       }
     })());
     // trilha C: encomendas miradas
@@ -1029,10 +1164,10 @@
       if (canShoot()) {
         pose(b, 'point', 0.7);
         const h = handPos(b, 1);
-        fan(h.x, h.y, G.aim(h.x, h.y), L2() ? 5 : 3, 0.5, 140, { style: 'lule_pacote', color: COL.orange, spin: 3 });
+        fan(h.x, h.y, G.aim(h.x, h.y), N(d, L2() ? 5 : 3), 0.5, 140, { style: 'lule_pacote', color: COL.orange, spin: 3 });
         sfx('enemy_shot');
       }
-      yield 1.75;
+      yield W(d, 1.75);
     }
   }
 
@@ -1043,12 +1178,12 @@
     let s = pl().x > G.W / 2 ? 1 : -1; // começa empurrando o Zé para longe de onde ele está
     for (;;) {
       yield* lSweep(b, d, s, 0.3, 40 * DEG, { maxL: L2() ? 5 : 3 });
-      yield 0.5;
+      yield W(d, 0.5);
       lRain(L2() ? 5 : 4);
       say(b, 'É O L, COMPANHEIRO!', 1.4);
-      yield 1.6;
-      aimedPicanha(b, 3, 0.4, 140);
-      yield 1.0;
+      yield W(d, 1.6);
+      aimedPicanha(b, N(d, 3), 0.4, 140);
+      yield W(d, 1.0);
       s = -s;
     }
   }
@@ -1062,7 +1197,7 @@
     co(b, wander(b, d, 40, 3.5));
     yield 0.6;
     say(b, 'CIRANDA, CIRANDINHA!', 1.8);
-    co(b, ciranda(b, d, { arms: L2() ? 5 : 4, every: 0.13, spd: 112, w: 0.95 }));
+    co(b, ciranda(b, d, { arms: N(d, L2() ? 5 : 4), every: 0.13, spd: 112, w: 0.95 }));
     // e de vez em quando a roda inteira estica e encolhe
     for (;;) {
       yield 5.5;
@@ -1072,95 +1207,104 @@
     }
   }
 
-  // ---------- 5. VOLTA POR CIMA (remix de tudo, mais rápido) ----------
+  // ---------- 5. DISCURSO SEM FIM (ÚLTIMO RECURSO da 1ª vida) ----------
+  // O L gigante sem parar (com o Leão em cena, só a chuva de L) + a chuva de picanha o tempo todo + latinhas a cada 2,5 s.
+  // O relógio do leão anda durante o L (d.lionThruL): o leão sai assim que o L acaba e o próximo L espera por ele.
+  function* ph1_5(b, d) {
+    say(b, 'E TEM MAIS UMA COISA...', 2.4);
+    pose(b, 'up', 1.0);
+    d.tx = G.W / 2; d.ty = HOME_Y;
+    d.lionThruL = true;
+    co(b, picanhaRain(b, d, L2() ? 0.30 : 0.36));
+    co(b, (function* () {
+      yield 1.6;
+      for (let k = 0; ; k++) { canRing(b, RG(d, 12), 175, k * 0.29); yield W(d, 2.5); }
+    })());
+    yield 1.0;
+    let s = pl().x > G.W / 2 ? 1 : -1;
+    for (;;) {
+      if (!lionBusy(d) && !lionDue(d)) {
+        yield* lSweep(b, d, s, 0.3, 40 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
+        s = -s;
+      } else {
+        lRain(L2() ? 6 : 5);
+        yield W(d, 1.0); // (sem o L, a chuva de L sai a cada 2 s: 1 s aqui + o 1 s de sempre)
+      }
+      yield W(d, 1.0);
+    }
+  }
+
+  // ---------- 6. VOLTA POR CIMA (remix de tudo, mais rápido; com a Janjinha ela leva o ataque principal) ----------
+  // Janjinha em cena (SPEC5 §8.5): sem espetinhos e sem o L gigante, e as colunas uma vez por ciclo em vez de duas.
   function* ph5(b, d) {
     co(b, wander(b, d, 60, 2.2));
     yield 0.8;
     let k = 0, s = 1;
     for (;;) {
       // A: espetinhos + latinhas
-      tossSkewers(b, d, 3, k);
-      yield 0.8;
-      canRing(b, L2() ? 14 : 12, 175, k * 0.27);
-      yield 1.0;
-      aimedPicanha(b, 5, 0.55, 165);
-      yield 0.8;
-      tossSkewers(b, d, 3, k + 1);
-      yield 1.2;
+      if (!jUp(b)) tossSkewers(b, d, 3, k);
+      yield W(d, 0.8);
+      canRing(b, RG(d, L2() ? 14 : 12), 175, k * 0.27);
+      yield W(d, 1.0);
+      aimedPicanha(b, N(d, 5), 0.55, 165);
+      yield W(d, 0.8);
+      if (!jUp(b)) tossSkewers(b, d, 3, k + 1);
+      yield W(d, 1.2);
       // B: carimbos + colunas
-      for (let i = 0; i < 2; i++) {
+      for (let i = 0; i < (jUp(b) ? 1 : 2); i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
-        yield 0.7;
+        yield W(d, 0.7);
         if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
-        yield 1.7;
+        yield W(d, 1.7);
       }
-      yield 0.8;
+      yield W(d, 0.8);
       // C: o L gigante, mais rápido. Com o Leão em cena fica só a chuva de L ("FIQUE DENTRO DO L" e o olé não cabem
       // juntos; esperar o leão deixava o L colado no fim do tonto, com as moedas ainda caindo)
-      if (!lionBusy(d)) {
+      if (!lionBusy(d) && !jUp(b)) {
         s = pl().x > G.W / 2 ? 1 : -1;
         yield* lSweep(b, d, s, 0.38, 46 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
-        yield 0.4;
+        yield W(d, 0.4);
       }
       lRain(L2() ? 6 : 5);
-      yield 1.4;
+      yield W(d, 1.4);
       // D: rodinha rápida de ciranda
-      co(b, ciranda(b, d, { arms: 4, every: 0.13, spd: 125, w: 1.2, seg: 2.2, dur: 4.6 }));
+      co(b, ciranda(b, d, { arms: N(d, 4), every: 0.13, spd: 125, w: 1.2, seg: 2.2, dur: 4.6 }));
       yield 5.2;
       k += 2;
     }
   }
 
-  // ---------- 6. PICANHA INFINITA (desespero: espiral densa com brechas + chuva de picanha) ----------
+  // ---------- 7. PICANHA INFINITA (desespero: espiral densa com brechas + chuva de picanha) ----------
   function* ph6(b, d) {
     say(b, 'TÁ CHEGANDO A PICANHA!', 2.4);
     d.tx = G.W / 2; d.ty = HOME_Y - 6;
     d.fire = 1;
     yield 1.0;
-    // espiral de 5 braços com giro que oscila (mas nunca fecha as brechas)
-    co(b, (function* () {
-      let a = 0;
-      const arms = L2() ? 6 : 5;
-      for (;;) {
-        const w = 0.82 + 0.16 * Math.sin(clk(b) * 0.55);
-        for (let i = 0; i < arms; i++) shoot(b.x, b.y + 10, a + (i * TAU) / arms, 120, { style: 'orb', color: COL.red });
-        a += w * 0.12;
-        if (Math.random() < 0.3) sfx('enemy_shot');
-        yield 0.12;
-      }
-    })());
-    // chuva de picanha lá do alto, com aviso (aparecem transparentes antes de cair)
-    co(b, (function* () {
-      let x = M.rand(30, G.W - 30), dx = 47;
-      for (;;) {
-        x += dx; if (x > G.W - 24 || x < 24) { dx = -dx; x += 2 * dx; }
-        shoot(x, 52, DOWN, M.rand(125, 150), { style: 'lule_picanha', color: COL.meat, delay: 0.35, spin: M.rand(-5, 5) });
-        yield L2() ? 0.26 : 0.32;
-      }
-    })());
+    co(b, spiralArms(b, d, N(d, L2() ? 6 : 5)));
+    co(b, picanhaRain(b, d, L2() ? 0.26 : 0.32));
     // tremedeira + picanha mirada em fila (não dá para ficar parado)
     for (let k = 0; ; k++) {
       G.shake(2.2);
-      yield 1.1;
+      yield W(d, 1.1);
       if (k % 2 === 1 && canShoot()) {
         pose(b, 'point', 0.6);
         const h = handPos(b, 1);
-        G.pat.stream(h.x, h.y, G.aim(h.x, h.y), 3, 130, 175, { style: 'lule_picanha', color: COL.meat });
+        G.pat.stream(h.x, h.y, G.aim(h.x, h.y), N(d, 3), 130, 175, { style: 'lule_picanha', color: COL.meat });
         sfx('enemy_shot');
       }
     }
   }
 
-  // ---------- 7. A ÚLTIMA PICANHA ----------
-  function* ph7(b, d) {
+  // ---------- 8. A ÚLTIMA PICANHA (e, com last, o miolo do Fim de Mandato) ----------
+  function* ph7(b, d, last) {
     d.fire = 2;
-    say(b, 'A ÚLTIMA PICANHA!', 2.2);
+    if (!last) say(b, 'A ÚLTIMA PICANHA!', 2.2);
     pose(b, 'up', 1.2);
     d.tx = G.W / 2; d.ty = HOME_Y;
     sfx('charge');
     yield 0.9;
     hint('picanhao', 'FUJA DA PICANHA GIGANTE!', '#ffb02e');
-    d.picanhao = giantPicanha(b);
+    if (!d.picanhao || d.picanhao.dead) d.picanhao = giantPicanha(b);
     co(b, (function* () { // se a picanha sumir (bomba), volta outra
       for (;;) {
         yield 0.5;
@@ -1169,25 +1313,95 @@
     })());
     let k = 0;
     for (;;) {
-      yield 1.1;
-      ring(b.x, b.y + 8, L2() ? 18 : 15, 98, { style: 'small', color: k % 2 ? COL.pink : COL.orange }, k * 0.21);
+      yield W(d, 1.1);
+      ring(b.x, b.y + 8, RG(d, L2() ? 18 : 15), 98, { style: 'small', color: k % 2 ? COL.pink : COL.orange }, k * 0.21);
       sfx('enemy_shot2');
       k++;
+    }
+  }
+
+  // ---------- 9. FIM DE MANDATO (ÚLTIMO RECURSO da 2ª vida): a picanha gigante + anéis + carimbo a cada 3 s ----------
+  function* ph2_4(b, d) {
+    say(b, 'NINGUÉM ME TIRA DAQUI!', 2.4);
+    co(b, (function* () {
+      yield 1.8;
+      for (;;) {
+        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // (com o Leão em cena, nada de carimbo)
+        yield W(d, 3.0);
+      }
+    })());
+    yield* ph7(b, d, true);
+  }
+
+  // ---------- 10. QUINTO MANDATO (LULE 5.0, luta secreta): medley de 4 blocos de ~12 s, variantes um nível acima ----------
+  // (a) espetinhos + latinhas · (b) L gigante (sem Leão em cena) + chuva de L · (c) espiral + chuva de picanha · (d) ciranda
+  function* ph8(b, d) {
+    d.fire = 2;
+    d.lionThruL = true;
+    co(b, wander(b, d, 60, 2.2));
+    yield 1.0;
+    const SEG = 12;
+    let k = 0, s = pl().x > G.W / 2 ? 1 : -1;
+    for (let seg = 0; ; seg = (seg + 1) % 4) {
+      const t0 = clk(b), left = () => SEG - (clk(b) - t0);
+      if (seg === 0) {
+        while (left() > 2) {
+          tossSkewers(b, d, 3, k);
+          yield W(d, 0.8);
+          canRing(b, RG(d, L2() ? 14 : 12), 175, k * 0.27);
+          yield W(d, 1.0);
+          aimedPicanha(b, N(d, 5), 0.55, 165);
+          yield W(d, 0.8);
+          tossSkewers(b, d, 3, k + 1);
+          yield W(d, 1.2);
+          k += 2;
+        }
+      } else if (seg === 1) {
+        while (left() > 2.5) {
+          if (!lionBusy(d) && !lionDue(d)) {
+            yield* lSweep(b, d, s, 0.38, 46 * DEG, { warn: 1.1, maxL: 4, lEvery: 0.75, lSpd: 115 });
+            s = -s;
+            yield W(d, 0.4);
+          }
+          lRain(L2() ? 6 : 5);
+          yield W(d, 1.4);
+        }
+      } else if (seg === 2) {
+        say(b, 'TÁ CHEGANDO A PICANHA!', 2);
+        co(b, spiralArms(b, d, N(d, L2() ? 6 : 5), SEG - 1));
+        co(b, picanhaRain(b, d, L2() ? 0.26 : 0.32, SEG - 1));
+        yield SEG;
+      } else {
+        while (left() > 3) {
+          co(b, ciranda(b, d, { arms: N(d, 4), every: 0.13, spd: 125, w: 1.2, seg: 2.2, dur: 4.6 }));
+          yield 5.2;
+          aimedPicanha(b, N(d, 3), 0.4, 150);
+          yield W(d, 0.8);
+        }
+      }
+      yield W(d, 0.6);
     }
   }
 
   // ======================================================================
   // A VOLTA DO LULE (cena entre as duas vidas)
   // ======================================================================
-  function startRevive(b, g) {
+  // to: 2 (a volta de sempre: LULE 4.0, com a Janjinha) ou 3 (LULE 5.0 — QUINTO MANDATO, a luta secreta)
+  function startRevive(b, g, to) {
     const d = b.data;
-    d.reviving = true; d.revT = 0; d.revStep = 0;
+    d.revTo = to === 3 ? 3 : 2;
+    d.reviving = true; d.revT = 0; d.revStep = 0; d.beat = 0; d.pinGlow = 0; d.rev4T = 0; d.jIntro = false;
     b.invuln = true; b.harmless = true; b.hp = 0; b.dmgMul = 1;
     b.phases = [{ at: 1, name: '' }]; b.phase = 0; // nenhuma troca de fase durante a cena
+    d.p5 = false; d.p5Mul = 1; d.lionThruL = false; // o ÚLTIMO RECURSO é por vida
     killCos(b);
     d.lanes.length = 0; d.stamps.length = 0; d.lsign = null; d.wantComps = false; d.respawn.length = 0;
+    d.picanhao = null; d.fire = 0;
     // manha: o Leão vai embora (ou sai com o saco, se já mordeu), sem tonto nem alvo durante a cena
     lionFlee(b); stunClear(b); clearGoal(b); d.lionTut = false;
+    // a Janjinha sai de mansinho (sem recompensa); no LULE 5.0 ela não volta
+    jcall(b, 'clear', b, d.revTo === 3 ? 'quinto' : 'revive');
+    if (d.revTo === 3 && G.run) G.run.secret = 'on'; // daqui em diante, perder todas as vidas termina como vitória (core)
     G.clearBullets(true);
     killComps(false);
     G.call(G.Audio, 'stopMusic');
@@ -1198,7 +1412,7 @@
     b.sayText = null; b.sayT = 0;
   }
   function updateRevive(b, dt, g) {
-    const d = b.data;
+    const d = b.data, five = d.revTo === 3;
     d.revT += dt;
     const t = d.revT;
     // nada de tiro durante a cena
@@ -1211,7 +1425,7 @@
       d.revStep = 1;
       b.x = d.revX;
       G.explode(b.x, b.y, 4); G.flash(0.9, '#ffffff'); sfx('explode_l');
-      g.stamp = { text: 'CASSADO!', t: 0, x: b.x, y: b.y };
+      g.stamp = { text: five ? 'CASSADO DE NOVO!' : 'CASSADO!', t: 0, x: b.x, y: b.y };
       G.dropPix(b.x, b.y, 60);
       d.slumpTo = 1;
     }
@@ -1220,21 +1434,29 @@
     if (d.revStep === 2 && t > 5.0 && !d.beat) { d.beat = 1; sfx('charge'); d.pinGlow = 1; }
     if (d.revStep === 2 && t > 5.7) {
       d.revStep = 3;
-      // ELE VOLTOU!
+      // ELE VOLTOU! (de novo)
       G.flash(0.85, '#ff2a4a'); G.shake(13); G.hitstop(0.12);
       sfx('laugh'); sfx('explode_l');
-      G.banner('ELE VOLTOU!', 'LULE 4.0 — QUARTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
-      b.name = 'LULE 4.0';
-      d.life = 2; d.slumpTo = 0;
-      b.maxHp = HP2 * d.hpMul; b.hp = 0;
+      if (five) {
+        G.banner('ELE VOLTOU DE NOVO!', 'LULE 5.0 — QUINTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
+        b.name = 'LULE 5.0';
+        d.life = 3; d.slumpTo = 0;
+        b.maxHp = HP3 * d.hpMul; b.hp = 0;
+        say(b, 'QUINTO MANDATO!', 2.6);
+      } else {
+        G.banner('ELE VOLTOU!', 'LULE 4.0 — QUARTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
+        b.name = 'LULE 4.0';
+        d.life = 2; d.slumpTo = 0;
+        b.maxHp = HP2 * d.hpMul; b.hp = 0;
+        say(b, 'QUARTO MANDATO!', 2.6);
+      }
       d.refill0 = t;
-      say(b, 'QUARTO MANDATO!', 2.6);
       for (let i = 0; i < 26; i++) {
         const a = (i * TAU) / 26;
         G.part({ x: b.x, y: b.y - 20, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, type: 'spark', size: 4, life: 0.7, color: i % 2 ? '#ff2a4a' : '#ffd23f', drag: 0.92 });
       }
       G.part({ x: b.x, y: b.y - 20, type: 'ring', size: 30, life: 0.6, color: '#ff2a4a' });
-      // recompensa por derrubar a 1ª vida
+      // recompensa por derrubar a vida anterior
       G.drop('power', b.x - 30, b.y + 70, { vy: -60 });
       G.drop('bomb', b.x + 30, b.y + 70, { vy: -60 });
     }
@@ -1244,31 +1466,55 @@
       if (Math.random() < 0.25 * (0.4 + 0.6 * decoK())) G.part({ x: b.x + M.rand(-70, 70), y: b.y + M.rand(-80, 60), vx: 0, vy: -60, type: 'spark', size: 2.5, life: 0.5, color: '#ff5d6e' });
     }
     if (d.revStep === 3 && t > d.refill0 + 2.5) {
-      d.revStep = 4;
+      d.revStep = 4; d.rev4T = t;
       b.hp = b.maxHp;
-      const lines = G.STORY && G.STORY.boss && G.STORY.boss.lule && G.STORY.boss.lule.voltou;
-      if (lines && lines.length && !G.debug.skipDialogue) G.dialogue(lines, () => finishRevive(b));
-      else finishRevive(b);
+      const S = G.STORY && G.STORY.boss && G.STORY.boss.lule;
+      const lines = S && (five ? S.quinto : S.voltou);
+      const fin = () => finishRevive(b);
+      // 2ª vida: a Janjinha chega depois do "voltou" (banner, jatinho da FAB, diálogo) e só então a luta recomeça
+      const next = () => {
+        if (!five && jcall(b, 'enabled', b)) {
+          d.jIntro = true;
+          jcall(b, 'intro', b, fin);
+          if (d.jOff) fin(); // (erro dentro do janjinha.js: segue sem ela)
+        } else fin();
+      };
+      if (lines && lines.length && !G.debug.skipDialogue) G.dialogue(lines, next);
+      else next();
     }
+    // salvaguarda: se a entrada da Janjinha nunca chamar o done(), a luta recomeça sozinha (12 s de jogo, fora de diálogo)
+    if (d.revStep === 4 && t > d.rev4T + 12) finishRevive(b);
   }
   function finishRevive(b) {
     const d = b.data;
     if (!d.reviving) return;
     const g = G.game;
     if (!g || g.boss !== b) return;
-    d.reviving = false; d.revived = true; d.life = 2;
+    const five = d.revTo === 3;
+    d.reviving = false; d.revived = true; d.life = five ? 3 : 2;
     d.dim = 0; d.slumpTo = 0; d.pinGlow = 0;
-    d.lifeT0 = b.ft; b.dmgMul = 1; d.fat = 0; // o cansaço recomeça na 2ª vida
+    d.lifeT0 = b.ft; b.dmgMul = 1; d.fat = 0; // o cansaço recomeça a cada vida
+    d.fatSaid = 0;
     d.lion = null; d.lionTut = false; stunClear(b); clearGoal(b);
-    d.lionT = LEAO.FIRST; // 1º leão da 2ª vida: 7 s depois da volta
+    d.lionT = LEAO.FIRST; // 1º leão da vida nova: 7 s depois da volta (no ÚLTIMO RECURSO, ≤ 1,5 s: startPhase)
     b.invuln = false; b.harmless = false;
-    G.setBossPhases(b, PH2, 1);
+    if (b.mech) b.mech.life = d.life;
     b.invulnT = 1.2;
     G.call(G.Audio, 'music', 'boss_final');
+    if (five) {
+      // LULE 5.0: um turno só, já em ÚLTIMO RECURSO (o core não anuncia o turno 0: o banner é daqui)
+      G.setBossPhases(b, PH3, 1);
+      G.banner('ÚLTIMO RECURSO', PH3[0].name, { color: G.C.red, dur: 1.8, small: true });
+      sfx('last_stand');
+      startPhase(b, 0); // (lastStand: PH3[0].last)
+      return;
+    }
+    G.setBossPhases(b, PH2, 1);
     // "FASE" é o nome das etapas e o core anuncia as fases do chefão como "Nº TURNO". Mandato novo,
-    // contagem nova: depois deste vêm "2º TURNO — Picanha Infinita" e "3º TURNO — A Última Picanha".
+    // contagem nova: depois deste vêm "2º TURNO — Picanha Infinita", "3º TURNO — A Última Picanha" e o ÚLTIMO RECURSO.
     G.banner('NOVO MANDATO', PH2[0].name, { color: G.C.yellow, dur: 1.8, small: true });
     startPhase(b, 0);
+    if (d.jIntro) jcall(b, 'start', b); // ela entra na luta (1,6 s invulnerável primeiro)
   }
 
   // ======================================================================
@@ -1439,7 +1685,7 @@
     // tambor (meio barril vermelho)
     c.beginPath();
     c.moveTo(-74, 19); c.lineTo(74, 19); c.bezierCurveTo(74, 46, 52, 57, 0, 57); c.bezierCurveTo(-52, 57, -74, 46, -74, 19); c.closePath();
-    inked(c, C(d.life === 2 ? '#b8181f' : '#cf2f2c'), 1.6);
+    inked(c, C(d.life >= 2 ? '#b8181f' : '#cf2f2c'), 1.6);
     if (!fl) {
       c.save(); c.clip();
       c.fillStyle = 'rgba(42,24,64,0.28)'; c.fillRect(-80, 42, 160, 20);
@@ -1592,11 +1838,12 @@
     }
   }
 
-  // 4 estrelas douradas girando em volta da cabeça: "quarto mandato" (side -1 = metade de trás)
-  function halo(c, t, fl, side) {
+  // n estrelas douradas girando em volta da cabeça: 4 = "quarto mandato", 5 = "quinto" (side -1 = metade de trás)
+  function halo(c, t, fl, side, n) {
     const hy = PY - 14 * PS / 100 - 44;
-    for (let i = 0; i < 4; i++) {
-      const a = t * 2 + (i * TAU) / 4, sn = Math.sin(a);
+    n = n || 4;
+    for (let i = 0; i < n; i++) {
+      const a = t * 2 + (i * TAU) / n, sn = Math.sin(a);
       if ((sn >= 0) !== (side > 0)) continue;
       const sx = Math.cos(a) * 46, sy = hy + sn * 7, k = 0.85 + 0.2 * sn;
       c.beginPath(); starP(c, sx, sy, 8 * k, 3.6 * k, 5); c.lineWidth = 2.6; c.strokeStyle = INK; c.lineJoin = 'round'; c.stroke();
@@ -1615,6 +1862,15 @@
     inked(c, '#c9a227', 1.2);
     c.beginPath(); c.moveTo(-3.5, -6.5); c.lineTo(3.5, -6.5); c.lineWidth = 1.6; c.strokeStyle = '#7a5a10'; c.stroke();
     txt(c, 'R$', 0, 2.5, 7, '#ffffff', { stroke: 2 });
+    c.restore();
+  }
+  // cartãozinho dourado (na boca do Leão depois do CARTÃO BLOQUEADO e no centro da mira 'CARTÃO')
+  function cardIcon(c, x, y, rot, k) {
+    c.save(); c.translate(x, y); c.rotate(rot || 0); c.scale(k || 1, k || 1);
+    c.beginPath(); RR(c, -8, -5, 16, 10, 1.8); inked(c, '#f2c230', 0.8);
+    c.fillStyle = '#d7191c'; c.fillRect(-8, -2.6, 16, 2.2);
+    c.beginPath(); RR(c, -5.6, 0.6, 4.4, 3.2, 0.8); c.fillStyle = '#c9a227'; c.fill();
+    c.lineWidth = 0.6; c.strokeStyle = 'rgba(16,20,24,0.6)'; c.stroke();
     c.restore();
   }
   function drawLionBody(c, b, g) {
@@ -1639,6 +1895,7 @@
     }
     c.restore();
     if (L.bag) moneyBag(c, L.x + 15, L.y + 10, L.T);
+    if (L.card) cardIcon(c, L.x + 4, L.y + 14, -0.25 + Math.sin(L.T * 9) * 0.2, 1);
   }
   function drawLionOver(c, b, g) {
     const d = b.data, L = d && d.lion;
@@ -1655,6 +1912,20 @@
       c.lineWidth = 5; c.strokeStyle = 'rgba(16,20,24,0.45)'; c.stroke();
       c.lineWidth = 3; c.strokeStyle = gold ? '#ffd23f' : 'rgba(255,255,255,0.7)'; c.stroke();
       c.setLineDash([]); c.lineDashOffset = 0;
+      // mira "CARTÃO" na Janjinha (o bote vai no cartão corporativo dela: CARTÃO BLOQUEADO)
+      const jb = gold && L.hitJ ? jcall(b, 'box', b) : null;
+      if (jb) {
+        const hx = jb.x, hy = jb.y, k = 1 + 0.1 * Math.sin(g.t * 14), r = Math.max(24, jb.r + 6);
+        c.globalAlpha = lunging ? 0.6 : 0.85 + 0.15 * Math.sin(g.t * 14);
+        c.beginPath(); c.arc(hx, hy, r * k, 0, TAU);
+        c.lineWidth = 5; c.strokeStyle = 'rgba(16,20,24,0.6)'; c.stroke();
+        c.lineWidth = 2.6; c.strokeStyle = '#ffd23f'; c.stroke();
+        c.beginPath();
+        for (let i = 0; i < 8; i += 2) { const ax = RET_DIRS[i], ay = RET_DIRS[i + 1]; c.moveTo(hx + ax * (r - 6) * k, hy + ay * (r - 6) * k); c.lineTo(hx + ax * (r + 6) * k, hy + ay * (r + 6) * k); }
+        c.lineWidth = 2.6; c.stroke();
+        cardIcon(c, hx, hy, 0, 1.1);
+        txt(c, 'CARTÃO', hx, hy + r * k + 10, 10, '#ffd23f', { stroke: 3 });
+      } else
       // mira "R$" no Lule
       if (gold && L.hit >= 0 && b.hitboxes && b.hitboxes[L.hit]) {
         const h = b.hitboxes[L.hit], hx = b.x + h.dx, hy = b.y + h.dy, k = 1 + 0.1 * Math.sin(g.t * 14);
@@ -1692,7 +1963,7 @@
     const c = ctx, t = b.t;
     const fl = G.isFlash(b);
     const frac = b.maxHp > 0 ? b.hp / b.maxHp : 1;
-    let heat = d.life === 2 ? (d.fire ? 0.7 + 0.3 * d.fire : 0.35) : (b.state === 'fight' ? M.clamp((0.5 - frac) * 2, 0, 1) : 0);
+    let heat = d.life >= 2 ? (d.fire ? 0.7 + 0.3 * d.fire : 0.35) : (b.state === 'fight' ? M.clamp((0.5 - frac) * 2, 0, 1) : 0);
     if (d.reviving && d.revStep >= 1 && d.revStep < 3) heat = 0; // desmaiado: só fumacinha
     const leaving = b.state === 'leaving', dying = b.state === 'dying';
     // fora da luta o core não chama update: anima fumaça e queda aqui
@@ -1712,8 +1983,8 @@
     }
     drawLanes(c, d);
     drawSmoke(c, d);
-    // aura do 4º mandato
-    if (d.life === 2 && !fl) {
+    // aura do 4º (e do 5º) mandato
+    if (d.life >= 2 && !fl) {
       const pul = 0.85 + 0.15 * Math.sin(t * 5);
       glow(c, b.x, b.y - 14, 160 * pul, 'rgba(255,36,56,0.95)', 1);
       if (G.quality === 'high') glow(c, b.x, b.y - 50, 80, 'rgba(255,210,63,0.5)', pul); // brilho extra
@@ -1732,8 +2003,8 @@
     // ----- mood / boca -----
     let mood = 'smug', mouth = 0, ps = d.pose || 'idle';
     if (d.moodT > 0) mood = d.moodOv;
-    if (b.sayT > 0) { mood = d.life === 2 ? 'laugh' : 'normal'; mouth = 0.25 + 0.55 * Math.abs(Math.sin(t * 15)); }
-    if (d.life === 2 && frac < 0.1 && b.state === 'fight' && !(b.sayT > 0)) mood = 'angry';
+    if (b.sayT > 0) { mood = d.life >= 2 ? 'laugh' : 'normal'; mouth = 0.25 + 0.55 * Math.abs(Math.sin(t * 15)); }
+    if (d.life >= 2 && frac < 0.1 && b.state === 'fight' && !(b.sayT > 0)) mood = 'angry';
     if (dying) { mood = 'hurt'; mouth = 0.5; ps = 'shrug'; }
     if (leaving) { mood = 'laugh'; ps = 'wave'; }
     if (d.reviving) {
@@ -1746,14 +2017,15 @@
     // ----- Lule -----
     const p = pl();
     const lookX = M.clamp((p.x - b.x) / 120, -1, 1), lookY = M.clamp((p.y - b.y) / 220, -1, 1) * 0.7;
-    const spec = d.dmg >= 1 || d.life === 2 ? SPEC_SWEAT : SPEC;
-    if (d.life === 2) halo(c, t, fl, -1);
+    const spec = d.dmg >= 1 || d.life >= 2 ? SPEC_SWEAT : SPEC;
+    const nStars = d.life === 3 ? 5 : 4;
+    if (d.life >= 2) halo(c, t, fl, -1, nStars);
     G.Art.person(c, 0, PY, PS, spec, { t, mood, mouth, flash: fl, pose: ps, lookX: d.revStep === 1 || d.revStep === 2 ? 0 : lookX, lookY, autoLook: false });
-    drawTie(c, d.life === 2 ? 0.05 : d.dmg >= 1 ? 0.32 + Math.sin(t * 3) * 0.06 : 0.02, fl);
+    drawTie(c, d.life >= 2 ? 0.05 : d.dmg >= 1 ? 0.32 + Math.sin(t * 3) * 0.06 : 0.02, fl);
     // estrelinha pulsando (o "coração" voltando a bater)
     if (d.pinGlow > 0 && !fl) glow(c, -14.5 * PS / 100, PY + 19 * PS / 100, 22 + 8 * Math.sin(t * 14), 'rgba(255,60,80,0.9)', 1);
-    if (d.life === 2) halo(c, t, fl, 1);
-    if (stunned) dizzy(c, 0, PY - (d.life === 2 ? 84 : 70), t, 30);
+    if (d.life >= 2) halo(c, t, fl, 1, nStars);
+    if (stunned) dizzy(c, 0, PY - (d.life >= 2 ? 84 : 70), t, 30);
 
     // ----- churrasqueira na frente -----
     c.translate(0, GY);
@@ -1777,6 +2049,8 @@
     if (ls) drawNeonL(c, hrx, hry, -PI / 2, 0, Math.min(1, (d.lsignT || 0) * 5), t);
     c.restore();
 
+    // cordão do CERIMONIAL da Janjinha (por cima da churrasqueira; coordenadas do mundo)
+    if (d.life === 2) { c.save(); jcall(b, 'drawShield', c, b); c.restore(); }
     // companheiros (por cima do Lule)
     for (const e of g.enemies) if (!e.dead && e.kind === 'lule_companheiro') drawComp(c, e, g.t);
     drawSkewerRods(c, d);
@@ -1795,7 +2069,7 @@
     // balão de fala logo abaixo da barra de vida
     b.bubbleY = b.y - Math.max(104, b.y - 86);
     // core sem a camada drawOver: mira e "SAI!" no fim do desenho (embaixo dos tiros)
-    if (!(G.coreHooks && G.coreHooks.drawOver)) { c.save(); drawLionOver(c, b, g); c.restore(); }
+    if (!(G.coreHooks && G.coreHooks.drawOver)) { c.save(); drawLionOver(c, b, g); c.restore(); c.save(); jcall(b, 'drawOver', c, b, g); c.restore(); }
   }
 
   // ======================================================================
@@ -1819,7 +2093,11 @@
       // manha (OLÉ): relógio do chefão, tonto, o Leão e os contadores
       d.clk = 0; d.stunT = 0; d.stunMul = 1; d.stunTag = null; d.fat = 0;
       d.lion = null; d.lionN = 0; d.lionT = LEAO.FIRST; d.lionOff = false; d.lionTut = false; d.oleN = 0;
+      d.p5 = false; d.p5Mul = 1; d.pl = 0; d.pR = 0; d.revTo = 2; d.jOff = false; d.jKoSaid = false;
       mechInit(b, 'ole');
+      if (b.mech) b.mech.life = 1;
+      // Janjinha: o piso do cordão é logo acima da 2ª fase da 2ª vida (o cordão nunca pula turno)
+      jcall(b, 'setFloorAt', PH2[1].at);
       warmPoses(b, 'p1', SPEC, ['idle', 'wave', 'point', 'shrug']); // shrug: o tonto do olé
       d.warmQ = SHOTS.slice();
     },
@@ -1831,12 +2109,13 @@
       d.lsignT = d.lsign ? (d.lsignT || 0) + dt : 0;
       d.moodT -= dt;
       d.slump = M.approach(d.slump, d.slumpTo, dt * 2.2);
-      const heat = d.life === 2 ? 0.6 : M.clamp((0.5 - b.hp / b.maxHp) * 2, 0, 1);
+      const heat = d.life >= 2 ? 0.6 : M.clamp((0.5 - b.hp / b.maxHp) * 2, 0, 1);
       updSmoke(d, b, dt, heat);
       if (d.reviving) { updLion(b, dt, g); updateRevive(b, dt, g); return; } // o Leão termina de fugir na cena
       // cansaço por vida: a luta de quem chega fraco não vira um moedor sem fim (bons jogadores nem percebem)
-      const lf = b.ft - (d.lifeT0 || 0), fat = M.clamp((lf - (d.life === 1 ? FAT1 : FAT2)) / FAT_RAMP, 0, 1);
+      const lf = b.ft - (d.lifeT0 || 0), fat = FAT_MAX * M.clamp((lf - fatStartOf(d.life)) / FAT_RAMP, 0, 1);
       d.fat = fat;
+      p5Update(b); // ÚLTIMO RECURSO: SEM SAÍDA ×1,5 depois de 30 s no turno
       // TONTO = PAUSA: sem corrotinas, relógio, movimento, ciranda nem companheiros voltando
       const st = d.stunT > 0;
       if (st) { d.stunT -= dt; if (d.stunT <= 0) luleStunEnd(b); }
@@ -1847,6 +2126,14 @@
       }
       const frac = b.hp / b.maxHp;
       d.dmg = d.life === 1 ? (frac < 0.25 ? 2 : frac < 0.5 ? 1 : 0) : 2;
+      // Janjinha em cena: o Lule fica no meio (os dois nunca se sobrepõem)
+      const jup = jUp(b);
+      if (jup) d.tx = G.W / 2 + 24 * Math.sin(0.6 * clk(b));
+      // ela embarcou pro exterior: o cordão cai (uma vez; se o janjinha.js já falou/escreveu, não repete)
+      if (d.life === 2 && !d.jKoSaid) {
+        const mj = b.mech && b.mech.janj;
+        if ((mj && mj.ko) || (g.stamp && g.stamp.text === 'EMBARCOU PRO EXTERIOR!')) { d.jKoSaid = true; janjKO(b, g); }
+      }
       // movimento suave (parado no tonto)
       if (!st) {
         const f = 1 - Math.exp(-2.2 * dt);
@@ -1855,7 +2142,7 @@
         d.compA += dt * (L2() ? 1.05 : 0.85);
       }
       // 4º mandato: faíscas vermelhas e douradas subindo em volta dele
-      if (d.life === 2 && Math.random() < dt * 10 * decoK()) {
+      if (d.life >= 2 && Math.random() < dt * 10 * decoK()) {
         const a = M.rand(0, TAU);
         G.part({ x: b.x + Math.cos(a) * 78, y: b.y - 10 + Math.sin(a) * 70, vx: 0, vy: M.rand(-70, -40), type: 'spark', size: 2.4, life: 0.55, color: Math.random() < 0.7 ? '#ff3b4e' : '#ffd23f', drag: 0.96 });
       }
@@ -1876,13 +2163,15 @@
       updStamps(d, dt);
       // o Leão da Receita: agenda (só com a luta "limpa": sem tonto, sem L aceso, sem carimbo, Zé vivo, fora do Faz o L)
       // (carimbo "vivo" = ainda descendo; depois da batida só sobra a marca de tinta inofensiva sumindo)
-      if (!d.lion && !(d.stunT > 0) && !d.lionOff && !d.lsign && !stampLive(d) && pl().alive) {
+      // (d.lionThruL, nos turnos que são quase só L gigante: o relógio anda durante o L e o leão sai quando ele acaba)
+      if (!d.lion && !(d.stunT > 0) && !d.lionOff && (d.lionThruL || !d.lsign) && !stampLive(d) && pl().alive) {
         d.lionT -= dt;
-        if (d.lionT <= 0) spawnLion(b);
+        if (d.lionT <= 0 && !d.lsign) spawnLion(b);
       }
       updLion(b, dt, g);
       luleGoal(b);
-      b.dmgMul = Math.min(4, (d.stunT > 0 ? d.stunMul : 1) * (1 + fat)); b.hudTag = d.stunT > 0 ? d.stunTag : null;
+      if (b.mech) b.mech.life = d.life;
+      applyMul(b);
     },
     onPhase(b, idx) {
       const d = b.data;
@@ -1899,14 +2188,24 @@
     },
     onHit(b, dmg) {
       const d = b.data;
+      // cordão do CERIMONIAL: o HP não desce do piso enquanto a Janjinha está em cena (nem no tonto: nada de pular turno)
+      if (d.life === 2 && !d.reviving && jUp(b)) {
+        const f = +jcall(b, 'floor', b);
+        if (f > 0) b.hp = Math.max(b.hp, f);
+        if (!(d.stunT > 0) && Math.random() < 0.25 * (0.4 + 0.6 * decoK())) {
+          G.part({ x: b.x + M.rand(-60, 60), y: b.y + M.rand(-10, 50), vx: M.rand(-60, 60), vy: M.rand(-90, -30), type: 'spark', size: 2.4, life: 0.25, color: '#ffd23f', drag: 0.9 });
+        }
+      }
       d.hitAcc += dmg;
       if (dmg >= 40) { d.moodT = 0.6; d.moodOv = 'hurt'; }
     },
     onDefeat(b, g) {
       const d = b.data;
       if (d.reviving) return true;              // nunca morre no meio da cena
-      if (!d.revived) { d.revX = b.x; startRevive(b, g); return true; }
-      return false;                             // 2ª vez: agora é de verdade
+      if (!d.revived) { d.revX = b.x; startRevive(b, g, 2); return true; }
+      // 2ª vez sem nenhum recurso numa partida começada na fase 1 (ou ?quinto=1): LULE 5.0 — QUINTO MANDATO
+      if (d.life === 2 && G.quintoOk && G.quintoOk()) { d.revX = b.x; startRevive(b, g, 3); return true; }
+      return false;                             // agora é de verdade
     },
     onDeath(b, g) {
       const d = b.data;
@@ -1916,12 +2215,23 @@
       for (const l of g.lasers) if (l.data && l.data.lt != null) { l.t = l.warn + l.life + 1; }
       // manha: o Leão vai embora (com o saco, se estava mordendo), sem tonto nem alvo
       lionFlee(b); stunClear(b); clearGoal(b); d.lionTut = false;
-      say(b, 'TÁ BOM, TÁ BOM!', 2.4);
+      d.p5 = false; d.p5Mul = 1; b.hudTag = null;
+      jcall(b, 'clear', b, 'boss');
+      if (d.life === 3) {
+        // venceu a luta secreta: carimbo, falas e conquista próprios
+        if (G.run) G.run.secret = 'won';
+        G.unlock('quinto');
+        b.defeatText = 'SEM QUINTO MANDATO!';
+        const S = G.STORY && G.STORY.boss && G.STORY.boss.lule;
+        if (S && S.postQuinto && G.game) G.game.postLines = S.postQuinto;
+        say(b, 'TÁ BOM, SEM QUINTO!', 2.4);
+      } else say(b, 'TÁ BOM, TÁ BOM!', 2.4);
       d.slumpTo = 0.5;
     },
     draw(ctx, b, g) { drawLule(ctx, b, g); },
     // por cima dos tiros: a mira do Leão, a mira "R$" no Lule e o "SAI!" ao lado do Fusca
-    drawOver(ctx, b, g) { drawLionOver(ctx, b, g); },
+    // (e a camada da Janjinha: barra de vida dela, avisos do foguete)
+    drawOver(ctx, b, g) { drawLionOver(ctx, b, g); ctx.save(); jcall(b, 'drawOver', ctx, b, g); ctx.restore(); },
   });
 
   // ======================================================================
@@ -1930,7 +2240,8 @@
   G.Portraits.define('lule', function (ctx, x, y, size, o) {
     o = o || {};
     const t = o.t || 0, mood = o.mood || 'smug';
-    const g = G.game, four = !!(g && g.boss && g.boss.id === 'lule' && g.boss.data && g.boss.data.life === 2);
+    const g = G.game, life = g && g.boss && g.boss.id === 'lule' && g.boss.data ? g.boss.data.life | 0 : 1, four = life >= 2;
+    const nStars = life === 3 ? 5 : 4;
     ctx.save();
     ctx.beginPath(); ctx.rect(x - size / 2, y - size / 2, size, size); ctx.clip();
     if (four) glow(ctx, x, y - size * 0.05, size * 0.6, 'rgba(255,40,60,0.5)', 1);
@@ -1944,8 +2255,8 @@
     drawSkewerProp(ctx, 0, 0, -1.72 + Math.sin(t * 3) * 0.06, false);
     ctx.restore();
     if (four) {
-      for (let i = 0; i < 4; i++) {
-        const a = t * 2.2 + (i * TAU) / 4;
+      for (let i = 0; i < nStars; i++) {
+        const a = t * 2.2 + (i * TAU) / nStars;
         if (Math.sin(a) < -0.2) continue;
         ctx.beginPath(); starP(ctx, x + Math.cos(a) * 34 * s, py - 50 * s + Math.sin(a) * 7 * s, 7 * s, 3.2 * s, 5);
         ctx.lineWidth = 2 * s; ctx.strokeStyle = INK; ctx.stroke(); ctx.fillStyle = '#ffd23f'; ctx.fill();

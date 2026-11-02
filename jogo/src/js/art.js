@@ -2,7 +2,8 @@
    FUSCA A JATO — art.js
    Arte do jogo (tudo desenhado em canvas, sem imagens):
    - G.Art.person   caricaturas "cabeção" (todos os políticos)
-   - G.Art.player   o Fusca 78 azul-celeste a jato do Zé (visto de cima)
+   - G.Art.player   o Fusca 78 azul-celeste a jato do Zé (visto de cima); FUSCA DOURADO com
+                    G.save.settings.skin === 'ouro' e a conquista 'transito'
    - G.Art.pickup   itens (Pix, mala, P, delação, habeas corpus, 13º, café)
    - ícones do HUD  (vida, delação, armas)
    - G.Art.scene    ilustrações da história (estilo gibi)
@@ -1452,6 +1453,16 @@
   // O FUSCA (visto de cima) — G.Art.player
   // ======================================================================
   const CAR = { body: '#6cc3ee', fender: '#58b2e2', roof: '#a3dcf6', glass: '#1d3557', chrome: '#e3e9f0', stripe: '#ffffff' };
+  // FUSCA DOURADO (conquista 'transito'): lataria ouro e faixas creme; cromados, vidros e a chama do jato iguais
+  const CAR_GOLD = Object.assign({}, CAR, { body: '#d9a91a', fender: '#c39410', roof: '#e9c44a', stripe: '#fff1b0' });
+  const CAR_SKIN = { azul: CAR, ouro: CAR_GOLD };
+  // pintura do Fusca: G.save.settings.skin ('azul' | 'ouro'; o.skin a sobrepõe, p. ex. numa prévia da UI), e o
+  // dourado só com a conquista. G.Art.player desenha ao vivo (sem sprite); qualquer cache com as cores
+  // do Fusca deve levar esta chave junto.
+  function carSkin(o) {
+    const sv = G.save, want = (o && o.skin) || (sv && sv.settings && sv.settings.skin);
+    return want === 'ouro' && sv && sv.achievements && sv.achievements.transito ? 'ouro' : 'azul';
+  }
   function carBodyPath(c) {
     c.moveTo(0, -20.5);
     c.bezierCurveTo(5.6, -20.5, 8.7, -18.4, 8.8, -13);
@@ -1537,6 +1548,7 @@
     const wtype = G.WEAPONS[o.weapon] ? o.weapon : 'voto';
     const lv = clamp(o.level || 1, 1, 5);
     const wc = G.WEAPONS[wtype].color;
+    const CP = CAR_SKIN[carSkin(o)];
     c.save();
     c.translate(x, y);
     // auras e efeitos fora da rotação
@@ -1579,25 +1591,25 @@
     const lw = 1.15;
     // contorno geral
     c.beginPath(); carFenders(c); carBodyPath(c); strokeP(c, INK, lw * 2);
-    c.beginPath(); carFenders(c); fillP(c, CAR.fender);
-    c.beginPath(); carBodyPath(c); fillP(c, CAR.body);
+    c.beginPath(); carFenders(c); fillP(c, CP.fender);
+    c.beginPath(); carBodyPath(c); fillP(c, CP.body);
     // brilho nos paralamas (lado esquerdo) e sombra chapada (lado direito)
     c.beginPath(); E(c, -11.4, -12.5, 1.6, 4.5, 0.1); E(c, -11.8, 8.5, 1.7, 5, 0.1); fillP(c, 'rgba(255,255,255,0.4)');
     c.beginPath(); c.moveTo(8.8, -13); c.lineTo(9.6, 3); c.bezierCurveTo(10.2, 13, 8, 19.6, 0, 19.9); c.bezierCurveTo(5, 18.5, 7.2, 13, 7, 3); c.lineTo(6.6, -13); c.closePath();
     fillP(c, SHADE_RGBA);
     // capô: faixas brancas (o centro fica azul para o ponto de colisão aparecer)
-    c.fillStyle = CAR.stripe;
+    c.fillStyle = CP.stripe;
     c.fillRect(-3.4, -19.6, 1.7, 9.4); c.fillRect(1.7, -19.6, 1.7, 9.4);
     // faróis redondos na ponta dos paralamas
-    c.beginPath(); O(c, -9.7, -17.4, 2.6); O(c, 9.7, -17.4, 2.6); inked(c, CAR.chrome, 0.8);
+    c.beginPath(); O(c, -9.7, -17.4, 2.6); O(c, 9.7, -17.4, 2.6); inked(c, CP.chrome, 0.8);
     c.beginPath(); O(c, -9.7, -17.7, 1.7); O(c, 9.7, -17.7, 1.7); fillP(c, '#fff6c8');
     // cabine: vidro em volta do teto (para-brisa, laterais, vigia traseiro)
     const rx0 = -tilt * 0.6;
-    c.beginPath(); RR(c, -8.5, -10, 17, 21.8, 7); inked(c, CAR.glass, 0.75);
+    c.beginPath(); RR(c, -8.5, -10, 17, 21.8, 7); inked(c, CP.glass, 0.75);
     c.beginPath(); c.moveTo(-5.6, -9.2); c.lineTo(-3.2, -9.2); c.lineTo(-4.6, -6.2); c.lineTo(-7, -6.2); c.closePath(); fillP(c, 'rgba(255,255,255,0.4)');
     // teto
-    c.beginPath(); RR(c, -6.9 + rx0, -5.4, 13.8, 13, 5.4); inked(c, CAR.roof, 0.55);
-    c.fillStyle = CAR.stripe;
+    c.beginPath(); RR(c, -6.9 + rx0, -5.4, 13.8, 13, 5.4); inked(c, CP.roof, 0.55);
+    c.fillStyle = CP.stripe;
     c.fillRect(-3.4 + rx0, -5, 1.7, 12.2); c.fillRect(1.7 + rx0, -5, 1.7, 12.2);
     c.beginPath(); E(c, -4.9 + rx0, -1.6, 0.9, 3, 0); fillP(c, 'rgba(255,255,255,0.6)');
     // tampa do motor: venezianas dos dois lados da turbina
@@ -1605,7 +1617,7 @@
     for (let i = 0; i < 3; i++) { const yy = 13.6 + i * 1.9; c.moveTo(-7.2, yy); c.lineTo(-4.4, yy); c.moveTo(4.4, yy); c.lineTo(7.2, yy); }
     strokeP(c, 'rgba(16,20,24,0.6)', 0.9);
     // para-choques cromados
-    c.beginPath(); RR(c, -9.6, -22.4, 19.2, 2.3, 1.1); RR(c, -9.6, 19.3, 19.2, 2.3, 1.1); inked(c, CAR.chrome, 0.7);
+    c.beginPath(); RR(c, -9.6, -22.4, 19.2, 2.3, 1.1); RR(c, -9.6, 19.3, 19.2, 2.3, 1.1); inked(c, CP.chrome, 0.7);
     // turbina amarrada na tampa traseira + bocal
     c.beginPath(); c.moveTo(-2.6, 20.4); c.lineTo(2.6, 20.4); c.lineTo(4, 25); c.lineTo(-4, 25); c.closePath(); inked(c, '#4a505c', 0.8);
     c.beginPath(); E(c, 0, 25, 3.4, 1.1); fillP(c, '#ffb347');
@@ -2935,6 +2947,7 @@
     person,
     personAnchors,
     player,
+    carSkin, // 'azul' | 'ouro': a pintura que G.Art.player usa agora (o.skin opcional)
     pickup,
     lifeIcon,
     bombIcon,

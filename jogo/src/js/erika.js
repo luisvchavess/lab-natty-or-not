@@ -4,6 +4,8 @@
    no Lago Paranoá. Manha: CORTAR OS FIOS DA LIVE ("Segue o fio"): os celulares que transmitem a live
    dela ficam presos ao hub Wi-Fi da tribuna por fios; o Fusca passa por cima dos fios e corta.
    Todos cortados = "CAIU A LIVE!": ela fica tonta (×2,4). Fios no ar = "EM ALTA" (armadura) + VIRALIZOU.
+   5 turnos (o 5º, ÚLTIMO RECURSO, é a "Live de 24 Horas"); a participação especial do Pavanatto é garantida na
+   1ª troca de turno, como um segmento de TV "AO VIVO" travado (SPEC5 §10).
    (+ retrato dos diálogos e estilos de tiro 'erk_'). Contrato: docs/ENGINE.md §5 e §5.1.
    Usa G.BossKit (bosses.js), obrigatório: sem ele o módulo avisa e não registra a chefona.
 
@@ -43,29 +45,36 @@
   // STUN_L1K× mais longo, LOAD_L1 s carregando e, depois do tonto, STUN_GAP_L1 s sem live (respiro; quem corta rápido
   // não emenda um tonto no outro). Celular que fica HOP_T s no ar sem ser cortado "muda de ângulo": voa HOP_DUR s para
   // mais perto do Zé (HOP_PULL do caminho na horizontal, metade do caminho até HOP_Y·H na vertical).
+  // Os arrays por turno têm 5 entradas (o 5º é o ÚLTIMO RECURSO, Live de 24 Horas: rig de drones como no 4º;
+  // CONNECT_P4 e STUN_P4 valem do 4º turno em diante).
   const FI = {
-    CUT_R: 10, PHONE_R: 12, REGROW: [11, 10, 6, 9], CONNECT: 1.4, CONNECT_P4: 1.2, LOAD: 2.0, STUN: 4.0, STUN_P4: 4.5, MUL: 2.4,
+    CUT_R: 10, PHONE_R: 12, REGROW: [11, 10, 6, 9, 9], CONNECT: 1.4, CONNECT_P4: 1.2, LOAD: 2.0, STUN: 4.0, STUN_P4: 4.5, MUL: 2.4,
     ARMOR: [1, 0.9, 0.8, 0.75, 0.7], ENG_MAX: 20, VIRAL_N: 28,
-    REGROW_L1: 2.5, REGROW_L2: 0.8, PHONES_L1: [2, 2, 3, 3], STUN_L1K: 1.25, LOAD_L1: 1.4,
+    REGROW_L1: 2.5, REGROW_L2: 0.8, PHONES_L1: [2, 2, 3, 3, 3], STUN_L1K: 1.25, LOAD_L1: 1.4,
     HOP_T: 4.5, HOP_DUR: 0.7, HOP_PULL: 0.55, HOP_Y: 0.76, STUN_GAP_L1: 3, PHONE_DY_L1: 0.05,
     REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
   };
   // Padrões (SPEC §5.4; afinados com o humanbot para a escada de mortes Centrão < Dilmãe < Erika < Lule).
   // THREAD_* = fileiras de textão (DX = espaço entre tiras, GAP = fresta, WALK = quanto a fresta anda por fileira),
   // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3; *_L2 = 2º mandato),
-  // SAY_PRE = a fala da semana sai antes do aviso (a chuva não cobre o balão), SPIRAL_* = 4º turno.
+  // SAY_PRE = a fala da semana sai antes do aviso (a chuva não cobre o balão), SPIRAL_* = 4º turno,
+  // P5_* = 5º turno (a espiral do 4º a SPIRAL_SPD × P5_SPD_K, passo P5_STEP, e o leque de corações a cada P5_HEARTS s).
+  // PRESSÃO (SPEC5 §2.3, travada por turno em d.pl / d.pR): +tiros nos leques mirados e braços da espiral (mesma
+  // fresta entre tiros), anéis ×(1 + 0,25 R), esperas entre ataques ×0,9 / ×0,82; as fileiras de textão e as faixas
+  // da 6x1 são paredes (noPress: nem velocidade nem contagem mudam).
   const PAT = {
     LIKE_N: 5, LIKE_N_L2: 7, LIKE_SPD: 108, LIKE_SPREAD: 0.62, NOTIF_P1: 2.2, NOTIF_P3: 2.4, NOTIF_SPD: 112, ADI_SPD: 100,
     THREAD_ROWS: 7, THREAD_DX: 32, THREAD_GAP: 80, THREAD_WALK: 24, THREAD_SPD: 92, THREAD_SPD_L2: 106, THREAD_EVERY: 0.66,
     RAIN_SPD: 150, RAIN_EVERY: 0.32, RAIN_EVERY_L2: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.05, RAIN_DBL_L2: 1.15,
     RAIN_JIT: 3, RAIN_DBL_DX: 10, SAY_PRE: 0.3,
-    SWAY: [45, 20, 60, 50], // balanço lateral por turno (px)
+    SWAY: [45, 20, 60, 50, 55], // balanço lateral por turno (px)
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
+    P5_SPD_K: 1.2, P5_STEP: 0.12, P5_HEARTS: 5.0,
   };
-  // HP (SPEC 4200) afinado com o humanbot (só o chefão, nv.3, 24 partidas por perfil, 1º mandato): casual cortando os
-  // fios ~2,6 mortes / ~138 s e ignorando ~4 / ~170 s (a manha vale a pena); bom ~2 mortes / ~100 s (nv.5: ~73 s).
-  // HP_L2 = base do 2º mandato (o core ainda põe ×1,25), a mesma de antes: o 2º mandato continua como estava.
-  const HP = 4700, HP_L2 = 3400;
+  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,07 na chegada). Rodada 4 era 4700 / 3400 (a arma no
+  // máximo resolvia a luta em ~73 s); agora a luta boa no nv.5 fica em ~100–130 s com a cena do Pavanatto.
+  // HP_L2 = base do 2º mandato (o core ainda põe ×1,25). FAT_START = cansaço (s de luta; já inclui os ~6,5 s da cena).
+  const HP = 8400, HP_L2 = 6100, FAT_START = 175;
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -285,7 +294,7 @@
   const WARM = [glowSpr, () => ringSpr(true), () => ringSpr(false), frontSpr, () => tribSpr(false), () => tribSpr(true),
     () => selfieSpr('live'), () => selfieSpr('static'), () => selfieSpr('flash'), () => rigSpr('tripod', false), () => rigSpr('tripod', true),
     () => rigSpr('drone', false), () => rigSpr('drone', true), plusSpr, corteSpr, () => surfSpr(false), () => surfSpr(true),
-    palqSpr, boardSpr];
+    palqSpr, boardSpr, () => pavLower()];
 
   // ---------- partes vivas ----------
   // ponta do pau de selfie por pose: [mão, dx, dy, giro do celular]
@@ -470,11 +479,14 @@
   const ERK_SHOTS = [['erk_like', COL.pink], ['erk_like', COL.hot], ['erk_like', COL.red], ['erk_hash', COL.magenta], ['erk_hash', COL.orange],
     ['erk_textao', COL.red], ['erk_notif', COL.red], ['erk_ctps', COL.red], ['erk_adi', COL.red], ['bs_cedula', COL.orange]];
   const LIKE = { style: 'erk_like', color: COL.pink }, LIKE_H = { style: 'erk_like', color: COL.hot }, LIKE_R = { style: 'erk_like', color: COL.red };
-  const TEXTAO = { style: 'erk_textao', color: COL.red }, NOTIF = { style: 'erk_notif', color: COL.red };
-  const CTPS = { style: 'erk_ctps', color: COL.red }, CEDULA = { style: 'bs_cedula', color: COL.orange };
+  // paredes com espaçamento exato (fileiras de textão e faixas da 6x1): noPress, a PRESSÃO não acelera
+  const TEXTAO = { style: 'erk_textao', color: COL.red, noPress: true }, NOTIF = { style: 'erk_notif', color: COL.red };
+  const CTPS = { style: 'erk_ctps', color: COL.red, noPress: true }, CEDULA = { style: 'bs_cedula', color: COL.orange };
   const HASH_M = { style: 'erk_hash', color: COL.magenta }, HASH_O = { style: 'erk_hash', color: COL.orange };
   // multiplicador de velocidade que shoot()/G.fire aplicam (para quem muda a velocidade no meio do voo)
   const spdK = (b) => (b.def.spdK || 1) * ((G.game && G.game.diff) || 1);
+  // corrotinas: 0 = sequência do turno, 1 = pressão de fundo, 2 = VIRALIZOU, 3 = fios do 4º turno, CPI_SLOT = cpiCo
+  const CPI_SLOT = 4;
 
   // ======================================================================
   // A manha: CORTAR OS FIOS DA LIVE (SPEC §5.5)
@@ -490,14 +502,15 @@
       // no 2º mandato também SEG e SEX
       L.push([(6.5 * W) / 7, 0.62 * H, 'tripod'], [(3.5 * W) / 7, 0.72 * H, 'tripod'], [(0.5 * W) / 7, 0.66 * H, 'tripod'], [(4.5 * W) / 7, 0.68 * H, 'tripod']);
     } else if (ph === 2) L.push([0.15 * W, 0.58 * H, 'tripod', 'slide'], [0.85 * W, 0.58 * H, 'tripod', 'slide'], [W / 2, 0.5 * H, 'drone', 'live']);
-    else if (l2 || FI.PHONES_L1[3] >= 4) for (let i = 0; i < 4; i++) L.push([[0.12, 0.38, 0.62, 0.88][i] * W, (i % 2 ? 0.68 : 0.58) * H, 'drone', 'bob']);
+    else if (l2 || FI.PHONES_L1[ph] >= 4) for (let i = 0; i < 4; i++) L.push([[0.12, 0.38, 0.62, 0.88][i] * W, (i % 2 ? 0.68 : 0.58) * H, 'drone', 'bob']);
     else L.push([0.16 * W, 0.58 * H, 'drone', 'bob'], [0.5 * W, 0.68 * H, 'drone', 'bob'], [0.84 * W, 0.58 * H, 'drone', 'bob']);
+    // (4º e 5º turnos: drones; o 5º, ÚLTIMO RECURSO, repete o rig do 4º: 3 celulares, 2º mandato 4)
     if (!l2) L.length = Math.min(L.length, FI.PHONES_L1[ph]);
     return L;
   }
   function rigStart(b) {
     const d = b.data, Lv = d.live, W = G.W, H = G.H;
-    Lv.gen++; Lv.st = 'connecting'; Lv.t = 0; Lv.dur = b.phase === 3 ? FI.CONNECT_P4 : FI.CONNECT;
+    Lv.gen++; Lv.st = 'connecting'; Lv.t = 0; Lv.dur = b.phase >= 3 ? FI.CONNECT_P4 : FI.CONNECT;
     Lv.phones.length = 0;
     const lay = rigLayout(b);
     for (let i = 0; i < lay.length; i++) {
@@ -619,22 +632,22 @@
   function erkStun(b) {
     const d = b.data;
     d.flopT = 0.9; // 'FLOPOU!' sai logo depois do 'CAIU A LIVE!' (não empilha com ele nem com o 'BRECHA!')
-    K.stunStart(b, (b.phase < 3 ? FI.STUN : FI.STUN_P4) * (L2() ? 1 : FI.STUN_L1K), FI.MUL, { tag: 'BRECHA ×2,4', text: 'CAIU A LIVE!', say: M.pick(STUN_SAY), onEnd: erkStunEnd, sfx: 'mech_ok' });
+    // a etiqueta 'BRECHA ×…' sai do BossKit (mul + a PRESSÃO)
+    K.stunStart(b, (b.phase < 3 ? FI.STUN : FI.STUN_P4) * (L2() ? 1 : FI.STUN_L1K), FI.MUL, { text: 'CAIU A LIVE!', say: M.pick(STUN_SAY), onEnd: erkStunEnd, sfx: 'mech_ok' });
     sfx('buffer');
     d.eng = 0; d.live.st = 'down'; d.armor = 1; d.armorTag = null;
     d.demo = false; d.flickT = 0.45; d.pose = 'hold'; d.poseT = 0;
     K.co(b, null, 2); d.viral = false; d.viralWarn = 0; // o VIRALIZOU que vinha cai junto com a live
-    if (d.pav) pavAbort(b); // participação especial no meio: ele vai embora na hora
+    // (a participação especial é travada: o rig some na cena, então não há tonto no meio dela)
   }
   function erkStunEnd(b) {
     const d = b.data;
     say(b, 'VOLTEI, GENTE!', 1.6);
     rigClear(b, true);
+    // participação especial pedida (troca de turno no meio do tonto): a live só volta depois da cena (PV.RESUME)
+    if (d.pavForce || d.rigHold) { d.live.st = null; d.rigT = 0; return; }
     // 1º mandato: a live demora STUN_GAP_L1 s para voltar (respiro; quem corta rápido não emenda um tonto no outro)
     if (!L2() && FI.STUN_GAP_L1 > 0) { d.live.st = null; d.rigT = FI.STUN_GAP_L1; } else rigStart(b);
-    // participação especial armada e ainda não feita: a hora mais segura é agora (a live só volta a ser cortável
-    // depois de connecting + loading)
-    if (d.pavArmT != null && !d.pavDone && !d.pav && (b.phase === 1 || b.phase === 2)) { d.pavReq = true; d.pavWait = 0; }
   }
   // rig a cada quadro: posição, fio, estados, corte, volta do fio, armadura e engajamento
   function rigUpdate(b, dt, st) {
@@ -841,14 +854,23 @@
   // ======================================================================
   // Padrões (SPEC §5.4). Velocidades antes do spdK; todo tiro passa por K.shoot.
   // ======================================================================
+  // PRESSÃO nos leques mirados: K.pN tiros (nível travado no turno) e a mesma fresta entre tiros (o leque abre)
+  const PF = [0, 0];
+  function pFan(b, n0, spread0) {
+    const n = K.pN(n0, b.data.pl);
+    PF[0] = n; PF[1] = n0 > 1 ? (spread0 * (n - 1)) / (n0 - 1) : 0.12 * (n - 1);
+    return PF;
+  }
+  const pW = (b, s) => K.pW(s, b.data.pl);   // esperas entre ataques (nunca aviso, telegrafia nem tempo da manha)
+  const pRing = (b, n) => K.pRing(n, b.data.pR);
   function* erkLikes(b, n0) {
     const d = b.data;
     say(b, 'DÁ LIKE AÍ!', 1.2);
     d.pose = 'point';
-    const n = n0 || (L2() ? PAT.LIKE_N_L2 : PAT.LIKE_N), cols = [LIKE, LIKE_H, LIKE_R];
+    const f = pFan(b, n0 || (L2() ? PAT.LIKE_N_L2 : PAT.LIKE_N), PAT.LIKE_SPREAD), n = f[0], spr = f[1], cols = [LIKE, LIKE_H, LIKE_R];
     for (let k = 0; k < 3; k++) {
       const q = phoneXY(b);
-      fan(q[0], q[1], aimFrom(q[0], q[1]), n, PAT.LIKE_SPREAD, PAT.LIKE_SPD, cols[k]);
+      fan(q[0], q[1], aimFrom(q[0], q[1]), n, spr, PAT.LIKE_SPD, cols[k]);
       sfx('enemy_shot');
       yield 0.35;
     }
@@ -882,7 +904,7 @@
   function* erkShare(b) {
     const d = b.data;
     say(b, 'COMPARTILHA!', 1.4); d.pose = 'hold'; d.postT = 1.6;
-    const n = L2() ? 20 : 16, kk = spdK(b), v0 = 90, a0 = Math.random() * TAU, x = b.x, y = b.y;
+    const n = pRing(b, L2() ? 20 : 16), kk = spdK(b), v0 = 90, a0 = Math.random() * TAU, x = b.x, y = b.y;
     for (let i = 0; i < n; i++) {
       shoot(x, y, a0 + (i * TAU) / n, v0, { style: 'erk_like', color: i % 2 ? COL.hot : COL.pink, accel: (-v0 * kk) / 0.7, minSpd: 0,
         data: { go: 1.1 + i * 0.06, v: 125 * kk }, update: shareAim });
@@ -894,10 +916,10 @@
   function* erkNotif(b, every) {
     const d = b.data;
     for (;;) {
-      yield every * M.rand(0.9, 1.1);
+      yield pW(b, every) * M.rand(0.9, 1.1);
       if (d.demo || d.threadOn) { yield () => !d.demo && !d.threadOn; continue; } // nada de notificação mirada no meio do fio
-      const q = phoneXY(b);
-      fan(q[0], q[1], aimFrom(q[0], q[1]), 2, 0.12, PAT.NOTIF_SPD, NOTIF);
+      const q = phoneXY(b), f = pFan(b, 2, 0.12);
+      fan(q[0], q[1], aimFrom(q[0], q[1]), f[0], f[1], PAT.NOTIF_SPD, NOTIF);
       sfx('enemy_shot');
     }
   }
@@ -908,10 +930,10 @@
     if (d.demo) yield () => !d.demo;
     for (let loop = 0; ; loop++) {
       yield* erkLikes(b);
-      yield 0.8;
+      yield pW(b, 0.8);
       yield* erkThread(b, PAT.THREAD_ROWS);
-      yield 1.0;
-      if (loop % 2 === 1) { yield* erkShare(b); yield 1.2; }
+      yield pW(b, 1.0);
+      if (loop % 2 === 1) { yield* erkShare(b); yield pW(b, 1.2); }
     }
   }
   // ---------- 2º turno: FIM DA ESCALA 6x1 (a semana do calendário) ----------
@@ -932,7 +954,7 @@
     d.rainOn = true; sfx('charge');
     const l2 = L2(), spd = PAT.RAIN_SPD * (dbl ? (l2 ? PAT.RAIN_DBL_L2 : PAT.RAIN_DBL) : 1), every = l2 ? PAT.RAIN_EVERY_L2 : PAT.RAIN_EVERY;
     const row = (delay) => {
-      const o = delay ? { style: CTPS.style, color: CTPS.color, delay } : CTPS;
+      const o = delay ? { style: CTPS.style, color: CTPS.color, delay, noPress: true } : CTPS;
       for (let i = 0; i < 7; i++) {
         if (!wk.work[i]) continue;
         const cx = (i + 0.5) * lw + M.rand(-PAT.RAIN_JIT, PAT.RAIN_JIT);
@@ -973,13 +995,9 @@
       // a) a escala 6x1 (folga no domingo; no 2º mandato a folga já muda)
       yield* weekSay(b, 'ESCALA 6x1? ABSURDO!');
       yield* erkWeek(b, [L2() ? M.randi(0, 6) : 6], false);
-      // participação especial (uma vez por luta): depois da 1ª semana inteira chega O MAIS VOTADO, na 1ª deixa entre
-      // as semanas em que a live ainda demora a poder cair (pavCue)
-      yield* pavCue(b);
       // b) a folga muda de lugar
       yield* weekSay(b, 'FOLGA AGORA É POR DECRETO!');
       yield* erkWeek(b, [M.randi(0, 6)], false);
-      yield* pavCue(b);
       // c) FIM DA 6x1 → 4x3: o mesmo trampo em 4 dias (chuva dupla, 1,25× mais rápida)
       yield* weekSay(b, 'FIM DA 6x1!');
       d.cal2 = '4x3'; d.flipTo = 1;
@@ -987,46 +1005,30 @@
       const run = G.run || {};
       if (!run._erk7x0) { run._erk7x0 = 1; const p = pl(); G.text(p.x, p.y - 40, 'E O ZÉ? 7x0.', { size: 12, color: '#ffffff', life: 1.8 }); }
       yield* erkWeek(b, folga3(), true);
-      yield* pavCue(b);
       d.cal = '4x3'; d.cal2 = '6x1'; d.flip = 0; d.flipTo = 1;
       // d) SEXTOU TODO DIA: semana toda verde, respiro (ela bate palma)
       say(b, 'SEXTOU TODO DIA!', 1.6);
       wk.work = lanesFolga([0, 1, 2, 3, 4, 5, 6]); wk.mode = 'sextou'; d.pose = 'up';
-      yield 1.2;
+      yield pW(b, 1.2);
       wk.mode = 'idle'; d.pose = 'hold';
       d.cal = '6x1'; d.cal2 = '6x1'; d.flip = 0; d.flipTo = 0;
       // e) E A CONTA? → MANDA PRO ZÉ!
       say(b, 'E A CONTA?', 1.0);
       yield 0.5;
       say(b, 'MANDA PRO ZÉ!', 1.4); d.pose = 'point';
+      const fz = pFan(b, 7, 0.9), nz = fz[0], sz = fz[1];
       for (let k = 0; k < 3; k++) {
         const q = phoneXY(b);
-        fan(q[0], q[1], aimFrom(q[0], q[1]), 7, 0.9, 135, CEDULA);
+        fan(q[0], q[1], aimFrom(q[0], q[1]), nz, sz, 135, CEDULA);
         sfx('enemy_shot2');
         yield 0.4;
       }
       d.pose = 'hold';
-      yield 0.5;
-      yield* pavCue(b);
+      yield pW(b, 0.5);
       // f) curtidas e repete
       yield* erkLikes(b);
-      yield 0.8;
-      yield* pavCue(b);
+      yield pW(b, 0.8);
     }
-  }
-  // deixa da participação especial (entre dois ataques): se for uma hora boa, pede a cena e espera ela acabar (a Erika
-  // fica pausada enquanto ele está lá); depois, um respiro para a última fala dela. Hora boa = a live ainda vai demorar
-  // a poder cair toda (um tonto logo no começo cortaria a cena). Armada há mais de ARM_MAX s: vai assim mesmo.
-  function* pavCue(b) {
-    const d = b.data;
-    if (d.pavDone || d.pavReq || d.pav) return;
-    if (d.pavArmT == null) { d.pavArmT = K.clk(b); d.pavStuns0 = b.mech ? b.mech.stuns : 0; }
-    if (!pavReady(b)) return;
-    // fallback só para quem não está derrubando a live (quem derruba ganha a cena no fim do tonto)
-    if (pavSafeT(b) < PV.SAFE && (K.clk(b) - d.pavArmT < PV.ARM_MAX || (b.mech && b.mech.stuns > d.pavStuns0))) return;
-    d.pavReq = true; d.pavWait = 0;
-    yield () => !d.pavReq && !(d.pav && d.pav.pause);
-    if (d.pavDone) yield PV.POST;
   }
   // ---------- 3º turno: O PSOL VAI AO STF ----------
   function* erkCerco(b) {
@@ -1057,9 +1059,10 @@
   function* erkADIfan(b) {
     const d = b.data;
     say(b, 'ADI NELES!', 1.2); d.pose = 'point';
+    const f = pFan(b, 3, 0.35), n = f[0], spr = f[1];
     for (let k = 0; k < 3; k++) {
       const q = phoneXY(b);
-      fan(q[0], q[1], aimFrom(q[0], q[1]), 3, 0.35, PAT.ADI_SPD, { style: 'erk_adi', color: COL.red });
+      fan(q[0], q[1], aimFrom(q[0], q[1]), n, spr, PAT.ADI_SPD, { style: 'erk_adi', color: COL.red });
       sfx('enemy_shot');
       yield 0.45;
     }
@@ -1069,14 +1072,14 @@
     if (q.t < q.data.split || q.dead) return;
     q.dead = true;
     G.text(q.x, q.y - 10, 'ARQUIVADO!', { size: 8, color: '#ffffff', life: 0.7, vy: -20 });
-    ring(q.x, q.y, 8, 90, NOTIF, Math.random() * TAU);
+    ring(q.x, q.y, q.data.n || 8, 90, NOTIF, Math.random() * TAU);
     sfx('split');
   }
   function* erkArquivado(b) {
     const d = b.data, kk = spdK(b);
     say(b, 'PROTOCOLEI!', 1.3); d.pose = 'up';
     for (let k = 0; k < 3; k++) {
-      shoot(b.x, b.y + 30, DOWN + (k - 1) * 0.3, 100, { style: 'erk_adi', color: COL.red, accel: -50 * kk, minSpd: 60 * kk, data: { split: 1.2 }, update: arquiva });
+      shoot(b.x, b.y + 30, DOWN + (k - 1) * 0.3, 100, { style: 'erk_adi', color: COL.red, accel: -50 * kk, minSpd: 60 * kk, data: { split: 1.2, n: pRing(b, 8) }, update: arquiva });
     }
     sfx('whoosh');
     yield 0.5;
@@ -1087,32 +1090,28 @@
     d.mv = (bb, dd) => { const t = K.clk(bb); dd.tx = bb.homeX + PAT.SWAY[2] * Math.sin(0.55 * t); dd.ty = bb.homeY + 6 * Math.sin(1.2 * t); };
     d.prop = 'stf';
     yield 1.0;
-    yield* pavCue(b); // o 2º turno acabou antes da participação especial: ela vem agora (ou na próxima deixa)
     for (;;) {
-      yield* erkCerco(b); yield 1.2;
-      yield* pavCue(b);
-      yield* erkADIfan(b); yield 0.9;
-      yield* pavCue(b);
-      yield* erkArquivado(b); yield 1.4;
-      yield* pavCue(b);
+      yield* erkCerco(b); yield pW(b, 1.2);
+      yield* erkADIfan(b); yield pW(b, 0.9);
+      yield* erkArquivado(b); yield pW(b, 1.4);
     }
   }
-  // ---------- 4º turno: TRENDING TOPIC (no celular-prancha) ----------
-  function* erkP4(b) {
+  // ---------- 4º turno: TRENDING TOPIC (no celular-prancha); 5º: LIVE DE 24 HORAS (a mesma espiral, mais rápida) ----------
+  function* erkSpiral(b, line, sway, spd, step) {
     const d = b.data;
-    say(b, 'TÁ NOS TRENDING!', 1.8);
-    d.mv = (bb, dd) => { const t = K.clk(bb); dd.tx = bb.homeX + PAT.SWAY[3] * Math.sin(0.45 * t); dd.ty = bb.homeY + 4 + 6 * Math.sin(1.1 * t); };
+    say(b, line, 1.8);
+    d.mv = (bb, dd) => { const t = K.clk(bb); dd.tx = bb.homeX + sway * Math.sin(0.45 * t); dd.ty = bb.homeY + 4 + 6 * Math.sin(1.1 * t); };
     yield 0.9;
-    const arms = L2() ? 5 : 4;
+    const arms = K.pN(L2() ? 5 : 4, d.pl); // PRESSÃO: +braços
     let dir = 1, a = Math.random() * TAU;
     for (;;) {
       const t0 = K.clk(b);
       let k = 0;
       while (K.clk(b) - t0 < 4) {
-        for (let i = 0; i < arms; i++) shoot(b.x, b.y + 4, a + (i * TAU) / arms, PAT.SPIRAL_SPD, k % 2 ? HASH_M : HASH_O);
+        for (let i = 0; i < arms; i++) shoot(b.x, b.y + 4, a + (i * TAU) / arms, spd, k % 2 ? HASH_M : HASH_O);
         if (k % 4 === 0) sfx('enemy_shot');
-        a += dir * PAT.SPIRAL_W * PAT.SPIRAL_STEP; k++;
-        yield PAT.SPIRAL_STEP;
+        a += dir * PAT.SPIRAL_W * step; k++;
+        yield step;
       }
       // vira o sentido: 0,6 s de aviso (a espiral para, o ring light pisca)
       d.ringFlashT = 0.6; sfx('charge');
@@ -1120,22 +1119,24 @@
       dir = -dir;
     }
   }
-  function* erkP4Hearts(b) {
+  const erkP4 = (b) => erkSpiral(b, 'TÁ NOS TRENDING!', PAT.SWAY[3], PAT.SPIRAL_SPD, PAT.SPIRAL_STEP);
+  const erkP5 = (b) => erkSpiral(b, 'LIVE DE 24 HORAS, GENTE!', PAT.SWAY[4], PAT.SPIRAL_SPD * PAT.P5_SPD_K, PAT.P5_STEP);
+  function* erkP4Hearts(b, every) {
     for (;;) {
-      yield PAT.P4_HEARTS;
-      const q = phoneXY(b);
-      fan(q[0], q[1], aimFrom(q[0], q[1]), 5, 0.5, PAT.P4_HEART_SPD, LIKE_H);
+      yield pW(b, every);
+      const q = phoneXY(b), f = pFan(b, 5, 0.5);
+      fan(q[0], q[1], aimFrom(q[0], q[1]), f[0], f[1], PAT.P4_HEART_SPD, LIKE_H);
       sfx('enemy_shot');
     }
   }
-  function* erkP4Threads(b) { for (;;) { yield PAT.P4_THREAD_EVERY; yield* erkThread(b, PAT.P4_THREAD_ROWS, false); } }
+  function* erkP4Threads(b) { for (;;) { yield pW(b, PAT.P4_THREAD_EVERY); yield* erkThread(b, PAT.P4_THREAD_ROWS, false); } }
   // ---------- VIRALIZOU (a pressão dos fios no ar) ----------
   function* erkViral(b) {
     const d = b.data;
     d.viralWarn = FI.VIRAL_WARN; sfx('charge'); say(b, 'VIRALIZOU!', 1.4); d.postT = 2.2;
     yield FI.VIRAL_WARN;
     d.viralWarn = 0;
-    const x = b.x, y = b.y + 4, n = FI.VIRAL_N, cols = [LIKE, LIKE_H, LIKE_R];
+    const x = b.x, y = b.y + 4, n = pRing(b, FI.VIRAL_N), cols = [LIKE, LIKE_H, LIKE_R];
     for (let i = 0; i < n; i++) {
       const t = (i / n) * TAU, s = Math.sin(t);
       const hx = 16 * s * s * s, hy = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
@@ -1153,29 +1154,32 @@
   // ======================================================================
   // LUCAS PAVANATTO chega voando num palanque-drone com a placa '3 MILHÕES DE VOTOS'. A Erika (1,6 milhão) fica com
   // ciúme e manda um leque de textões nele; ele levanta a placa e os textões voltam nela (dano modesto via G.hitBoss,
-  // então armadura e cansaço valem; 0,8 s de susto, não é tonto). Quando: armada no 2º turno, depois da 1ª semana
-  // inteira do calendário (se o 2º turno acabar antes, no começo do 3º); vem na primeira deixa entre semanas com hora
-  // boa (SAFE) ou logo no fim de um tonto (erkStunEnd: a live leva connecting + loading para voltar a ser cortável).
-  // Enquanto ele está em cena (~5,2 s) a corrotina da Erika fica pausada como no tonto (sem d.clk, d.mv nem conversa)
-  // e os fios cortados não voltam; os fios da live e o alvo do piloto continuam valendo.
+  // então armadura e cansaço valem; 0,8 s de susto, não é tonto).
+  // GARANTIDA (SPEC5 §10): a cena começa na 1ª troca de turno da luta, caia em que turno cair, FORCE_DELAY s depois
+  // (mais que a invulnerabilidade de 1 s do core: o letreiro do turno dá para ler; o prazo só anda fora do tonto).
+  // Até lá a Erika fica pausada como no tonto. A cena é um segmento de TV travado "AO VIVO": tela limpa
+  // (G.clearBullets), a chefona invulnerável e inofensiva (tiro só faz 'tink', a Delação é recusada), sem rig, sem
+  // VIRALIZOU, sem alvo do piloto, com a faixa 'AO VIVO' / 'PARTICIPAÇÃO ESPECIAL — PAVANATTO' por LOWER s.
+  // Nada a corta (dano, tonto, morte do Zé): o dano só tira a vida até 1% e, sem a cena completa (b.mech.pav), ela não
+  // cai (onDefeat). Os textões devolvidos (pavHit) tiram 2,5% da vida no total, sem cruzar o próximo turno.
+  // Enquanto ele está em cena (~5,2 s) a corrotina da Erika fica pausada como no tonto (sem d.clk, d.mv nem conversa).
   // Os textões da cena não são tiros (g.eb): ficam numa lista própria, lá em cima, e nunca acertam o Zé.
-  // Tonto, troca de turno, morte da chefona ou do Zé no meio da cena: ele vai embora na hora e os textões somem.
   // X/Y = onde o palanque para (fração da tela); IN/OUT = voo de entrada / saída (s), FLEE = saída quando a cena é
-  // interrompida; o resto são os instantes do roteiro (s desde a chegada); N textões a SPD px/s (TURN rad/s de mira),
-  // na volta BACK_SPD/BACK_TURN; DMG = dano total (fração da vida, antes do multiplicador); FLINCH = susto (s);
-  // POST = respiro da Erika depois da cena (relógio dela) para a última fala. SAFE = hora boa: a live só pode cair
-  // toda daqui a SAFE s ou mais (pavSafeT; cobre o leque, que acaba em ~FIRE + 0,75 s); ARM_MAX = armada há tantos
-  // s (relógio dela) sem hora boa e sem nenhum tonto desde então (quem derruba a live ganha a cena no fim do tonto):
-  // vai assim mesmo;
-  // WAIT_MAX = pedida e sem poder começar (Zé caído) por tantos s: desiste até a próxima deixa.
+  // cortada (só na morte da chefona); o resto são os instantes do roteiro (s desde a chegada); N textões a SPD px/s
+  // (TURN rad/s de mira), na volta BACK_SPD/BACK_TURN; DMG = dano total (fração da vida, antes do multiplicador);
+  // FLINCH = susto (s); POST = respiro da Erika depois da cena (sem VIRALIZOU) para a última fala;
+  // FORCE_DELAY = s entre a troca de turno e a cena; LOWER = s da faixa de TV.
   const PV = {
     X: 0.16, Y: 0.30, IN: 0.7, OUT: 0.85, FLEE: 1.1,
     E1: 0.45, E2: 1.65, FIRE: 1.7, P1: 2.5, P2: 3.6, LEAVE: 4.9, RESUME: 5.2,
-    N: 7, SPD: 170, TURN: 7, BACK_SPD: 220, BACK_TURN: 9, DMG: 0.025, FLINCH: 0.8, POST: 1.3, SAFE: 2.8, ARM_MAX: 12, WAIT_MAX: 6,
+    N: 7, SPD: 170, TURN: 7, BACK_SPD: 220, BACK_TURN: 9, DMG: 0.025, FLINCH: 0.8, POST: 1.3,
+    FORCE_DELAY: 1.2, LOWER: 3.0,
   };
+  const PV_TAG = { text: 'AO VIVO', color: '#8fc1ff' }; // etiqueta da barra durante a cena
   const PAV_TXT = {
     IN: 'CHEGOU O PAVANATTO!', E1: '1,6 MILHÃO É POUCO?!', E2: 'TEXTÃO NELE!', BACK: 'DEVOLVEU O TEXTÃO!',
     P1: 'ZÉ, CORTA OS FIOS DELA!', P2: 'FIM DA 6x1? VIRA 0x7!', E3: 'VOU ABRIR UM FIO SOBRE ELE!',
+    LOW1: 'AO VIVO', LOW2: 'PARTICIPAÇÃO ESPECIAL — PAVANATTO',
   };
   // aquecimento das poses dele (cabeça falando: boca quantizada em terços, como em G.Art)
   const PAV_WARM = [['hold', 'smug', 0], ['hold', 'smug', 1 / 3], ['hold', 'smug', 2 / 3], ['up', 'smug', 0], ['up', 'laugh', 0],
@@ -1191,32 +1195,45 @@
   }
   // a Erika fica virada para ele enquanto ele está em cena
   const erkFace = (b) => (b.data.pav && b.data.pav.pause ? -1 : 1);
-  // dá para começar agora? (sem tonto nem VIRALIZOU no meio, chefona fora da invulnerabilidade da troca de turno,
-  // Zé vivo e já na tela)
-  function pavReady(b) {
-    const d = b.data, p = pl();
-    return b.state === 'fight' && !K.stunning(b) && !d.viral && !(b.invulnT > 0) && !!p.alive && !p.entering;
-  }
-  // daqui a quantos s a live pode cair toda (no mínimo): o que falta para os fios ficarem cortáveis + ~0,25 s por fio
-  // a cortar (quem já espera em cima do fio corta rápido)
-  function pavSafeT(b) {
-    const d = b.data, Lv = d.live, n = Lv.phones.length ? liveCount(Lv) : 2;
-    let t = 0;
-    if (!Lv.st) t = Math.max(0, d.rigT) + FI.CONNECT + loadT();
-    else if (Lv.st === 'connecting') t = Math.max(0, Lv.dur - Lv.t) + loadT();
-    else if (Lv.st === 'loading') t = Math.max(0, loadT() - Lv.t);
-    else if (Lv.st === 'down') return 0;
-    return t + 0.25 * n;
-  }
-  function pavStart(b) {
+  // a cena começa (sempre travada: forced)
+  function pavStart(b, forced) {
     const d = b.data, W = G.W, H = G.H;
-    d.pavReq = false; d.pavDone = true; d.pavWait = 0; d.pavFlinchT = 0;
+    d.pavDone = true; d.pavFlinchT = 0;
     d.pavDmg = (PV.DMG * b.maxHp) / PV.N;
     d.pav = { st: 'in', t: 0, ot: 0, outDur: PV.OUT, x: -70, y: H * PV.Y, x0: -70, y0: H * PV.Y, tx: W * PV.X, ty: H * PV.Y, ex: W + 90, bob: 0,
-      pose: 'hold', board: 0, boardTo: 0, laughT: 0, sayText: null, sayT: 0, bye: false, proj: [], ev: 0, bounced: 0, hits: 0, pause: true };
+      pose: 'hold', board: 0, boardTo: 0, laughT: 0, sayText: null, sayT: 0, bye: false, proj: [], ev: 0, bounced: 0, hits: 0, pause: true,
+      forced: forced !== false };
+    // segmento de TV: tela limpa, chefona invulnerável e inofensiva, sem live, sem VIRALIZOU, sem alvo do piloto
+    G.clearBullets(true);
+    b.invuln = true; b.harmless = true;
+    d.viral = false; d.viralWarn = 0; K.co(b, null, 2);
+    if (d.live.phones.length) rigClear(b, true);
+    d.live.st = null; d.rigHold = true; d.goalPh = null; d.eng = 0;
+    d.armor = 1; d.armorTag = PV_TAG; d.lowerT = PV.LOWER;
     d.pose = 'hold'; d.poseT = 0;
+    K.clearGoal(b);
     sfx('whoosh');
     G.text(W / 2, Math.max(H * 0.4, b.y + STUN_PILL_DY + 34), PAV_TXT.IN, { size: 14, color: '#8fc1ff', stroke: true, life: 1.2, vy: -10 }); // linha do 'FLOPOU!'
+  }
+  // fim da cena: ela volta a lutar (meio segundo de invulnerabilidade), a live do turno entra RIG_GAP s depois
+  function pavResume(b, d, P) {
+    P.pause = false; d.pose = 'hold'; d.poseT = 0;
+    if (P.forced && b.state === 'fight') { b.invuln = false; b.invulnT = Math.max(b.invulnT, 0.5); }
+    b.harmless = false;
+    d.armorTag = null; d.rigHold = false; d.rigT = FI.RIG_GAP; d.pavForce = false;
+    if (b.mech) b.mech.pav = 1;
+    if (d.p5) d.p5T0 = b.ft; // ÚLTIMO RECURSO: o prazo do SEM SAÍDA conta da volta dela
+    say(b, PAV_TXT.E3, 1.5); d.chatT = Math.max(d.chatT, 4); d.pavHoldT = PV.POST;
+  }
+  // os textões devolvidos ainda doem nela (a cena é invulnerável para o Zé): sem cruzar o próximo turno e sem derrubá-la
+  function pavHit(b, dmg) {
+    const nx = b.phases[b.phase + 1], floor = nx ? nx.at * b.maxHp + 1 : Math.max(1, b.maxHp * 0.01);
+    const mul = b.dmgMul != null && b.dmgMul > 0 ? b.dmgMul : 1;
+    dmg = Math.max(0, Math.min(dmg, (b.hp - floor) / mul));
+    const inv = b.invuln, it = b.invulnT;
+    b.invuln = false; b.invulnT = 0;
+    G.hitBoss(b, dmg);
+    if (b.state === 'fight') { b.invuln = inv; b.invulnT = it; }
   }
   function pavSay(P, s, dur) { P.sayText = s; P.sayT = dur; }
   // roteiro: [instante, ação]
@@ -1228,7 +1245,7 @@
     [PV.P1, (b, d, P) => { P.boardTo = 0; pavSay(P, PAV_TXT.P1, PV.P2 - PV.P1); }],
     [PV.P2, (b, d, P) => { P.pose = 'wave'; P.bye = true; pavSay(P, PAV_TXT.P2, PV.LEAVE - PV.P2); }], // some antes de ele cruzar com ela
     [PV.LEAVE, (b, d, P) => pavLeave(P, PV.OUT)],
-    [PV.RESUME, (b, d, P) => { P.pause = false; d.pose = 'hold'; d.poseT = 0; say(b, PAV_TXT.E3, 1.5); d.chatT = Math.max(d.chatT, 4); d.pavHoldT = PV.POST; }],
+    [PV.RESUME, (b, d, P) => pavResume(b, d, P)],
   ];
   // TEXTÃO NELE!: leque de 7 textões saindo do celular dela para cima e para a esquerda; eles fazem a curva e
   // caem na placa levantada (bem longe do Zé, lá em cima)
@@ -1267,7 +1284,7 @@
         if (M.dist2(o.x, o.y, ex, ey) < 26 * 26 || o.t > 1.4) {
           L.splice(i, 1);
           // acertou a Erika: dano modesto (G.hitBoss: armadura e cansaço valem) e o susto de 0,8 s
-          G.hitBoss(b, d.pavDmg);
+          pavHit(b, d.pavDmg);
           if (d.pav !== P) return; // o golpe derrubou a chefona (onDeath já limpou a cena)
           G.burst(o.x, o.y, 6, { colors: ['#ffffff', '#ff2a4a', '#ffd23f'], speed: 170, life: 0.35 });
           G.part({ x: o.x, y: o.y, vx: M.rand(-40, 40), vy: -60, type: 'paper', size: 4, life: 0.8, color: '#ffffff', drag: 0.94, grav: 120, rot: M.rand(0, TAU), vr: M.rand(-10, 10) });
@@ -1278,15 +1295,20 @@
   }
   // sai voando para a direita (passa por trás dela)
   function pavLeave(P, dur) { P.st = 'out'; P.ot = 0; P.outDur = dur; P.x0 = P.x; P.y0 = P.y; P.ex = G.W + 90; sfx('whoosh'); }
-  // cena interrompida (tonto, troca de turno, Zé caiu): os textões somem, a Erika volta na hora e ele vai embora já,
-  // com a fala da saída se ainda não falou; gone = some numa fumacinha (morte da chefona)
+  // cena cortada (só a morte da chefona, que a cena trava; fica para robustez): os textões somem, a Erika volta na
+  // hora e ele vai embora já, com a fala da saída se ainda não falou; gone = some numa fumacinha
   function pavAbort(b, gone) {
     const d = b.data, P = d.pav;
-    d.pavReq = false; d.pavFlinchT = 0;
+    d.pavFlinchT = 0; d.pavForce = false; d.lowerT = 0;
+    if (d.rigHold) { d.rigHold = false; if (d.armorTag === PV_TAG) d.armorTag = null; }
+    b.harmless = false;
     if (!P) return;
     for (const o of P.proj) G.burst(o.x, o.y, 4, { colors: ['#ffffff', '#c9d3e6'], speed: 110, life: 0.3 });
     P.proj.length = 0;
-    if (P.pause) { P.pause = false; d.pose = 'hold'; d.poseT = 0; }
+    if (P.pause) {
+      P.pause = false; d.pose = 'hold'; d.poseT = 0;
+      if (P.forced && b.state === 'fight') b.invuln = false;
+    }
     if (gone) {
       G.burst(P.x, P.y, 10, { colors: ['#ffffff', pavBlue(), '#ffd23f'], speed: 140, life: 0.45 });
       G.part({ x: P.x, y: P.y, type: 'smoke', size: 14, life: 0.6, color: 'rgba(200,206,220,0.5)', drag: 0.95 });
@@ -1304,14 +1326,17 @@
     const d = b.data;
     if (d.pavFlinchT > 0) d.pavFlinchT -= dt;
     if (d.pavHoldT > 0 && !st) d.pavHoldT -= dt; // respiro depois da cena (a última fala dela não é atropelada)
+    if (d.lowerT > 0) d.lowerT -= dt;
     let P = d.pav;
     if (!P) {
-      if (!d.pavReq) return false;
-      if (!pavReady(b)) { if (!st && (d.pavWait += dt) > PV.WAIT_MAX) d.pavReq = false; return false; } // tenta na próxima deixa
-      pavStart(b); P = d.pav;
+      if (!d.pavForce) return false;
+      // pedida na troca de turno: ela fica pausada como no tonto; o prazo só anda fora do tonto (ignora a
+      // invulnerabilidade da troca, o VIRALIZOU e o estado do Zé)
+      if (b.state !== 'fight' || st || (d.pavForceT -= dt) > 0) return true;
+      pavStart(b, true); P = d.pav;
     }
-    const p = pl();
-    if (P.pause && (st || !p.alive)) pavAbort(b);
+    // (cena travada: tonto ou o Zé caindo não cortam; sem tiros na tela não há o que temer)
+    if (P.pause && !P.forced && (st || !pl().alive)) pavAbort(b);
     P.t += dt; P.bob = Math.sin(P.t * 3.2) * 2;
     if (P.sayT > 0) P.sayT -= dt;
     if (P.laughT > 0) P.laughT -= dt;
@@ -1329,7 +1354,7 @@
     pavProj(b, P, dt);
     if (d.pav !== P) return false;
     if (P.st === 'out' && P.ot >= P.outDur && !P.proj.length) {
-      if (P.pause) { P.pause = false; d.pose = 'hold'; d.poseT = 0; }
+      if (P.pause) pavResume(b, d, P);
       d.pav = null;
       return false;
     }
@@ -1420,27 +1445,41 @@
       c.fillRect(i * lw, y0, lw, G.H - y0);
     }
   }
-  const lowerThird = () => sprite('lower|' + G.W + '|' + fontKey(), [0, -12, G.W, 24], (c) => {
-    const W = G.W;
-    K.rr(c, 10, -10, W - 20, 20, 4); c.fillStyle = 'rgba(16,20,34,0.55)'; c.fill();
-    K.rr(c, 12, -9, 66, 18, 3); K.inked(c, '#e63946', 1.6);
-    c.beginPath(); K.O(c, 23, 0, 3.4); c.fillStyle = '#ffffff'; c.fill();
-    K.txt(c, 'AO VIVO', 49, 0.5, 9, '#ffffff', { maxW: 46 });
-    K.rr(c, 80, -9, W - 92, 18, 3); K.inked(c, '#ffd23f', 1.6);
-    c.font = '10px ' + G.FONT_DISPLAY;
-    const nw = Math.min(118, c.measureText('ERIKA VIRALTON').width);
-    K.txt(c, 'ERIKA VIRALTON', 86, 0.5, 10, INK, { align: 'left', maxW: 118 });
-    K.txt(c, '— Deputada do Engajamento', 92 + nw, 0.8, 9, '#3a2a0a', { align: 'left', font: G.FONT_BODY, weight: 700, maxW: W - 104 - nw - 6 });
-  });
+  // faixa de TV (aba vermelha + barra amarela: nome em FONT_DISPLAY 10, o resto em FONT_BODY 9): a da entrada dela e a
+  // da participação especial (PAV_TXT.LOW1 / LOW2, partida no travessão: 'PARTICIPAÇÃO ESPECIAL' + '— PAVANATTO')
+  function lowerSpr(key, tab, name, sub, nameMax) {
+    return sprite('lower' + key + '|' + G.W + '|' + fontKey(), [0, -12, G.W, 24], (c) => {
+      const W = G.W;
+      K.rr(c, 10, -10, W - 20, 20, 4); c.fillStyle = 'rgba(16,20,34,0.55)'; c.fill();
+      K.rr(c, 12, -9, 66, 18, 3); K.inked(c, '#e63946', 1.6);
+      c.beginPath(); K.O(c, 23, 0, 3.4); c.fillStyle = '#ffffff'; c.fill();
+      K.txt(c, tab, 49, 0.5, 9, '#ffffff', { maxW: 46 });
+      K.rr(c, 80, -9, W - 92, 18, 3); K.inked(c, '#ffd23f', 1.6);
+      c.font = '10px ' + G.FONT_DISPLAY;
+      const nw = Math.min(nameMax, c.measureText(name).width);
+      K.txt(c, name, 86, 0.5, 10, INK, { align: 'left', maxW: nameMax });
+      K.txt(c, sub, 92 + nw, 0.8, 9, '#3a2a0a', { align: 'left', font: G.FONT_BODY, weight: 700, maxW: W - 104 - nw - 6 });
+    });
+  }
+  const lowerThird = () => lowerSpr('', 'AO VIVO', 'ERIKA VIRALTON', '— Deputada do Engajamento', 118);
+  const PAV_LOW = PAV_TXT.LOW2.split(' — ');
+  const pavLower = () => lowerSpr('pav', PAV_TXT.LOW1, PAV_LOW[0], '— ' + PAV_LOW[1], Math.max(60, G.W - 92 - 76));
   function drawLowerThird(c, b, t) {
     const u = b.state === 'enter' ? M.easeOutCubic(clamp(b.t / 0.45, 0, 1)) : 1;
     // tela baixa (360x640): sobe a faixa para o PULAR do diálogo não cobrir o fim dela
-    const ly = G.H < 700 ? G.H * 0.52 : G.H * 0.62;
+    drawLower(c, lowerThird(), G.H < 700 ? G.H * 0.52 : G.H * 0.62, u, t);
+  }
+  function drawLower(c, spr, ly, u, t) {
     c.save(); c.globalAlpha = u; c.translate((1 - u) * -G.W * 0.6, 0);
-    blit(c, lowerThird(), 0, ly);
+    blit(c, spr, 0, ly);
     // o ponto do AO VIVO pisca
     if (((t * 2) | 0) % 2) { c.beginPath(); K.O(c, 23, ly, 3.4); c.fillStyle = '#ff9aa2'; c.fill(); }
     c.restore();
+  }
+  // participação especial: a faixa entra e sai deslizando (0,4 s), na altura de 0,62·H (sem diálogo na luta)
+  function drawPavLower(c, b, t) {
+    const d = b.data, u = M.easeOutCubic(clamp(Math.min(PV.LOWER - d.lowerT, d.lowerT) / 0.4, 0, 1));
+    drawLower(c, pavLower(), G.H * 0.62, u, t);
   }
   function drawViralWarn(c, b, t) {
     const k = 1 + 0.3 * Math.abs(Math.sin(t * 14)), H = G.H;
@@ -1453,13 +1492,14 @@
   // A chefona
   // ======================================================================
   G.Bosses.define('erika', {
-    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: 90,
+    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: FAT_START,
     score: 220000, pix: 180, music: 'boss', defeatText: 'CANCELADA!',
     phases: [
       { at: 1, name: 'Segue o Fio' },
-      { at: 0.74, name: 'Fim da Escala 6x1' },
-      { at: 0.48, name: 'O PSOL Vai ao STF' },
-      { at: 0.22, name: 'Trending Topic' },
+      { at: 0.76, name: 'Fim da Escala 6x1' },
+      { at: 0.52, name: 'O PSOL Vai ao STF' },
+      { at: 0.30, name: 'Trending Topic' },
+      { at: 0.13, name: 'Live de 24 Horas', last: true },
     ],
     init(b) {
       const d = b.data;
@@ -1472,8 +1512,12 @@
       d.prop = null; d.cal = '6x1'; d.cal2 = '6x1'; d.flip = 0; d.flipTo = 0; d.surf = false;
       d.chatT = M.rand(7, 10); d.cutSayT = 0; d.flopT = 0; d.flickT = 0; d.ringFlashT = 0; d.leaveSaid = false; d.lv = null;
       d.S = { look: [0, 0] }; d.warmI = 0;
-      d.pav = null; d.pavReq = false; d.pavDone = false; d.pavWait = 0; d.pavArmT = null; d.pavStuns0 = null; d.pavFlinchT = 0; d.pavHoldT = 0; d.pavDmg = 0; // participação especial
+      // participação especial (garantida: pavForce na 1ª troca de turno; rigHold segura a live durante a cena)
+      d.pav = null; d.pavForce = false; d.pavForceT = 0; d.pavDone = false; d.pavFlinchT = 0; d.pavHoldT = 0; d.pavDmg = 0;
+      d.rigHold = false; d.lowerT = 0;
+      d.pl = 0; d.pR = 0; d.p5 = false;
       K.mechInit(b, 'fio');
+      b.mech.pav = 0; // 1 quando a cena do Pavanatto termina
       if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
       b.hitboxes = HB_A;
       K.warmPeople(b, 'p1', K.poses(ERIKA, ERK_SIZE, ['idle', 'hold', 'point', 'up', 'shrug', 'wave']).concat(K.poses(ERIKA, ERK_SIZE, ['fist'])));
@@ -1493,7 +1537,8 @@
       d.demo = !L2() && !run._erkSeen;
       run._erkSeen = 1;
       rigStart(b);
-      K.co(b, erkP1(b)); K.co(b, erkNotif(b, PAT.NOTIF_P1), 1);
+      K.pLatch(b);
+      K.co(b, erkP1(b)); K.co(b, erkNotif(b, PAT.NOTIF_P1), 1); K.co(b, K.cpiCo(b), CPI_SLOT);
       say(b, 'OI, GENTE! TÔ AO VIVO!', 1.8);
     },
     update(b, dt, g) {
@@ -1512,12 +1557,17 @@
           if ((d.chatT -= dt) <= 0) { if (!(b.sayT > 0)) say(b, M.pick(CHAT), 1.6); d.chatT = M.rand(7, 10); }
           if (d.poseT > 0 && (d.poseT -= dt) <= 0) d.pose = 'hold';
         } else if (b.x < b.homeX) { d.tx = b.homeX; d.ty = b.y; K.glide(b, dt, 2.4); } // à esquerda do meio: abre espaço para ele
+        // cena (e a espera por ela): o Zé não tem em quem atirar, então a APROVAÇÃO não cai por falta de acerto
+        if (pz && g) g.approvalIdle = 0;
         if (d.mechCd > 0) d.mechCd -= dt;
-        if (d.rigT > 0 && (d.rigT -= dt) <= 0) rigStart(b);
+        // a live não volta durante a participação especial (nem enquanto ela espera a cena)
+        if (!pz && !d.rigHold && d.rigT > 0 && (d.rigT -= dt) <= 0) rigStart(b);
       }
       rigUpdate(b, dt, K.stunning(b));
+      const scene = !!(d.pav && d.pav.pause);
+      if (scene) { d.armor = 1; d.armorTag = PV_TAG; } // segmento AO VIVO: a etiqueta da barra fica até a volta dela
       // VIRALIZOU: muito engajamento com os fios no ar (fora da chuva da 6x1, do tonto, da demonstração e da participação especial)
-      if (!K.stunning(b) && !d.viral && !d.rainOn && !d.demo && !(d.pav && d.pav.pause) && !(d.pavHoldT > 0) && d.eng >= FI.ENG_MAX) { d.viral = true; K.co(b, erkViral(b), 2); }
+      if (!K.stunning(b) && !d.viral && !d.rainOn && !d.demo && !scene && !d.pavForce && !(d.pavHoldT > 0) && d.eng >= FI.ENG_MAX) { d.viral = true; K.co(b, erkViral(b), 2); }
       K.fatigue(b, 'VOU FAZER DETOX DIGITAL...');
       if (d.cutSayT > 0) d.cutSayT -= dt;
       // 'FLOPOU!' em 0,40H, mas sempre abaixo do '0 CURTIDAS' do tonto (tela baixa: 360x640) e subindo devagar
@@ -1530,33 +1580,50 @@
       d.mouth = M.approach(d.mouth, b.sayT > 0 ? 0.5 + 0.4 * Math.sin(b.ft * 16) : 0, dt * 4);
       b.hitboxes = d.surf ? HB_B : HB_A;
       if (b.hp / b.maxHp < 0.25 && Math.random() < dt * 4 * decoK()) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 60, vx: M.rand(-10, 10), vy: -30, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
-      erkGoal(b);
+      // participação especial em cena: nada de alvo do piloto (tela limpa, o Zé só espera)
+      if (scene) K.clearGoal(b); else erkGoal(b);
       K.trackCar(b);
     },
     onPhase(b, idx) {
       const d = b.data;
+      K.pLatch(b); // variantes da PRESSÃO travadas no começo do turno
       d.pose = 'hold'; d.poseT = 0; d.postT = 0;
-      if (idx === 1) K.warmPeople(b, 'p2', K.poses(ERIKA_SWEAT, ERK_SIZE, ['hold', 'point', 'shrug']));
-      if (idx === 2) K.warmPeople(b, 'p3', K.poses(ERIKA_SWEAT, ERK_SIZE, ['fist', 'up', 'wave']));
+      if (idx >= 1) K.warmPeople(b, 'p2', K.poses(ERIKA_SWEAT, ERK_SIZE, ['hold', 'point', 'shrug']));
+      if (idx >= 2) K.warmPeople(b, 'p3', K.poses(ERIKA_SWEAT, ERK_SIZE, ['fist', 'up', 'wave']));
       // a manha: os celulares somem numa fumacinha; um rig novo do turno entra 1 s depois (ou no fim do tonto)
       rigClear(b, true);
-      // participação especial no meio: ele vai embora; se ela ainda não aconteceu, o 3º turno pede de novo (erkP3)
-      if (d.pav) pavAbort(b);
-      d.pavReq = false;
+      // participação especial GARANTIDA (SPEC5 §10): a 1ª troca de turno, caia em que turno cair, pede a cena
+      // (FORCE_DELAY s depois, fora do tonto). Uma cena já em andamento é travada: segue (as corrotinas esperam).
+      if (idx >= 1 && !d.pavDone && !d.pav) { d.pavForce = true; d.pavForceT = PV.FORCE_DELAY; }
       if (K.stunning(b)) { d.stunT = Math.min(d.stunT, 2.0); d.live.st = 'down'; }
       else { d.live.st = null; d.rigT = FI.RIG_GAP; d.armor = 1; d.armorTag = null; }
       K.co(b, null, 2); d.viral = false; d.viralWarn = 0; d.threadOn = false;
       d.week.show = false; d.week.mode = 'idle'; d.rainOn = false; d.demo = false;
       d.prop = null; d.flip = 0; d.flipTo = 0; d.cal = '6x1'; d.cal2 = '6x1';
-      if (idx === 1) { K.co(b, erkP2(b)); K.co(b, null, 1); }
-      else if (idx === 2) { K.co(b, erkP3(b)); K.co(b, erkNotif(b, PAT.NOTIF_P3), 1); }
-      else if (idx === 3) {
-        // a tribuna fica para trás: ela sobe num celular gigante
+      if (idx >= 3 && !d.surf) {
+        // a tribuna fica para trás: ela sobe num celular gigante (e continua nele no 5º turno)
         d.surf = true;
         G.burst(b.x, b.y + TRY + 20, 14, { colors: ['#8b5a2b', '#ffd23f', '#ffffff'], speed: 200, life: 0.6 });
         sfx('whoosh');
-        K.co(b, erkP4(b)); K.co(b, erkP4Hearts(b), 1); K.co(b, erkP4Threads(b), 3);
       }
+      if (idx === 1) { K.co(b, erkP2(b)); K.co(b, null, 1); K.co(b, null, 3); }
+      else if (idx === 2) { K.co(b, erkP3(b)); K.co(b, erkNotif(b, PAT.NOTIF_P3), 1); K.co(b, null, 3); }
+      else if (idx === 3) { K.co(b, erkP4(b)); K.co(b, erkP4Hearts(b, PAT.P4_HEARTS), 1); K.co(b, erkP4Threads(b), 3); }
+      else if (idx >= 4) {
+        // ÚLTIMO RECURSO: LIVE DE 24 HORAS (a espiral do 4º mais rápida + corações; o rig de drones continua)
+        K.lastStand(b);
+        if (!(d.live.st === 'down')) d.rigT = Math.min(d.rigT, 1.5);
+        K.co(b, erkP5(b)); K.co(b, erkP4Hearts(b, PAT.P5_HEARTS), 1); K.co(b, null, 3);
+      }
+      K.co(b, K.cpiCo(b), CPI_SLOT);
+    },
+    // a cena do Pavanatto é garantida: sem ela completa, a Erika não cai (fica com 1% e a cena vem na hora certa)
+    onDefeat(b) {
+      const d = b.data;
+      if (b.mech && b.mech.pav) return false;
+      b.hp = Math.max(1, b.maxHp * 0.01);
+      if (!d.pavDone && !d.pav && !d.pavForce) { d.pavForce = true; d.pavForceT = PV.FORCE_DELAY; }
+      return true;
     },
     onDeath(b) {
       const d = b.data;
@@ -1565,7 +1632,7 @@
       d.stunT = 0; d.stunOnEnd = null; d.viral = false; d.viralWarn = 0; d.demo = false;
       d.week.show = false; d.week.mode = 'idle'; d.rainOn = false; d.armor = 1; d.armorTag = null;
       K.clearGoal(b); b.hudTag = null;
-      pavAbort(b, true);
+      pavAbort(b, true); b.harmless = false; // (impossível no meio da cena: fica para robustez)
       say(b, 'ATAQUE À DEMOCRACIA!', 2.2);
       if (b.x < 40 || b.x > G.W - 40) b.x = clamp(b.x, 60, G.W - 60);
     },
@@ -1647,6 +1714,7 @@
       drawRigOver(ctx, b, t);
       if (d.week.show && !K.stunning(b)) drawWeekOver(ctx, b, t);
       if (d.viralWarn > 0) drawViralWarn(ctx, b, t);
+      if (d.lowerT > 0) drawPavLower(ctx, b, t);
     },
   });
 

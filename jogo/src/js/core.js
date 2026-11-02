@@ -109,10 +109,13 @@
   const SAVE_KEY = 'fusca-a-jato.save.v1';
   function defaultSave() {
     return {
+      // saveV: versão do save (5 = jogo de 5 fases; os saves antigos não têm o campo e são migrados no loadSave)
+      saveV: 5,
       pix: 0, upgrades: {}, unlocked: 1, best: 0, cleared: false, cleared2: false, seenIntro: false,
       achievements: {}, counters: {},
       // quality: 'auto' (o jogo escolhe pelo desempenho) | 'high' | 'mid' | 'low'
-      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto' },
+      // skin: 'azul' | 'ouro' (FUSCA DOURADO: só vale com a conquista 'transito')
+      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto', skin: 'azul' },
       qualityTier: 'high', // nível escolhido pelo modo automático (lembrado entre sessões)
     };
   }
@@ -123,16 +126,31 @@
       if (raw) {
         const d = JSON.parse(raw);
         Object.assign(s, d);
+        s.saveV = d.saveV | 0; // sem o campo = save antigo (o padrão 5 do defaultSave não vale aqui)
         s.settings = Object.assign(defaultSave().settings, d.settings || {});
         s.upgrades = d.upgrades || {};
         s.achievements = d.achievements || {};
         s.counters = d.counters || {};
+        if (migrateSave(s)) migrated = true;
       }
     } catch (e) { /* storage bloqueado: segue com save em memória */ }
     return s;
   }
+  // Saves do jogo de 4 fases (antes do saveV 5): a Fazenda entrou como fase 4, antes do Planalto.
+  // Ninguém perde fase liberada: quem já chegava no Planalto ganha a Fazenda e o Planalto.
+  let migrated = false;
+  function migrateSave(s) {
+    if (s.saveV >= 5) return false;
+    if (s.cleared) s.unlocked = 5;
+    else if ((s.unlocked | 0) >= 4) s.unlocked = Math.min(5, (s.unlocked | 0) + 1);
+    const r = s.ui && s.ui.ranks;
+    if (r && r['3'] != null) { r['4'] = r['3']; delete r['3']; } // nota do Planalto antigo -> índice novo 4
+    s.saveV = 5;
+    return true;
+  }
   G.save = loadSave();
   G.saveGame = function () { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.save)); } catch (e) { /* nada */ } };
+  if (migrated) G.saveGame(); // grava a migração na hora (saveV 5)
   // APAGAR PROGRESSO: a qualidade volta para 'auto' (começando do 'high') e o medidor recomeça
   G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); };
   G.upg = (id) => G.save.upgrades[id] || 0;
@@ -156,6 +174,7 @@
       if (id === 'vida') { r.lives = Math.min(9, r.lives + 1); r.baseLives++; }
       if (id === 'bomba') { r.bombs = Math.min(6, r.bombs + 1); r.baseBombs++; }
       if (id === 'arma') { r.level = Math.min(G.MAX_LEVEL, r.level + 1); r.pp = 0; }
+      if (id === 'recurso') r.maxContinues = (r.maxContinues || 0) + 1;
     }
     return true;
   };
@@ -221,7 +240,9 @@
   // Ganchos do motor para as mecânicas de chefão (os módulos testam antes de usar):
   //  autoGoal: o piloto automático segue b.autoGoal; hudTag: b.hudTag no meio da barra do chefão;
   //  drawOver: def.drawOver(ctx, b, g) desenha por cima dos tiros e lasers; mech: b.mech + G.debug.mech().
-  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true };
+  //  Rodada 5: postLines (G.game.postLines troca as falas do fim da fase), press (PRESSÃO: G.press / G.PRESS),
+  //  lastPhase (fase com last: true mostra 'ÚLTIMO RECURSO'), defeatText (b.defeatText no carimbo).
+  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true, postLines: true, press: true, lastPhase: true, defeatText: true };
 
   // ===================== Estilos de tiro inimigo (sprites em cache) =====================
   // def: { r: raio de colisão, size: tamanho do sprite em px lógicos, rotate: gira na direção do tiro,
@@ -674,6 +695,114 @@
   }
   G.vibrate = function (ms) { if (!G.save.settings.vibrate) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* nada */ } };
 
+  // ===================== PRESSÃO (dificuldade dinâmica) =====================
+  // Um "rank" visível de 0 a 1 (G.press.R). Sobe com o nível da arma (forte no 4-5) e com o tempo vivo
+  // (run.heat); cai na morte e na Delação. Acelera e adensa os tiros, engrossa os inimigos e PAGA de volta:
+  // pontos ×(1+R), mais Pix, tonto do chefão mais forte. (g.rank continua sendo a nota S/A/B/C da fase.)
+  // Bloco de ajuste do balanço: G.PRESS pode ser trocado inteiro; o que faltar volta para estes padrões.
+  const PRESS = {
+    W: [0, 0.04, 0.10, 0.20, 0.35],       // peso por run.level 1..5 (concentrado no 4-5)
+    TURBO: 0.02,                          // por nível de G.upg('turbo')
+    HEAT_T: 0.0015, HEAT_KILL: 0.0005, HEAT_BIG: 0.02, HEAT_PHASE: 0.015, HEAT_MAXP: 0.03, HEAT_MAX: 0.5,
+    DEATH_KEEP: 0.5, BOMB: 0.05,
+    UP: 0.04, DOWN: 0.3,                  // R por segundo na direção do alvo
+    L2_BASE: 0.15, L2_FLOOR: 0.25,        // 2º Mandato
+    LV: [0.15, 0.30, 0.50, 0.70, 0.85],   // limiares -> lv 0..5
+    NAMES: ['CALMARIA', 'BURBURINHO', 'TENSÃO', 'CRISE', 'CAOS', 'CPI!'],
+    COLORS: ['#9aa5b8', '#3ddc84', '#ffd23f', '#ff8c1a', '#ff2a4a', '#ff3dd8'],
+    SPD: 0.22, SPD_CAP: 250,              // tiros
+    EHP: 0.35, BIGHP: 0.5,                // inimigos comuns / grandes
+    BHP0: 0.80, BHP1: 0.27,               // vida do chefão, travada na chegada
+    SCORE: 1, PIX: 0.6, BOSSPIX: 1, CLEARPIX: 1,
+    STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
+    GOLD_AVG: 0.5, GOLD_PIX: 400,
+  };
+  const PRESS_DEF = JSON.parse(JSON.stringify(PRESS));
+  G.PRESS = PRESS;
+  // constantes em uso: o próprio PRESS (ajustes nele valem na hora) ou a troca completada com os padrões
+  let pcRef = null, pcObj = PRESS_DEF;
+  function PC() {
+    const p = G.PRESS;
+    if (p === PRESS) return PRESS;
+    if (!p || typeof p !== 'object') return PRESS_DEF;
+    if (p !== pcRef) { pcRef = p; pcObj = Object.assign({}, PRESS_DEF, p); }
+    return pcObj;
+  }
+  // um objeto só, atualizado a cada quadro de jogo (os módulos leem G.press.R / G.press.lv)
+  G.press = { R: 0, lv: 0, name: PRESS.NAMES[0], color: PRESS.COLORS[0], tgt: 0 };
+  G.pressK = (k) => 1 + k * G.press.R;
+  let pressUpCd = 0; // aviso 'PRESSÃO: ...!' no máximo 1 vez a cada 3 s
+  function pressTarget(run) {
+    const P = PC(), W = P.W, l2 = run.loop > 1;
+    const w = W[M.clamp((run.level | 0) - 1, 0, W.length - 1)] || 0;
+    return M.clamp(w + P.TURBO * G.upg('turbo') + (run.heat || 0) + (l2 ? P.L2_BASE : 0), l2 ? P.L2_FLOOR : 0, 1);
+  }
+  function pressLevelOf(R) { const LV = PC().LV; let n = 0; for (let i = 0; i < LV.length; i++) if (R >= LV[i]) n++; return n; }
+  // sobe na hora; desce só 0,02 abaixo do limiar (histerese)
+  function pressLevel(R) {
+    const LV = PC().LV, n = pressLevelOf(R);
+    let lv = G.press.lv;
+    if (n > lv) lv = n;
+    else while (lv > n && R < LV[lv - 1] - 0.02) lv--;
+    return lv;
+  }
+  function pressSetLevel(lv) {
+    const P = PC(), pr = G.press;
+    pr.lv = lv; pr.name = P.NAMES[lv] || ''; pr.color = P.COLORS[lv] || '#ffffff';
+  }
+  function addHeat(h) {
+    const run = G.run; if (!run) return;
+    const mx = PC().HEAT_MAX, cur = run.heat || 0;
+    if (cur < mx) run.heat = Math.min(mx, cur + h);
+  }
+  // começo de partida: R vai direto para o alvo (nível de arma das melhorias, ?heat=, piso do 2º Mandato)
+  function pressReset(run) {
+    const pr = G.press, fix = G.debug.pressFix;
+    pr.tgt = pressTarget(run);
+    pr.R = fix != null ? fix : pr.tgt;
+    pressSetLevel(pressLevelOf(pr.R));
+    pressUpCd = 0;
+  }
+  // updateGame, logo depois do updatePlayer
+  function updatePress(dt) {
+    const g = G.game, p = g.player, run = G.run, P = PC(), pr = G.press, b = g.boss;
+    const active = p.alive && !p.entering && g.canFire && !g.inDialogue && !g.cleared && !(g.resumeT > 0) &&
+      (!b || (b.state === 'fight' && !(b.data && b.data.reviving)));
+    if (active) addHeat(P.HEAT_T * dt);
+    const tgt = pressTarget(run), fix = G.debug.pressFix;
+    pr.tgt = tgt;
+    let R = pr.R;
+    if (fix != null) R = fix;
+    else if (R < tgt) R += Math.min(P.UP * dt, tgt - R);
+    else if (R > tgt) R -= Math.min(P.DOWN * dt, R - tgt);
+    pr.R = R;
+    const lv = fix != null ? pressLevelOf(R) : pressLevel(R);
+    if (pressUpCd > 0) pressUpCd -= dt;
+    if (lv !== pr.lv) {
+      const up = lv > pr.lv;
+      pressSetLevel(lv);
+      if (up && lv >= 2 && pressUpCd <= 0 && !g.inDialogue) {
+        pressUpCd = 3;
+        G.text(G.W / 2, G.H * 0.30, 'PRESSÃO: ' + pr.name + (/!$/.test(pr.name) ? '' : '!'), { color: pr.color, size: 13, life: 1.3, stroke: true });
+        call(G.Audio, 'sfx', 'press_up');
+      }
+    }
+    if (active) { g.pressSum += R * dt; g.pressT += dt; }
+  }
+  // morte de verdade (hurtPlayer, depois de perder o nível): metade do calor some e R desce na hora
+  function pressOnDeath(p) {
+    const run = G.run, pr = G.press, P = PC(), fix = G.debug.pressFix;
+    const R0 = pr.R, h0 = run.heat || 0;
+    run.heat = h0 * P.DEATH_KEEP;
+    pr.tgt = pressTarget(run);
+    if (fix == null) { pr.R = Math.min(pr.R, pr.tgt); pressSetLevel(pressLevel(pr.R)); }
+    if (R0 - pr.R > 0.005 || (fix != null && h0 > 0)) G.text(p.x, p.y - 40, 'PRESSÃO ALIVIOU', { color: '#9aa5b8', size: 11, life: 1.2 });
+  }
+  // nota média da fase (R̄) para o boletim e o Carimbo de Ouro
+  function pressAvg(g) { return g && g.pressT > 0 ? g.pressSum / Math.max(1, g.pressT) : 0; }
+  // LULE 5.0: só numa partida que começou na fase 1 e nunca entrou com recurso (ou ?quinto=1)
+  G.quintoOk = () => !!(G.run && G.run.startStage === 0 && G.run.continues === 0) || !!G.debug.forceQuinto;
+
   // ===================== Estado do jogo =====================
   G.state = 'boot'; // boot | menu | intro | play | dialogue | pause | clear | over | ending
   G.run = null;     // dados da partida (vidas, bombas, arma, placar...)
@@ -692,6 +821,8 @@
       kills: 0, hits: 0, bombsUsed: 0, bombsUsedBoss: 0, grazes: 0, pixStage: 0, pixCommitted: 0,
       script: null, cleared: false, canFire: false, introT: 0, beam: null, grazeSfxT: 0, inDialogue: false,
       resumeT: 0, rank: null,
+      pressSum: 0, pressT: 0, // PRESSÃO: soma de R×dt e tempo ativo (R̄ da fase)
+      bossHits: 0, postLines: null, lastBoss: null, // mortes na luta do chefão (SEM ARRANHÃO!), falas do fim, último chefão derrotado
       pixQ: [], // moedas de tiros convertidos esperando para sair (G.clearBullets)
     };
     return g;
@@ -726,6 +857,9 @@
       invuln: false, shieldT: 0, harmless: !!def.harmless, sayText: null, sayT: 0,
       ignoreClear: !!def.ignoreClear,
     };
+    // PRESSÃO engrossa os inimigos (def.noPress / o.noPress: partes de chefão, que não contam)
+    const R = G.press.R;
+    if (R > 0 && !o.noPress && !def.noPress) { const P = PC(); e.hp *= 1 + (e.big ? P.BIGHP : P.EHP) * R; }
     e.maxHp = e.hp;
     if (def.init) call(def, 'init', e, o, g);
     g.enemies.push(e);
@@ -733,13 +867,16 @@
   };
 
   // Tiro inimigo. ang em radianos (0 = direita, PI/2 = para baixo). spd em px/s.
-  // o: {style, color, r, accel, maxSpd, minSpd, turn, ax, ay, life, delay, update(b,dt,g), data, keep}
+  // o: {style, color, r, accel, maxSpd, minSpd, turn, ax, ay, life, delay, update(b,dt,g), data, keep, noPress}
+  // PRESSÃO: velocidade ×(1 + 0,22 R), nunca passando de 250 px/s (tiro que já era >= 250 fica como está).
+  // noPress: paredes cronometradas cuja justiça depende do espaçamento exato (os lasers nunca mudam).
   G.fire = function (x, y, ang, spd, o) {
     const g = G.game; if (!g) return null;
     o = o || {};
     const style = o.style || 'orb';
     const def = BS.defs[style] || BS.defs.orb;
     spd *= g.diff;
+    if (!o.noPress) { const P = PC(); if (spd < P.SPD_CAP) spd = Math.min(P.SPD_CAP, spd * (1 + P.SPD * G.press.R)); }
     const b = {
       x, y, ang, spd, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
       ax: o.ax || 0, ay: o.ay || 0, accel: o.accel || 0, maxSpd: o.maxSpd || 9999, minSpd: o.minSpd != null ? o.minSpd : -9999,
@@ -790,13 +927,17 @@
       t: 0, r: type === 'pix' ? 7 : 11, dead: false, magnet: !!o.magnet,
       wtype: o.wtype || G.WEAPON_ORDER[(Math.random() * 4) | 0], cycle: o.cycle != null ? o.cycle : true,
       restore: !!o.restore, // P que caiu na morte: devolve o nível perdido direto
+      life: o.life || 0, // > 0: some depois de life s (pisca nos últimos 2 s)
     };
     g.pickups.push(it);
     return it;
   };
-  // Espalha N moedas de Pix
+  // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: valor exato), arredondado na sorte
   G.dropPix = function (x, y, amount, o) {
-    let left = Math.round(amount);
+    let a = +amount || 0;
+    if (!(o && o.noPress)) a *= 1 + PC().PIX * G.press.R;
+    const fa = Math.floor(a);
+    let left = fa + (Math.random() < a - fa ? 1 : 0);
     while (left > 0) {
       if (left >= 25 && M.chance(0.5)) { G.drop('mala', x, y, o); left -= 25; }
       else if (left >= 5) { G.drop('pix5', x, y, o); left -= 5; }
@@ -921,7 +1062,7 @@
   G.mult = function () { const g = G.game; return g ? 1 + g.approval / 25 : 1; };
   // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que o recurso
   // NÃO zera: cada marca só dá vida uma vez por partida.
-  const EXTENDS = [500000, 1500000, 3000000, 6000000];
+  const EXTENDS = [1500000, 4500000, 9000000];
   function checkExtends(run) {
     while ((run.extGiven || 0) < EXTENDS.length && (run.total || 0) >= EXTENDS[run.extGiven || 0]) {
       run.extGiven = (run.extGiven || 0) + 1;
@@ -932,7 +1073,7 @@
   }
   G.addScore = function (base, x, y, showText) {
     const run = G.run; if (!run) return 0;
-    const pts = Math.round(base * G.mult());
+    const pts = Math.round(base * G.mult() * (1 + PC().SCORE * G.press.R)); // PRESSÃO paga: pontos ×(1+R)
     run.score += pts;
     run.total = (run.total || 0) + pts;
     if (run.total >= EXTENDS[run.extGiven || 0]) checkExtends(run);
@@ -963,6 +1104,7 @@
     if (!opts.silent) {
       g.kills++;
       G.count('kills');
+      addHeat(e.big ? PC().HEAT_BIG : PC().HEAT_KILL);
       G.addScore(e.score, e.x, e.y, e.big);
       G.addApproval(e.big ? 4 : 1.2);
       if (e.pix > 0) G.dropPix(e.x, e.y, e.pix);
@@ -1013,9 +1155,11 @@
     const g = G.game; if (!g) return null;
     const def = G.Bosses.defs[id];
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
-    const hpMul = g.loop > 1 ? 1.25 : 1;
+    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,00 (R 0,75) … ×1,07 (R 1)
+    const P = PC(), R = G.press.R;
+    const hpMul = (g.loop > 1 ? 1.25 : 1) * (P.BHP0 + P.BHP1 * R);
     const b = {
-      id, def, name: def.name || id.toUpperCase(), title: def.title || '',
+      id, def, name: def.name || id.toUpperCase(), title: def.title || '', press0: R,
       x: G.W / 2, y: -160, homeX: G.W / 2, homeY: def.homeY || 150, r: def.r || 40, hitboxes: null,
       hp: (def.hp || 2000) * hpMul, t: 0, ft: 0, state: 'warning', flash: 0, invuln: true, invulnT: 0,
       phase: 0, phases: def.phases || [{ at: 1, name: '' }], dead: false, data: {}, mood: 'normal', mouth: 0,
@@ -1026,6 +1170,7 @@
     b.maxHp = b.hp;
     g.boss = b;
     g.bombsUsedBoss = 0;
+    g.bossHits = 0;
     if (def.init) call(def, 'init', b, g);
     // def.fem (Dilmãe, Erika): sempre no feminino, como o cartão da fase (CHEFONA)
     G.banner('ALERTA!', def.fem || b.fem ? 'CHEFONA SE APROXIMANDO' : 'CHEFÃO SE APROXIMANDO', { color: G.C.red, dur: 2.4 });
@@ -1078,7 +1223,7 @@
         G.explode(b.x, b.y, 4);
         G.flash(0.8, '#fff');
         call(G.Audio, 'sfx', 'explode_l');
-        g.stamp = { text: def.defeatText || 'CASSADO!', t: 0, x: b.x, y: b.y };
+        g.stamp = { text: b.defeatText || def.defeatText || 'CASSADO!', t: 0, x: b.x, y: b.y };
         call(G.Audio, 'sfx', 'stamp');
       }
     } else if (b.state === 'leaving') {
@@ -1098,9 +1243,13 @@
       G.shake(5);
       G.flash(0.35, '#fff');
       const ph = b.phases[idx];
-      // "º TURNO" (e não "FASE", que é o nome das etapas do jogo)
-      if (ph && ph.name) G.banner((idx + 1) + 'º TURNO', ph.name, { color: G.C.yellow, dur: 1.8, small: true });
+      // "º TURNO" (e não "FASE", que é o nome das etapas do jogo); o turno de desespero (last: true) é o ÚLTIMO RECURSO
+      if (ph && ph.last) {
+        G.banner('ÚLTIMO RECURSO', ph.name || '', { color: G.C.red, dur: 2.0, small: true });
+        call(G.Audio, 'sfx', 'last_stand');
+      } else if (ph && ph.name) G.banner((idx + 1) + 'º TURNO', ph.name, { color: G.C.yellow, dur: 1.8, small: true });
       call(G.Audio, 'sfx', 'phase');
+      addHeat(PC().HEAT_PHASE);
       if (b.def.onPhase) call(b.def, 'onPhase', b, idx, G.game);
     }
   }
@@ -1121,7 +1270,15 @@
     call(G.Audio, 'sfx', 'boss_down');
     G.addScore(b.def.score || 100000, b.x, b.y, true);
     G.addApproval(30);
-    G.dropPix(b.x, b.y, b.def.pix || 120, { magnet: false });
+    G.dropPix(b.x, b.y, (b.def.pix || 120) * (1 + PC().BOSSPIX * G.press.R), { magnet: false, noPress: true });
+    // SEM ARRANHÃO!: nenhuma morte durante a luta inteira (escudo quebrado não conta)
+    if (g.bossHits === 0) {
+      G.addScore(100000, b.x, b.y + 40, true);
+      G.dropPix(b.x, b.y, 100, { noPress: true });
+      G.text(G.W / 2, G.H * 0.36, 'SEM ARRANHÃO!', { color: '#ffd23f', size: 18, life: 1.8, stroke: true });
+    }
+    if (G.press.lv === 5) G.unlock('cpi');
+    g.lastBoss = b.id;
     G.count('boss_' + b.id);
     G.unlock(b.id);
     if (g.bombsUsedBoss === 0) G.unlock('bico_calado');
@@ -1395,7 +1552,7 @@
     const g = G.game, p = g.player, run = G.run;
     if (!p.alive || p.inv > 0 || p.bombT > 0 || p.entering || G.debug.god) return;
     if (p.shield) {
-      p.shield = false; p.inv = 1.6;
+      p.shield = false; p.inv = 1.6; // escudo quebrado não é morte: não conta para SEM ARRANHÃO! nem alivia a PRESSÃO
       G.part({ x: p.x, y: p.y, type: 'ring', size: 30, life: 0.4, color: '#4cc9f0' });
       G.burst(p.x, p.y, 16, { colors: ['#4cc9f0', '#ffffff'], speed: 200 });
       G.text(p.x, p.y - 20, 'HABEAS CORPUS!', { color: '#4cc9f0', size: 13 });
@@ -1408,6 +1565,7 @@
     p.respawnT = 1.5;
     run.lives--;
     g.hits++; run.hits = (run.hits || 0) + 1;
+    if (g.boss) g.bossHits++;
     G.count('deaths');
     g.approval *= 0.4;
     G.explode(p.x, p.y, 3, { colors: ['#7ec8e3', '#ffffff', '#ffd23f', '#ff8c1a'] });
@@ -1418,11 +1576,13 @@
     call(G.Audio, 'sfx', 'player_die');
     const lostLevel = run.level > 1;
     run.level = Math.max(1, run.level - 1);
-    run.pp = Math.min(run.pp || 0, Math.max(0, powerNeed(run.level) - 1));
-    // o nível perdido cai como um P "de volta" (cor da arma, sem piscar): pegou, recupera o nível na hora
-    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true });
+    run.pp = 0; // a barra de força do próximo nível zera
+    // o nível perdido cai como um P "de volta" (cor da arma, sem trocar de cor): pegou, recupera o nível na hora.
+    // Dura 7 s (pisca nos 2 últimos) e some.
+    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true, life: 7 });
     else if (M.chance(0.5)) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon });
     run.bombs = Math.max(run.bombs, run.baseBombs);
+    pressOnDeath(p);
     G.clearBullets(false);
     g.beam = null;
   }
@@ -1444,6 +1604,7 @@
     }
     run.bombs--;
     g.bombsUsed++; g.bombsUsedBoss++;
+    run.heat = Math.max(0, (run.heat || 0) - PC().BOMB); // a Delação alivia a PRESSÃO
     const p = g.player;
     p.bombT = 3.0;
     g.bombFx = { t: 0, x: p.x, y: p.y };
@@ -1460,9 +1621,9 @@
     return true;
   };
 
-  // Quantos P para subir do nível lv para lv+1
-  const POWER_NEED = [0, 1, 2, 3, 3];
-  function powerNeed(lv) { return POWER_NEED[lv] || 3; }
+  // Quantos P para subir do nível lv para lv+1 (13 P do nível 1 ao 5)
+  const POWER_NEED = [0, 2, 3, 4, 4];
+  function powerNeed(lv) { return POWER_NEED[lv] || 4; }
   G.powerNeed = powerNeed;
   function collectPickup(it) {
     const g = G.game, run = G.run, p = g.player;
@@ -1477,7 +1638,8 @@
         return;
       }
       case 'power': {
-        // Todo P fortalece a arma (barra de progresso: 1, 2, 3, 3 P por nível); a cor escolhe QUAL arma.
+        // Todo P fortalece a arma (barra de progresso: 2, 3, 4, 4 P por nível); a cor escolhe QUAL arma.
+        // No nível máximo, cada P comum vale pontos, R$ 5 e +PRESSÃO (o P "de volta" só vale os pontos).
         // O P "de volta" (caiu na morte) devolve um nível inteiro na hora, seja qual for a cor.
         const wcol = (w) => (G.WEAPONS[w] || G.WEAPONS.voto).color;
         let switched = false;
@@ -1485,7 +1647,11 @@
         let msg = null;
         if (run.level >= G.MAX_LEVEL) {
           G.addScore(5000, it.x, it.y, true);
-          msg = switched ? G.WEAPONS[run.weapon].name + '!' : 'NÍVEL MÁXIMO';
+          if (!it.restore) {
+            run.pix += 5; g.pixStage += 5;
+            addHeat(PC().HEAT_MAXP);
+            msg = switched ? G.WEAPONS[run.weapon].name + '!' : 'MÁXIMO! +PRESSÃO';
+          } else msg = 'NÍVEL MÁXIMO';
         } else if (it.restore) {
           run.level++;
           msg = 'NÍVEL ' + run.level + ' DE VOLTA!';
@@ -1542,6 +1708,7 @@
     if (G.state === 'play') runScript(dt);
     updatePlayer(dt);
     if (G.state !== 'play' && G.state !== 'clear') return; // gameOver pode mudar o estado
+    updatePress(dt);
     updateBeam(dt);
 
     // --- tiros do jogador ---
@@ -1645,7 +1812,7 @@
         g.grazes++; run.grazes++;
         G.addScore(40);
         G.addApproval(0.3);
-        g.delacao += 1.4;
+        g.delacao += 1.0; // 100 raspões por Delação de graça
         if (g.delacao >= 100) {
           g.delacao = 0;
           G.drop('bomb', p.x, p.y - 60, { vy: -60, magnet: true });
@@ -1699,7 +1866,7 @@
       it.x += it.vx * dt; it.y += it.vy * dt;
       if (it.type !== 'pix' && it.type !== 'pix5' && it.type !== 'mala') it.x = M.clamp(it.x, 10, W - 10);
       if (p.alive && d2 < (it.r + 14) * (it.r + 14)) collectPickup(it);
-      if (it.y > H + 30 || it.t > 25) it.dead = true;
+      if (it.y > H + 30 || it.t > 25 || (it.life && it.t > it.life)) it.dead = true;
     }
 
     // --- partículas, textos ---
@@ -1764,7 +1931,8 @@
 
     // itens
     for (const it of g.pickups) {
-      const blink = it.t > 20 && ((it.t * 8) | 0) % 2;
+      // item com prazo (P "de volta"): pisca a cada 1/16 s nos 2 últimos segundos
+      const blink = it.life ? it.t > it.life - 2 && ((it.t * 16) | 0) % 2 === 1 : it.t > 20 && ((it.t * 8) | 0) % 2;
       if (!blink) call(G.Art, 'pickup', ctx, it.type, it.x, it.y, it.t, it);
     }
     // inimigos
@@ -2108,7 +2276,7 @@
   // A faixa de cima (votos, Pix, vidas, aprovação) vai para um canvas guardado e só é redesenhada
   // quando algum valor muda (no máximo ~15x/s para o placar). A barra do chefão e a arma são diretas.
   const HUD_BAND_H = 48;
-  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1 };
+  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1 };
   function paintHudBand(g, run, k) {
     const W = G.W, hc = hudCache;
     if (!hc.c || hc.k !== k) {
@@ -2147,8 +2315,29 @@
     const ap = Math.round(g.approval) / 100;
     x.fillStyle = ap > 0.66 ? G.C.greenL : ap > 0.33 ? G.C.yellow : G.C.red;
     x.fillRect(ax, ay, aw * ap, 5);
+    // o multiplicador mostrado já inclui a PRESSÃO (pontos ×(1+R))
+    const P = PC(), pr = G.press;
     x.textAlign = 'center'; x.font = '700 10px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.85)';
-    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + G.mult().toFixed(1).replace('.', ','), W / 2, ay - 3);
+    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + (G.mult() * (1 + P.SCORE * pr.R)).toFixed(1).replace('.', ','), W / 2, ay - 3);
+    // PRESSÃO: rótulo + 5 casas entre a barra da aprovação (acaba em W/2 + 50) e o botão de pausa (W - 48).
+    // As casas cheias usam a cor do nível; a próxima enche aos poucos (do limiar atual ao próximo).
+    // Em CPI! (lv 5) o rótulo sai daqui: o drawHUD pisca 'CPI!' a cada quadro.
+    const LV = P.LV, COL = P.COLORS, lv = Math.min(5, pr.lv | 0);
+    const px0 = W - 84, pw = 6, pg = 1, py = 41; // 5 × 6 px + 4 × 1 px: de W - 84 a W - 50
+    x.fillStyle = 'rgba(8,12,22,0.55)'; x.fillRect(px0 - 1, py - 1, 5 * pw + 4 * pg + 2, 6);
+    for (let i = 0; i < 5; i++) {
+      const xx = px0 + i * (pw + pg);
+      if (i < lv) { x.fillStyle = COL[i + 1] || '#fff'; x.fillRect(xx, py, pw, 4); continue; }
+      x.fillStyle = 'rgba(255,255,255,0.18)'; x.fillRect(xx, py, pw, 4);
+      if (i === lv) {
+        const a = i > 0 ? LV[i - 1] : 0, f = M.clamp((pr.R - a) / Math.max(0.001, LV[i] - a), 0, 1);
+        if (f > 0.02) { x.globalAlpha = 0.6; x.fillStyle = COL[i + 1] || '#fff'; x.fillRect(xx, py, pw * f, 4); x.globalAlpha = 1; }
+      }
+    }
+    if (lv < 5) {
+      x.textAlign = 'right'; x.font = '700 8px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.7)';
+      x.fillText('PRESSÃO', W - 86, 45);
+    }
   }
   function drawHUD(g, k) {
     const run = G.run; if (!run) return;
@@ -2156,16 +2345,24 @@
     k = k || scale * dpr;
     // faixa de cima (guardada)
     const apr = Math.round(g.approval);
+    const plv = G.press.lv, ppr = Math.round(G.press.R * 50);
     const now = performance.now();
-    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives;
-    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || now - hc.t >= 66))) {
+    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives || hc.plv !== plv || hc.pr !== ppr;
+    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || hc.plv !== plv || now - hc.t >= 66))) {
       paintHudBand(g, run, k);
-      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.t = now;
+      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.plv = plv; hc.pr = ppr; hc.t = now;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(hc.c, 0, 0);
     ctx.setTransform(k, 0, 0, k, 0, 0);
     ctx.textBaseline = 'alphabetic';
+    // PRESSÃO no máximo: 'CPI!' pulsando no lugar do rótulo
+    if (plv >= 5) {
+      ctx.globalAlpha = 0.65 + 0.35 * Math.sin(g.t * 8);
+      ctx.textAlign = 'right'; ctx.font = '9px ' + G.FONT_DISPLAY; ctx.fillStyle = '#ff3dd8';
+      ctx.fillText('CPI!', W - 86, 45);
+      ctx.globalAlpha = 1;
+    }
     // chefão
     const b = g.boss;
     if (b && (b.state === 'fight' || b.state === 'talk' || b.state === 'enter')) {
@@ -2262,9 +2459,14 @@
     const bombs = 2 + G.upg('bomba');
     G.run = {
       loop, stageIdx, startStage: stageIdx, score: 0, lives, baseLives: lives, bombs, baseBombs: bombs,
-      weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, continues: 0, maxContinues: 3, grazes: 0, pix: 0, hits: 0,
+      weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, grazes: 0, pix: 0, hits: 0,
+      continues: 0, maxContinues: 2 + G.upg('recurso'), // recursos: 2 + Embargos de Declaração
       total: 0, extGiven: 0, // pontos da partida inteira (o recurso não zera) e vidas extras já dadas
+      heat: G.debug.heat0 || 0, // PRESSÃO: calor acumulado (tempo vivo, abates, turnos, P no máximo)
+      gold: 0,                  // Carimbos de Ouro nesta partida
+      secret: null,             // LULE 5.0: null | 'on' (luta secreta) | 'won' | 'lost' (o lule.js marca)
     };
+    pressReset(G.run);
     G.count('runs');
     const go = () => G.startStage(stageIdx);
     // a abertura em 6 painéis passa só na primeira vez (G.UI pode oferecer "rever a história")
@@ -2315,14 +2517,17 @@
   // Grava o que já foi ganho (app indo para o fundo / aba fechando)
   function saveProgress() { if (G.game && G.run) commitPix(); else G.saveGame(); }
   // Nota da fase. S: sem morrer e no máximo 1 Delação (bomba não é pecado). A: sem morrer (Delações
-  // à vontade) OU uma morte só com no máximo 1 Delação. B: até 1 / 2 / 4 / 6 mortes nas fases 1..4
-  // (a régua acompanha a dificuldade; medido com o bot "humano": nas fases 3 e 4 um jogador bom morre
-  // 4 a 8 vezes). C: o resto.
-  const RANK_B = [1, 2, 4, 6];
+  // à vontade) OU uma morte só com no máximo 1 Delação. B: até 1 / 2 / 3 / 4 / 6 mortes nas fases 1..5
+  // (a régua acompanha a dificuldade: a final é a mais dura). C: o resto.
+  const RANK_B = [1, 2, 3, 4, 6];
   G.rankFor = function (hits, bombs, stageIdx) {
     if (hits === 0) return bombs <= 1 ? 'S' : 'A';
     if (hits === 1 && bombs <= 1) return 'A';
-    return hits <= RANK_B[M.clamp(stageIdx | 0, 0, RANK_B.length - 1)] ? 'B' : 'C';
+    let i = M.clamp(stageIdx | 0, 0, RANK_B.length - 1);
+    // jogo com menos fases registradas (ex.: sem a Fazenda): a última fase usa a régua da final
+    const n = G.Stages.list.length;
+    if (n > 1 && n < RANK_B.length && (stageIdx | 0) >= n - 1) i = RANK_B.length - 1;
+    return hits <= RANK_B[i] ? 'B' : 'C';
   };
   G.stageClear = function () {
     const g = G.game, run = G.run;
@@ -2346,9 +2551,14 @@
     run.score += total;
     run.total = (run.total || 0) + total;
     checkExtends(run);
-    // Pix da nota: cresce com a fase (fases difíceis pagam mais) e dobra no 2º Mandato
-    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (run.loop > 1 ? 2 : 1));
-    run.pix += pixBonus; g.pixStage += pixBonus;
+    // Pix da nota: cresce com a fase (fases difíceis pagam mais), com a PRESSÃO média da fase (R̄)
+    // e dobra no 2º Mandato. CARIMBO DE OURO: nota S com R̄ >= 0,5 paga um extra.
+    const P = PC(), avg = pressAvg(g), l2k = run.loop > 1 ? 2 : 1;
+    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (1 + P.CLEARPIX * avg) * l2k);
+    const gold = rank === 'S' && avg >= P.GOLD_AVG;
+    const goldPix = gold ? Math.round(P.GOLD_PIX * (1 + 0.25 * g.stageIdx) * l2k) : 0;
+    run.pix += pixBonus + goldPix; g.pixStage += pixBonus + goldPix;
+    if (gold) { run.gold = (run.gold || 0) + 1; if (run.gold >= 3) G.unlock('carimbo_ouro'); }
     commitPix();
     if (noHit) G.unlock('ficha_limpa');
     G.save.unlocked = Math.max(G.save.unlocked, Math.min(G.Stages.list.length, g.stageIdx + 2));
@@ -2358,6 +2568,8 @@
       index: g.stageIdx, stage: g.stage, rank, bonus, bonusTotal: total, pixBonus, pixStage: g.pixStage,
       kills: g.kills, hits: g.hits, bombsUsed: g.bombsUsed, grazes: g.grazes, score: run.score, time: g.t,
       last: g.stageIdx >= G.Stages.list.length - 1, loop: run.loop,
+      press: { avg, lv: pressLevelOf(avg), name: P.NAMES[pressLevelOf(avg)] || '', color: P.COLORS[pressLevelOf(avg)] || '#fff', mul: 1 + avg },
+      gold, goldPix, continued: run.continues > 0,
     };
     const next = () => {
       if (stats.last) { G.finishGame(); return; }
@@ -2365,14 +2577,17 @@
       call(G.UI, 'shop', { fromRun: true, next: g.stageIdx + 1 }, () => G.startStage(g.stageIdx + 1));
     };
     const showResults = () => { if (G.debug.skipUI) next(); else call(G.UI, 'stageClear', stats, next); };
-    const lastBoss = g.stage && g.stage.boss;
-    const post = lastBoss && G.STORY.boss[lastBoss] && G.STORY.boss[lastBoss].post;
+    // falas do fim: as do módulo do chefão (g.postLines, ex.: ISENTO!, Quinto Mandato) ou as do chefão derrotado
+    const lastBoss = g.lastBoss || (g.stage && g.stage.boss);
+    const post = g.postLines || (lastBoss && G.STORY.boss[lastBoss] && G.STORY.boss[lastBoss].post);
     if (post && !G.debug.skipDialogue) call(G.UI, 'dialogue', post, showResults);
     else showResults();
   };
   function gameOver() {
     const g = G.game, run = G.run;
     if (G.state === 'over') return;
+    // perdeu na luta secreta (LULE 5.0): sem tela de recurso, a partida conta como vencida
+    if (run.secret === 'on') { run.secret = 'lost'; G.unlock('lule'); G.finishGame(); return; }
     G.state = 'over';
     setPlayButtons(false);
     // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
@@ -2391,6 +2606,9 @@
     if (!g || run.continues >= run.maxContinues) return false;
     run.continues++;
     run.score = 0; // o placar zera; run.total não (vidas extras não se repetem)
+    run.heat = 0; // o recurso zera a PRESSÃO acumulada (R desce na hora até o alvo)
+    G.press.tgt = pressTarget(run);
+    if (G.debug.pressFix == null) { G.press.R = Math.min(G.press.R, G.press.tgt); pressSetLevel(pressLevel(G.press.R)); }
     run.lives = run.baseLives;
     run.bombs = run.baseBombs;
     const p = g.player;
@@ -2409,12 +2627,15 @@
     const run = G.run;
     commitPix();
     if (run.loop > 1) { G.save.cleared2 = true; G.unlock('reeleito'); }
+    // TRÂNSITO EM JULGADO: o mandato inteiro (da fase 1) sem entrar com recurso — libera o Fusca Dourado
+    const oneCC = run.startStage === 0 && run.continues === 0;
+    if (oneCC) G.unlock('transito');
     G.save.cleared = true;
     G.saveGame();
     G.state = 'ending';
     setPlayButtons(false);
     call(G.Audio, 'music', 'victory');
-    call(G.UI, 'ending', { loop: run.loop, score: run.score, best: G.save.best }, () => G.toMenu());
+    call(G.UI, 'ending', { loop: run.loop, score: run.score, best: G.save.best, oneCC, secret: run.secret }, () => G.toMenu());
   };
   G.pause = function () {
     if (G.state !== 'play') return;
@@ -2527,6 +2748,14 @@
   G.debug = {
     god: false, auto: false, timeScale: 1, hitboxes: false, skipUI: false, skipDialogue: false, skipStory: false, autoContinue: false,
     noMech: false, // ?mech=0: o piloto automático ignora b.autoGoal (testa o caminho "ignorar a manha")
+    pressFix: null, // ?press=R: PRESSÃO fixa em R (0..1); lv/nome seguem, o calor continua contando
+    heat0: 0,       // ?heat=H: calor inicial da partida (run.heat)
+    forceQuinto: false, // ?quinto=1: libera o LULE 5.0 mesmo sem a partida sem recurso
+    press() {
+      const pr = G.press, g = G.game, run = G.run;
+      return { R: +pr.R.toFixed(4), lv: pr.lv, name: pr.name, heat: run ? +(run.heat || 0).toFixed(4) : 0, tgt: +pr.tgt.toFixed(4),
+        avg: g && g.pressT > 0 ? +(g.pressSum / g.pressT).toFixed(4) : 0 };
+    },
     qualityForced: null, // ?quality=high|mid|low (testes): fixa a qualidade e desliga o modo automático
     qualityMeter() { return { quality: G.quality, ema: +QM.ema.toFixed(1), slowMs: Math.round(QM.slowT), stageMax: +QM.stageMax.toFixed(1), n: QM.stageN, failed: Object.keys(QM.failed) }; },
     // pula direto para o chefão da fase atual
@@ -2552,12 +2781,13 @@
     weapon(w, lv) { if (G.run) { G.run.weapon = w; G.run.level = lv || G.run.level; } },
     stats() {
       const g = G.game;
-      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length } : { state: G.state, quality: G.quality, errors: G.errors.length };
+      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length, press: G.debug.press() } : { state: G.state, quality: G.quality, errors: G.errors.length, press: G.debug.press() };
     },
     // estado da manha do chefão (testes / humanbot): null sem chefão
     mech() {
       const g = G.game, b = g && g.boss;
-      return b ? { id: b.id, state: b.state, phase: b.phase, goal: b.autoGoal, mech: b.mech, hudTag: b.hudTag, stunT: (b.data && b.data.stunT) || 0 } : null;
+      return b ? { id: b.id, state: b.state, phase: b.phase, goal: b.autoGoal, mech: b.mech, hudTag: b.hudTag, stunT: (b.data && b.data.stunT) || 0,
+        last: !!(b.phases && b.phases[b.phase] && b.phases[b.phase].last), p5: !!(b.data && b.data.p5), dmgMul: b.dmgMul } : null;
     },
   };
   function readParams() {
@@ -2651,6 +2881,10 @@
     if (P.mech === '0' || P.mech === 'false') G.debug.noMech = true;
     if (P.mods) G.debug.isolated = true;
     if (P.quality && Q_DPR[P.quality]) { G.debug.qualityForced = P.quality; applyQuality(); }
+    // PRESSÃO: ?press=R fixa o R; ?heat=H calor inicial; ?quinto=1 libera o LULE 5.0
+    if (P.press != null && P.press !== '' && isFinite(+P.press)) G.debug.pressFix = M.clamp(+P.press, 0, 1);
+    if (P.heat != null && P.heat !== '' && isFinite(+P.heat)) G.debug.heat0 = M.clamp(+P.heat, 0, 1);
+    if (P.quinto === '1' || P.quinto === 'true') G.debug.forceQuinto = true;
     G.state = 'menu';
     requestAnimationFrame(frame);
     if (P.stage != null) {

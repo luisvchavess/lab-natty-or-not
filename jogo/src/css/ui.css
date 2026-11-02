@@ -429,6 +429,8 @@ html { font-size: calc(10px * var(--gs, 1)); }
 }
 #ui .sant:active, #ui .sant.is-down { transform: translate(.25rem, .25rem) rotate(-1deg); box-shadow: .1rem .1rem 0 rgba(23, 34, 26, .4); }
 #ui .sant-band { display: flex; align-items: center; justify-content: space-between; padding: .5rem .65rem; background: var(--c); color: #fff; font: 900 1.3rem/1 var(--font-display); }
+#ui .sant-main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+#ui .sant-txt { display: block; }
 #ui .sant-photo { position: relative; display: block; flex: 1 1 7.8rem; min-height: 7.8rem; max-height: 15rem; background: var(--c); border-top: .25rem solid var(--u-ink); border-bottom: .25rem solid var(--u-ink); }
 #ui .sant-photo canvas { width: 100%; height: 100%; }
 #ui .sant-num {
@@ -481,6 +483,59 @@ html { font-size: calc(10px * var(--gs, 1)); }
   box-shadow: 0 .2rem 0 rgba(0, 0, 0, .3);
 }
 #ui .sant.shake, #ui .up.shake { animation: u-shake .38s ease-out; }
+
+/* 5 fases: 2×2 + a FASE FINAL sozinha, centrada e deitada (foto à esquerda) embaixo.
+   As fotos encolhem até 4,4rem para tudo caber em 360×640 sem rolar; em telas altas crescem. */
+#ui .sant-grid.has-final { grid-template-rows: repeat(var(--rows, 2), minmax(min-content, 1fr)) minmax(min-content, .5fr); }
+#ui .has-final .sant-photo { flex-basis: 4.4rem; min-height: 4.4rem; }
+#ui .sant.final {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: 86%;
+  padding: 0;
+  box-shadow: 0 0 0 .2rem var(--u-yel), .45rem .45rem 0 rgba(23, 34, 26, .45);
+}
+#ui .sant.final:active, #ui .sant.final.is-down { box-shadow: 0 0 0 .2rem var(--u-yel), .1rem .1rem 0 rgba(23, 34, 26, .4); }
+#ui .sant.last .sant-band b { color: var(--u-yel); letter-spacing: .04em; white-space: nowrap; }
+#ui .sant.last .sant-band b::before, #ui .sant.last .sant-band b::after {
+  content: '';
+  display: inline-block;
+  width: .95rem;
+  height: .95rem;
+  margin: 0 .4rem;
+  vertical-align: .05rem;
+  background: currentColor;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+#ui .sant.last .sant-band b::before { margin-left: 0; }
+#ui .sant.final .sant-main { flex-direction: row; align-items: stretch; }
+#ui .sant.final .sant-photo { flex: 0 0 40%; min-height: 6.4rem; max-height: none; border-bottom: 0; border-right: .25rem solid var(--u-ink); }
+#ui .sant.final .sant-num { left: .4rem; bottom: .4rem; font-size: 1.35rem; }
+#ui .sant.final .sant-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; padding: .55rem 0 .7rem; }
+#ui .sant.final .sant-boss { min-height: 0; margin: 0 .65rem; }
+#ui .sant.final .sant-name { margin-top: .35rem; }
+#ui .sant.final.locked { box-shadow: 0 0 0 .2rem #b9bdb3, .35rem .35rem 0 rgba(23, 34, 26, .25); }
+#ui .sant.last.locked .sant-band b { color: #fff; }
+#ui .sant.final .sigilo { left: -6%; right: -6%; top: 2.7rem; transform: rotate(-6deg); }
+/* telas baixas (G.H < 700) com 5 fases: santinhos mais enxutos */
+#ui .short .has-final { gap: .8rem; }
+#ui .short .has-final .sant { padding-bottom: .55rem; }
+#ui .short .has-final .sant.final { padding-bottom: 0; }
+#ui .short .has-final .sant-band { padding: .4rem .6rem; font-size: 1.2rem; }
+#ui .short .has-final .mini-rank { width: 2rem; height: 2rem; font-size: 1.05rem; }
+#ui .short .has-final .sant-photo { min-height: 4.4rem; }
+#ui .short .has-final .sant-num { bottom: -1.15rem; padding: .2rem .38rem .15rem; font-size: 1.3rem; }
+#ui .short .has-final .sant-boss { min-height: 1.2rem; margin: .3rem .4rem 0 5.5rem; font-size: .95rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui .short .has-final .sant-name { margin-top: .5rem; font-size: 1.1rem; }
+#ui .short .has-final .sant-sub { margin-top: .2rem; font-size: 1.05rem; line-height: 1.12; }
+#ui .short .has-final .sant.final .sant-num { bottom: .35rem; }
+#ui .short .has-final .sant.final .sant-boss { margin: 0 .6rem; }
+#ui .short .has-final .sant.final .sant-name { margin-top: .3rem; }
+#ui .short .has-final .sant.final .sant-txt { padding: .35rem 0 .45rem; }
+#ui .short .has-final .sant.final .sant-photo { min-height: 5.6rem; }
+#ui .short.scr-stages .lcd-body { padding-bottom: .8rem; }
+#ui .short .has-final .sigilo { top: 4rem; }
+#ui .short .has-final .sant.final .sigilo { top: 2.15rem; }
 
 /* ============================================================
    HISTÓRIA (quadrinhos)
@@ -768,6 +823,48 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .ready .cl-keys { opacity: 1; transform: none; pointer-events: auto; }
 #ui .cl-keys .kl { font: 900 1.9rem/1 var(--font-display); }
 #ui .rm .rc-row, #ui .rm .rc-sep { opacity: 1; transform: none; }
+/* PRESSÃO MÉDIA: nome do nível num selo da cor dele + 5 pips (como no HUD) */
+#ui .rc-press { flex-wrap: wrap; align-items: center; row-gap: .25rem; padding: .3rem 0 .1rem; }
+#ui .rc-press .k { flex: 0 1 auto; min-width: 0; font-weight: 700; white-space: normal; overflow: visible; }
+#ui .rc-press .rc-pips { margin-left: auto; }
+#ui .rc-pchip { display: inline-block; padding: .2rem .4rem .1rem; border: .15rem solid #121519; border-radius: .3rem; font: 900 1rem/1 var(--font-display); letter-spacing: .02em; vertical-align: .05rem; }
+#ui .rc-pips { flex: none; display: flex; gap: .2rem; }
+#ui .rc-pips i { width: .9rem; height: .55rem; border: .12rem solid rgba(42, 45, 49, .55); border-radius: .1rem; }
+#ui .rc-pips i.on { border-color: #121519; }
+#ui .rc-row.rc-goldrow .v { color: #a87b00; }
+/* COM RECURSO: etiqueta vermelha no cabeçalho do boletim */
+#ui .rc-tag { display: inline-block; margin-top: .45rem; padding: .25rem .55rem .2rem; border: .2rem solid #c8323e; border-radius: .35rem; color: #c8323e; font: 900 1rem/1 var(--font-display); letter-spacing: .05em; transform: rotate(-2deg); }
+/* CARIMBO DE OURO: selo dourado que entra depois da nota */
+#ui .rc-gold {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  margin: .8rem 0 0;
+  padding: .55rem .8rem .55rem .55rem;
+  border: .2rem solid #a87b00;
+  border-radius: .7rem;
+  background: linear-gradient(100deg, #fff3b0, #ffd23f 55%, #f2b900);
+  color: #2a2000;
+  box-shadow: 0 .25rem 0 rgba(120, 80, 0, .35);
+  opacity: 0;
+  transform: scale(.6) rotate(-3deg);
+  transition: opacity .2s .55s, transform .32s cubic-bezier(.3, 1.6, .5, 1) .55s;
+}
+#ui .stamped .rc-gold { opacity: 1; transform: rotate(-1.5deg); }
+#ui .rm .rc-gold { transition: none; }
+#ui .rc-gold-seal {
+  flex: none;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fffbe0, #ffd23f 45%, #c98e00);
+  box-shadow: inset 0 0 0 .25rem rgba(120, 80, 0, .45);
+  position: relative;
+}
+#ui .rc-gold-seal::after { content: ''; position: absolute; inset: .75rem; background: #7a5200; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+#ui .rc-gold span { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+#ui .rc-gold b { font: 900 1.15rem/1.05 var(--font-display); letter-spacing: .01em; }
+#ui .rc-gold em { font: 800 1.45rem/1 var(--font-body); font-style: normal; color: #5a3d00; }
 
 /* ============================================================
    LOJINHA
@@ -888,6 +985,16 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .seg-b.on { background: var(--u-green); color: #0c1d11; box-shadow: inset 0 -.25rem 0 rgba(0, 0, 0, .18); }
 #ui .seg-b.is-down { transform: translateY(.2rem); }
 #ui .seg-b:focus-visible { outline: .3rem solid var(--u-yel); outline-offset: .2rem; }
+/* FUSCA: azul ou dourado (com o carrinho de amostra) */
+#ui .skin-row { display: flex; align-items: center; gap: .8rem; }
+#ui .skin-cv { flex: none; width: 5.6rem; height: 5rem; overflow: hidden; margin-top: .5rem; border: .25rem solid var(--u-lcd-ink); border-radius: .8rem; background: #0b1022; }
+#ui .skin-cv canvas { width: 100%; height: 100%; }
+#ui .skin-row .seg { flex: 1; min-width: 0; }
+#ui .seg-b.skin-lock { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; background: #a9aea2; color: #4b5148; border-style: dashed; cursor: not-allowed; }
+#ui .seg-b.skin-lock .lock-ico { margin-top: .5rem; background: #4b5148; }
+#ui .seg-b.skin-lock .lock-ico::before { border-color: #4b5148; }
+#ui .seg-b[data-skin="ouro"].on { background: linear-gradient(#fff1b0, #ffd23f 55%, #d9a91a); color: #2a2000; }
+#ui .seg-b.shake { animation: u-shake .38s ease-out; }
 #ui .set-danger { margin-top: 1.6rem; }
 #ui .set-danger .k-wipe { width: 100%; }
 #ui .wipe-confirm { padding: .9rem; border: .2rem solid #c8323e; border-radius: .8rem; background: #ffe2e2; }
@@ -991,6 +1098,21 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .fin-score span { font: 800 1.1rem/1 var(--font-body); letter-spacing: .2em; color: rgba(255, 255, 255, .65); }
 #ui .fin-score b { font: 900 3.4rem/1 var(--font-display); color: #fff; }
 #ui .fin-score small { font: 800 1.1rem/1 var(--font-body); letter-spacing: .14em; color: var(--u-yel); }
+/* SEM RECURSO!: carimbo pequeno logo embaixo do placar final (mandato inteiro sem recurso) */
+#ui .fin-stamp {
+  margin: .1rem 0 .15rem;
+  padding: .3rem .55rem .25rem;
+  border: .3rem double #ff5d5d;
+  border-radius: .5rem;
+  color: #ff7b7b;
+  font: 900 1.15rem/1 var(--font-display);
+  font-style: normal;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  transform: rotate(-5deg);
+  animation: u-fin-stamp .34s cubic-bezier(.3, 1.4, .5, 1) both .9s;
+}
+@keyframes u-fin-stamp { 0% { opacity: 0; transform: rotate(-18deg) scale(2.6); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
 #ui .fin .k-menu { max-width: 30rem; }
 #ui .fin .k-menu .kl { font: 900 1.7rem/1 var(--font-display); }
 

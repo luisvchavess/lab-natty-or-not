@@ -31,11 +31,21 @@
     'Deputado jura que a mala era de roupa suja',
     'Plenário aprova recesso para descansar do recesso',
     'Pesquisa: 171% dos políticos dizem que vão baixar impostos',
-    'Ministro Taxad anuncia imposto sobre o imposto',
+    'Fernando Taxad anuncia imposto sobre o imposto',
     'Secom paga influencer para elogiar a Secom',
     'Governo cria o 39º ministério: o dos ministérios',
     'Nunca antes na história deste país se cobrou tanto imposto',
     'Receita estuda taxar o vento estocado da Dilmãe',
+    'Taxad garante: não vai taxar o Pix. Ainda.',
+    'Impostômetro bate recorde. De novo. E de novo.',
+    'Blusinha de R$ 30 chega custando R$ 60. A taxa veio de navio',
+    'Arcabouço fiscal passa na vistoria. Com furo e tudo',
+    'Déficit zero é alcançado na calculadora do ministério',
+    'Janjinha embarca em missão oficial. Volta em breve',
+    'Sofá novo do Alvorada é visto voando sobre a Esplanada',
+    'Cartão corporativo pede férias. Está cansado',
+    'Receita lança CPF na nota até no cafezinho do Zé',
+    'Pesquisa: PRESSÃO sobe quando o Zé fica forte. Ninguém sabe por quê',
   ];
   const STICKERS = ['NÃO É FAKE NEWS!', 'AQUI NÃO SE FAZ O L', 'PICANHA NÃO INCLUSA', 'CONTÉM IMPOSTO', 'APROVADO PELO POVO'];
   const SHOP_QUIPS = [
@@ -44,6 +54,7 @@
     'Melhoria de verdade, não promessa de campanha.',
     'Nota fiscal? Aqui tem, viu, companheiro?',
     'Parcelo em 12x sem juros. Mentira: é à vista.',
+    'Preço com imposto incluso. O Taxad mandou lembranças.',
   ];
   const BUY_QUIPS = [
     'Negócio fechado! Sem toma lá, dá cá.',
@@ -65,6 +76,7 @@
     'Calma: em Brasília ninguém perde de verdade.',
     'Recurso aceito. Só não vale pedalada.',
     'Faz o L de Lamentável.',
+    'O Taxad cobrou IOF até do recurso.',
   ];
   const PAUSE_JOKES = [
     'Os deputados foram tomar um cafezinho.',
@@ -72,6 +84,7 @@
     'Ninguém trabalha, mas o salário cai.',
     'A sessão volta assim que alguém achar o quórum.',
     'O ministro foi buscar a picanha. Volta em breve.',
+    'Pausa autorizada. Com taxa de conveniência.',
   ];
   const RANKS = {
     // frase do boletim (rankLine): lineHit quando perdeu vida, lineBomb quando usou Delação.
@@ -87,19 +100,22 @@
     { id: 'rodoviaria', name: 'Rodoviária do Plano', subtitle: 'A campanha começou', boss: 'centrao' },
     { id: 'esplanada', name: 'Esplanada dos Ministérios', subtitle: 'Cada ministério, mil assessores', boss: 'dilmae' },
     { id: 'paranoa', name: 'Lago Paranoá', subtitle: 'Lives, bots e trending topics', boss: 'erika' },
+    { id: 'fazenda', name: 'Ministério da Fazenda', subtitle: 'O Impostômetro não para', boss: 'taxad' },
     { id: 'planalto', name: 'Palácio do Planalto', subtitle: 'A conta chegou', boss: 'lule' },
   ];
   const STAGE_LOOK = {
     rodoviaria: { c: '#1b3fa0', c2: '#4cc9f0' },
     esplanada: { c: '#00a651', c2: '#ffd23f' },
     paranoa: { c: '#0b7f95', c2: '#7be0f2' },
+    fazenda: { c: '#8a5a12', c2: '#ffd23f' },
     planalto: { c: '#d62f3c', c2: '#ffd23f' },
   };
-  const BOSS_FALLBACK_NAME = { centrao: 'O Centrão', dilmae: 'Dilmãe', erika: 'Erika Viralton', lule: 'Lule' };
+  const BOSS_FALLBACK_NAME = { centrao: 'O Centrão', dilmae: 'Dilmãe', erika: 'Erika Viralton', taxad: 'Fernando Taxad', lule: 'Lule' };
   const BOSS_SLOGAN = {
     centrao: 'Apoio quem estiver pagando',
     dilmae: 'Atingiu a meta? Dobra a meta',
     erika: 'Segue o fio!',
+    taxad: 'Não vou taxar o Pix... ainda',
     lule: 'A picanha tá chegando',
   };
   // abertura de fase: "CHEFONA" para elas, "CHEFÃO" para o resto. Vale o def.fem do chefão;
@@ -107,24 +123,29 @@
   const BOSS_FEM = { dilmae: 1, erika: 1 };
   function bossFem(id) { const d = G.Bosses && G.Bosses.defs && G.Bosses.defs[id]; return !!((d && d.fem) || BOSS_FEM[id]); }
   // a manha de cada chefão (abertura de fase, linha "MANHA:")
-  const BOSS_MECH = { centrao: 'pegue a emenda', dilmae: 'fique na META', erika: 'corte os fios da live', lule: 'olé no Leão' };
+  const BOSS_MECH = { centrao: 'pegue a emenda', dilmae: 'fique na META', erika: 'corte os fios da live', taxad: 'ache o seu dinheiro', lule: 'olé no Leão' };
   // cartão "CADA CHEFÃO TEM UMA MANHA" do Como Jogar (chefão ainda não visto = '???')
   const BOSS_MANHA = [
     ['centrao', 'Centrão:', ' pegue a EMENDA com o Fusca'],
     ['dilmae', 'Dilmãe:', ' fique dentro da META até encher'],
     ['erika', 'Erika:', ' passe nos FIOS da live'],
+    ['taxad', 'Taxad:', ' siga o COFRE do seu dinheiro e encoste nele'],
     ['lule', 'Lule:', ' deixe o LEÃO passar e morder o bolso dele'],
   ];
   const STAGE_GAG = {
     rodoviaria: 'Todo candidato desta fase é o nº 171. Coincidência?',
     esplanada: '38 ministérios. Um número só: 171.',
     paranoa: 'Todo post aqui tem 171 mil curtidas. Compradas.',
+    fazenda: 'Aqui o 171 já vem com IOF.',
     planalto: 'Para Presidente da Conta, digite 171 e CONFIRMA.',
   };
   const ALLIES = { ze: 1, vo: 1, radio: 1 };
   const UPGRADE_ICON = {
     vida: ['life'], bomba: ['bomb'], turbo: ['cafe'], ima: ['pix5'], arma: ['power', 'voto'], habeas: ['shield'],
+    recurso: ['shield'], // reserva: o martelo de juiz é desenhado aqui mesmo (UPGRADE_DRAW)
   };
+  // ícones da lojinha desenhados na própria UI (caixa de 34 unidades centrada em 0,0, como os itens)
+  const UPGRADE_DRAW = { recurso: drawGavel };
   const CAST_CREDITS = [
     ['Zé Contribuinte', 'ele mesmo, pagando tudo'],
     ['Vó Dirce', 'no rádio e no crochê'],
@@ -133,8 +154,11 @@
     ['Dilmãe', 'estocando vento'],
     ['Erika Viralton', 'ao vivo, seguindo o fio'],
     ['Lucas Pavanatto', 'o mais votado, com a placa na mão'],
+    ['Fernando Taxad', 'calculando a sua parte'],
     ['Lule', 'com picanha (prometida)'],
+    ['Janjinha', 'em missão oficial'],
     ['Leão da Receita', 'mordendo a sua parte (e a do Lule)'],
+    ['Fiscal da Receita', 'CPF na nota?'],
     ['Fusca 78', 'motor a jato, freio na fé'],
   ];
 
@@ -163,8 +187,10 @@
     const n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? '#121519' : '#ffffff';
   }
+  // quantas fases o jogo tem (5 com o stages.js; a lista de reserva quando ele não carregou)
+  const nStages = () => (G.Stages && G.Stages.list && G.Stages.list.length) || STAGE_FALLBACK.length;
   function stageInfo(i, st) {
-    st = st || G.Stages.list[i] || {};
+    st = st || (G.Stages && G.Stages.list && G.Stages.list[i]) || {};
     const fb = STAGE_FALLBACK[i] || STAGE_FALLBACK[0];
     const canon = STAGE_FALLBACK.some((s) => s.id === st.id);
     const src = canon ? st : fb; // fase de teste (módulos isolados) usa os dados oficiais
@@ -177,7 +203,7 @@
   function bossReached(id) {
     const S = G.save;
     if (S.cleared || (S.achievements && S.achievements[id]) || (uiSave().met || {})[id]) return true;
-    for (let i = 0; i < 4; i++) if (stageInfo(i).boss === id) return i < (S.unlocked || 1) - 1;
+    for (let i = 0, n = nStages(); i < n; i++) if (stageInfo(i).boss === id) return i < (S.unlocked || 1) - 1;
     return false;
   }
   function markMet(lines) {
@@ -524,6 +550,36 @@
     G.call(G.Art, 'player', ctx, 0, 0, o || {});
     ctx.restore();
   }
+  // Embargos de Declaração: martelo de juiz que bate na base a cada 1,5 s (só caminhos, sem glifos)
+  function drawGavel(c, t) {
+    const INK = '#121519', u = t % 1.5, UP = -0.62;
+    let a = UP + Math.sin(t * 2.2) * 0.04;
+    if (u >= 1.05 && u < 1.17) a = lerp(UP, 0, (u - 1.05) / 0.12);
+    else if (u >= 1.17) a = lerp(0, UP, smooth((u - 1.17) / 0.33));
+    const hitK = u >= 1.17 && u < 1.42 ? 1 - (u - 1.17) / 0.25 : 0;
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // base (bloco de madeira)
+    c.fillStyle = INK; c.beginPath(); c.ellipse(5, 13.4, 11.5, 4.6, 0, 0, TAU); c.fill();
+    c.fillStyle = '#6b3d18'; c.beginPath(); c.ellipse(5, 13.6, 10, 3.3, 0, 0, TAU); c.fill();
+    c.fillStyle = '#a8692e'; c.beginPath(); c.ellipse(5, 12.3, 10, 2.9, 0, 0, TAU); c.fill();
+    if (hitK > 0) { // linhas do impacto
+      c.strokeStyle = 'rgba(255,210,63,' + hitK.toFixed(2) + ')'; c.lineWidth = 1.6;
+      for (const [dx, dy, ex, ey] of [[-8, 8, -12, 5], [-6, 4, -8, 0], [17, 8, 21, 5], [15, 4, 17, 0]]) { c.beginPath(); c.moveTo(dx, dy); c.lineTo(ex, ey); c.stroke(); }
+    }
+    // martelo: gira em torno da ponta do cabo (mão do juiz fora da tela)
+    c.save(); c.translate(-12, 5); c.rotate(a);
+    c.fillStyle = INK; c.beginPath(); c.roundRect ? c.roundRect(-1.5, -2.6, 18.5, 5.2, 2.2) : c.rect(-1.5, -2.6, 18.5, 5.2); c.fill();
+    c.fillStyle = '#8b5a2b'; c.beginPath(); c.roundRect ? c.roundRect(0, -1.3, 16, 2.6, 1.2) : c.rect(0, -1.3, 16, 2.6); c.fill();
+    // cabeça do martelo (cilindro deitado, perpendicular ao cabo)
+    c.translate(17, 0);
+    c.fillStyle = INK; c.beginPath(); c.roundRect ? c.roundRect(-5.3, -8.3, 10.6, 15.6, 2.6) : c.rect(-5.3, -8.3, 10.6, 15.6); c.fill();
+    const g = c.createLinearGradient(-4, 0, 4, 0);
+    g.addColorStop(0, '#6b3d18'); g.addColorStop(0.45, '#b97a3b'); g.addColorStop(1, '#6b3d18');
+    c.fillStyle = g; c.beginPath(); c.roundRect ? c.roundRect(-4, -7, 8, 13, 1.8) : c.rect(-4, -7, 8, 13); c.fill();
+    c.fillStyle = '#ffd23f'; c.fillRect(-4, -4.6, 8, 1.6); c.fillRect(-4, 2, 8, 1.6);
+    c.fillStyle = 'rgba(255,255,255,0.35)'; c.fillRect(-2.6, -6, 1.2, 11);
+    c.restore();
+  }
   function hitDot(ctx, x, y, t, big) {
     const r = big ? 4.2 : 3.2;
     ctx.strokeStyle = 'rgba(255,255,255,' + (0.35 + 0.35 * Math.sin(t * 6)) + ')';
@@ -669,27 +725,34 @@
   // SELEÇÃO DE FASES (santinhos)
   // ==================================================================
   function showStages() {
-    const unlocked = G.save.unlocked || 1;
+    const n = nStages();
+    const unlocked = Math.min(G.save.unlocked || 1, n);
     const ranks = uiSave().ranks || {};
     let cards = '';
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < n; i++) {
       const s = stageInfo(i);
       const open_ = i < unlocked;
       const r = ranks[i];
+      // a última fase é a FASE FINAL; com um número ímpar de fases ela fica sozinha e centrada embaixo do 2×2
+      const last = n > 1 && i === n - 1, wide = last && n % 2 === 1;
       cards +=
-        '<button type="button" class="sant' + (open_ ? '' : ' locked') + '" data-i="' + i + '" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + ';--i:' + i + '">' +
-        '<span class="sant-band"><b>FASE ' + (i + 1) + '</b>' + (r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '') + '</span>' +
+        '<button type="button" class="sant' + (last ? ' last' : '') + (wide ? ' final' : '') + (open_ ? '' : ' locked') + '" data-i="' + i + '" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + ';--i:' + i + '"' +
+        ' aria-label="' + esc('FASE ' + (i + 1) + ': ' + s.name + ' · ' + castName(s.boss)) + '">' +
+        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + (r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '') + '</span>' +
+        '<span class="sant-main">' +
         '<span class="sant-photo"><canvas data-boss="' + s.boss + '"></canvas><span class="sant-num"><small>Nº</small>171</span></span>' +
+        '<span class="sant-txt">' +
         '<span class="sant-boss">' + esc(castName(s.boss)) + '</span>' +
         '<span class="sant-name">' + esc(s.name) + '</span>' +
         '<span class="sant-sub">' + esc(open_ ? s.subtitle : 'Vença a fase anterior') + '</span>' +
+        '</span></span>' +
         (open_ ? '' : '<span class="sigilo">PEDIDO DE VISTA</span>') +
         '</button>';
     }
     const scr = pageShell('stages', {
       kicker: 'SEU VOTO PARA', title: 'FASES',
-      right: '<span class="lcd-chip">' + Math.min(unlocked, 4) + '/4 LIBERADAS</span>',
-      body: '<div class="sant-grid">' + cards + '</div>',
+      right: '<span class="lcd-chip">' + unlocked + '/' + n + ' LIBERADAS</span>',
+      body: '<div class="sant-grid' + (n > 1 && n % 2 === 1 ? ' has-final" style="--rows:' + ((n - 1) / 2) : '') + '">' + cards + '</div>',
       foot: lcdFoot('', 'VOLTAR') + '<span class="foot-msg">Escolha um santinho. Todos são nº 171.</span>',
       keys: backKey(),
     });
@@ -874,7 +937,7 @@
     const fin = once(done);
     const i = info.index | 0;
     const s = stageInfo(i, info.stage);
-    const loopN = info.loop || 1, total = info.total || 4;
+    const loopN = info.loop || 1, total = info.total || nStages();
     const scr = open('intro');
     scr.root.innerHTML =
       '<div class="in-card" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + '">' +
@@ -918,6 +981,18 @@
     const k = String(stats.index | 0), prev = u.ranks[k];
     if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
   }
+  // multiplicador no padrão do jogo: ×2 / ×1,7 (como o BossKit.fmtMul)
+  function fmtMul(m) { const v = Math.round((+m || 0) * 10) / 10; return v % 1 === 0 ? String(v) : v.toFixed(1).replace('.', ','); }
+  // linha da PRESSÃO MÉDIA (stats.press do core: { avg, lv, name, color, mul })
+  function pressRow(pr) {
+    if (!pr || !pr.name) return '';
+    const lv = clamp(pr.lv | 0, 0, 5), col = pr.color || '#9aa5b8';
+    const mul = pr.mul != null ? pr.mul : 1 + (+pr.avg || 0);
+    let pips = '';
+    for (let i = 1; i <= 5; i++) pips += '<i' + (i <= lv ? ' class="on" style="background:' + esc(((G.PRESS && G.PRESS.COLORS) || PRESS_FB.COLORS)[i] || col) + '"' : '') + '></i>';
+    return '<div class="rc-row rc-press"><span class="k">PRESSÃO MÉDIA: <b class="rc-pchip" style="background:' + esc(col) + ';color:' + inkOn(col) + '">' + esc(pr.name) + '</b> ×' + esc(fmtMul(mul)) + '</span>' +
+      '<span class="rc-pips" aria-hidden="true">' + pips + '</span></div>';
+  }
   function fmtTime(sec) { sec = Math.max(0, Math.round(sec || 0)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); }
   function rankLine(rank, stats) {
     const R = RANKS[rank];
@@ -960,6 +1035,8 @@
     // subiu a nota desta fase? (só quando já havia uma nota antes)
     const better = !!prevRank && (RANK_ORDER[rank] || 0) > (RANK_ORDER[prevRank] || 0);
     const tip = rankTip(rank, stats.index | 0);
+    // CARIMBO DE OURO (nota S com PRESSÃO média alta) e COM RECURSO (a partida já usou um recurso)
+    const goldPix = Math.max(0, Math.round(+stats.goldPix || 0)), gold = !!stats.gold && rank === 'S';
     const rows = [
       { k: 'VOTOS', v: stats.score, cls: 'big' },
       { k: 'POLÍTICOS CASSADOS', v: stats.kills },
@@ -967,6 +1044,7 @@
       { k: 'DELAÇÕES USADAS', v: stats.bombsUsed },
       { k: 'VIDAS PERDIDAS', v: stats.hits },
       { k: 'TEMPO DE SESSÃO', txt: fmtTime(stats.time) },
+      { html: pressRow(stats.press) },
       { sep: 'BÔNUS' + (loopN > 1 ? ' (2º MANDATO ×1,5)' : '') },
       { k: 'FICHA LIMPA', v: b.fichaLimpa, plus: 1 },
       { k: 'SEM DELAÇÃO', v: b.semDelacao, plus: 1 },
@@ -976,9 +1054,12 @@
       { sep: 'PIX' },
       { k: 'PIX GANHO NA FASE', v: stats.pixStage, money: 1, cls: 'strong pix' },
       { k: '(bônus da nota ' + rank + ')', v: stats.pixBonus, money: 1, cls: 'small' },
+      (gold ? { k: '(Carimbo de Ouro)', v: goldPix, money: 1, cls: 'small rc-goldrow' } : null),
     ];
     let html = '';
     for (const r of rows) {
+      if (!r) continue;
+      if (r.html != null) { html += r.html; continue; }
       if (r.sep != null) { html += '<div class="rc-sep"><span>' + esc(r.sep) + '</span></div>'; continue; }
       const val = r.txt != null ? esc(r.txt) : r.money ? 'R$ 0' : (r.plus ? '+' : '') + '0';
       html += '<div class="rc-row ' + (r.cls || '') + '"><span class="k">' + esc(r.k) + '</span><i class="dots"></i><span class="v"' +
@@ -990,12 +1071,14 @@
       '<div class="cl-printer"><span class="slot"></span><span class="led"></span><span class="pl">IMPRIMINDO BOLETIM…</span></div>' +
       '<div class="cl-paper-win scroll"><div class="rc-shadow"><div class="receipt">' +
       '<div class="rc-head"><small>JUSTIÇA ELEITORAL DO POVO</small><h2>BOLETIM DE URNA</h2>' +
-      '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p></div>' +
+      '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p>' +
+      (stats.continued ? '<span class="rc-tag">COM RECURSO</span>' : '') + '</div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
       '<p class="rc-line">' + esc(rankLine(rank, stats)) + '</p>' +
       (tip ? '<p class="rc-tip">' + esc(tip) + '</p>' : '') +
       (better ? '<p class="rc-best"><small>MELHOR NOTA!</small><b><s>' + esc(prevRank) + '</s> → ' + rank + '</b></p>' : '') + '</div>' +
+      (gold ? '<div class="rc-gold"><i class="rc-gold-seal" aria-hidden="true"></i><span><b>NOTA S · CARIMBO DE OURO</b><em>+' + esc(money(goldPix)) + '</em></span></div>' : '') +
       '<div class="rc-foot"><i class="barcode"></i><span>CÓD. VERIFICAÇÃO 171-' + String(((stats.score || 0) % 9973) + 1000).slice(0, 4) + '-ZÉ</span><b>FIM</b></div>' +
       '</div></div></div>' +
       '<div class="cl-keys">' + keyHTML('confirma', 'CONTINUAR', 'CONFIRMA', 'k-next key-wide') + '</div>' +
@@ -1019,6 +1102,7 @@
       later(scr, reducedMotion() ? 0 : 380, () => {
         scr.root.classList.add('stamped');
         sfx('stamp');
+        if (gold) later(scr, reducedMotion() ? 0 : 520, () => sfx('caixa')); // o carimbo de ouro entra depois da nota
         G.vibrate && G.vibrate(30);
         later(scr, 260, () => { scr.root.classList.add('ready'); focusEl(nextKey); });
       });
@@ -1156,14 +1240,19 @@
     };
     focusEl(q(scr.root, fromRun ? '.k-go' : '.key-buy:not(.off)') || q(scr.root, '.k-back'));
     // ícones animados (itens do jogo)
-    const icons = qa(scr.root, '.up').map((row) => ({ cv: q(row, 'canvas'), ic: UPGRADE_ICON[row.getAttribute('data-id')] || ['pix'] }));
+    const icons = qa(scr.root, '.up').map((row) => {
+      const id = row.getAttribute('data-id');
+      return { cv: q(row, 'canvas'), ic: UPGRADE_ICON[id] || ['pix'], draw: UPGRADE_DRAW[id] || null };
+    });
     loop(scr, (dt, t) => {
       for (const it of icons) {
         const f = fitCanvas(it.cv);
         f.ctx.clearRect(0, 0, f.w, f.h);
-        const k = f.w / (it.ic[0] === 'power' ? 46 : 34);
+        const k = f.w / (it.ic[0] === 'power' && !it.draw ? 46 : 34);
         f.ctx.save(); f.ctx.translate(f.w / 2, f.h / 2); f.ctx.scale(k, k);
-        G.call(G.Art, 'pickup', f.ctx, it.ic[0], 0, 0, t, it.ic[1] ? { wtype: it.ic[1] } : {});
+        if (it.draw) {
+          try { it.draw(f.ctx, t); } catch (e) { it.draw = null; G.reportError(e, 'ui.shop.icon'); } // quebrou: fica o item de reserva
+        } else G.call(G.Art, 'pickup', f.ctx, it.ic[0], 0, 0, t, it.ic[1] ? { wtype: it.ic[1] } : {});
         f.ctx.restore();
       }
     });
@@ -1173,7 +1262,7 @@
   // GAME OVER
   // ==================================================================
   // "Faltou pouco": quanto do chefão faltava quando o Fusca caiu
-  const BOSS_ART = { centrao: 'o Centrão', dilmae: 'a Dilmãe', erika: 'a Erika Viralton', lule: 'o Lule' };
+  const BOSS_ART = { centrao: 'o Centrão', dilmae: 'a Dilmãe', erika: 'a Erika Viralton', taxad: 'o Fernando Taxad', lule: 'o Lule' };
   function nearMiss() {
     const g = G.game, b = g && g.boss;
     if (!b || b.state !== 'fight' || !(b.maxHp > 0)) return '';
@@ -1275,6 +1364,44 @@
       QUALITY.map(([v, l]) => '<button type="button" class="seg-b' + (v === sel ? ' on' : '') + '" role="radio" aria-checked="' + (v === sel) + '" data-q="' + v + '">' + l + '</button>').join('') +
       '</div></div>';
   }
+  // FUSCA DOURADO: liberado pela conquista 'transito'; o art.js pinta o carro com G.save.settings.skin
+  const SKINS = [['azul', 'AZUL'], ['ouro', 'DOURADO']];
+  const skinOk = () => !!(G.save.achievements && G.save.achievements.transito);
+  function skinHTML() {
+    const ok = skinOk(), sel = ok && settings().skin === 'ouro' ? 'ouro' : 'azul';
+    const btn = ([v, l]) => {
+      if (!ok && v !== 'azul') return '<button type="button" class="seg-b skin-lock" data-skin="' + v + '" aria-disabled="true" aria-label="Vença um mandato inteiro sem entrar com recurso"><i class="lock-ico" aria-hidden="true"></i>???</button>';
+      return '<button type="button" class="seg-b' + (v === sel ? ' on' : '') + '" role="radio" aria-checked="' + (v === sel) + '" data-skin="' + v + '">' + l + '</button>';
+    };
+    return '<div class="set-row set-col set-skin' + (ok ? '' : ' is-locked') + '"><div class="set-lbl"><b>FUSCA</b>' +
+      (ok ? '' : '<small>Vença um mandato inteiro sem entrar com recurso</small>') + '</div>' +
+      '<div class="skin-row"><span class="skin-cv"><canvas aria-hidden="true"></canvas></span>' +
+      '<div class="seg" role="radiogroup" aria-label="Cor do Fusca">' + SKINS.map(btn).join('') + '</div></div></div>';
+  }
+  function bindSkin(scr) {
+    const root = scr.root, cv = q(root, '.skin-cv canvas');
+    if (!cv) return;
+    const paint = () => {
+      const f = fitCanvas(cv);
+      const c = f.ctx;
+      tileBG(c, f.w, f.h);
+      drawPlayer(c, f.w / 2, f.h * 0.46, f.h / 50, { t: 0.4, weapon: 'voto', level: 1 });
+    };
+    requestAnimationFrame(() => { if (scr.alive) G.safe(paint, 'ui.skin.paint'); });
+    onResize(scr, paint);
+    qa(root, '.seg-b[data-skin]').forEach((b) => onTap(b, () => {
+      if (b.classList.contains('skin-lock')) {
+        sfx('denied');
+        b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+        return;
+      }
+      sfx('ui_click');
+      settings().skin = b.getAttribute('data-skin');
+      G.saveGame();
+      qa(root, '.seg-b[data-skin]').forEach((o) => { const on = o === b; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
+      G.safe(paint, 'ui.skin.paint');
+    }, false));
+  }
   function bindSettings(root) {
     qa(root, '.seg-b[data-q]').forEach((b) => onTap(b, () => {
       const v = b.getAttribute('data-q');
@@ -1356,7 +1483,11 @@
   function showEnding(info, done) {
     info = info || {};
     const fin = once(done);
-    storyScreen((G.STORY && G.STORY.ending) || [], { cls: 'ending' }, () => creditsRoll(info, fin));
+    const ST = G.STORY || {};
+    const panels = (ST.ending || []).slice();
+    // venceu o LULE 5.0: o quadro extra entra antes do último quadro do final
+    if (info.secret === 'won' && ST.endingQuinto && ST.endingQuinto.length) panels.splice(Math.max(0, panels.length - 1), 0, ...ST.endingQuinto);
+    storyScreen(panels, { cls: 'ending' }, () => creditsRoll(info, fin));
   }
   function creditsHTML(roll) {
     const lines = (G.CREDITS || []).slice();
@@ -1381,7 +1512,9 @@
       '<div class="bezel fin-bezel"><div class="lcd fin-lcd"><b class="fim">FIM</b></div></div>' +
       '<div class="fin-title">' + (loopN > 1 ? 'REELEITO!' : '2º MANDATO<br>DESBLOQUEADO') + '</div>' +
       '<p class="fin-sub">' + (loopN > 1 ? 'Você venceu o 2º Mandato. Brasília nunca mais será a mesma. (Mentira.)' : 'Mais difícil, mais Pix. Já está no menu, esperando seu voto.') + '</p>' +
-      '<div class="fin-score"><span>VOTOS FINAIS</span><b>' + fmt(info.score) + '</b><small>RECORDE ' + fmt(Math.max(info.best || 0, info.score || 0)) + '</small></div>' +
+      '<div class="fin-score"><span>VOTOS FINAIS</span><b>' + fmt(info.score) + '</b>' +
+      (info.oneCC ? '<i class="fin-stamp">SEM RECURSO!</i>' : '') + // o mandato inteiro sem entrar com recurso
+      '<small>RECORDE ' + fmt(Math.max(info.best || 0, info.score || 0)) + '</small></div>' +
       keyHTML('confirma', 'VOLTAR AO MENU', 'CONFIRMA', 'key-wide k-menu') +
       '</div>';
     const roll = q(scr.root, '.roll'), finEl = q(scr.root, '.fin'), win = q(scr.root, '.roll-win');
@@ -1393,6 +1526,7 @@
       q(scr.root, '.roll-skip').hidden = true;
       finEl.hidden = false;
       later(scr, 150, () => sfx('urna_fim'));
+      if (info.oneCC) later(scr, 900, () => sfx('stamp'));
       later(scr, 700, () => focusEl(q(scr.root, '.k-menu')));
     };
     const finish = () => { if (ended) return; ended = true; close(); fin(); };
@@ -1441,6 +1575,7 @@
       kicker: 'PAINEL DE CONTROLE', title: 'AJUSTES',
       body:
         '<div class="set-list">' +
+        skinHTML() +
         togHTML('music', 'MÚSICA', 'Trilha de campanha') +
         togHTML('sfx', 'EFEITOS SONOROS', 'Tiros, bipes da urna, panelaço') +
         togHTML('vibrate', 'VIBRAÇÃO', 'Treme o celular quando você apanha') +
@@ -1457,6 +1592,7 @@
       keys: backKey(),
     });
     bindSettings(scr.root);
+    bindSkin(scr);
     const wipe = q(scr.root, '.k-wipe'), conf = q(scr.root, '.wipe-confirm');
     onTap(wipe, () => { wipe.hidden = true; conf.hidden = false; reveal(conf); focusEl(q(conf, '.k-no')); });
     onTap(q(scr.root, '.k-no'), () => { conf.hidden = true; wipe.hidden = false; });
@@ -1503,7 +1639,7 @@
     const out = [], max = G.MAX_LEVEL || 5;
     for (let lv = 1; lv < max; lv++) {
       let n = typeof G.powerNeed === 'function' ? +G.powerNeed(lv) : NaN;
-      if (!(n > 0)) n = [1, 2, 3, 3][lv - 1] || 3;
+      if (!(n > 0)) n = [2, 3, 4, 4][lv - 1] || 4;
       out.push(n);
     }
     return out;
@@ -1512,7 +1648,7 @@
     const c = powerCycle();
     return 'Ele troca de arma a cada ' + numPT(c) + (c === 1 ? ' segundo' : ' segundos') + ': a <b>cor escolhe a arma</b>. ' +
       '<b>Todo P deixa a arma mais forte</b> (' + listPT(powerNeeds()) + ' P por nível). ' +
-      'Perdeu uma vida? O nível perdido cai como um P "de volta".';
+      'Perdeu uma vida? O nível perdido cai como um P "de volta". Pegue antes que ele suma!';
   }
   // Cartão das manhas: lista só os chefões que o jogador já viu (os outros ficam '???')
   function howtoManha() {
@@ -1525,7 +1661,14 @@
   // ---- mini-demos do cartão das manhas (uma por chefão: pegar, meta, fio, olé) ----
   // Regra do verde-água: o que o Fusca encosta tem anel tracejado teal + rótulo branco.
   const MH = { SEG: 2.8, TEAL: '#32bcad', TEAL_L: '#7ff0e2', INK: '#121519', GOLD: '#ffd23f' };
-  const MH_SUIT = ['#1b3fa0', '#00a651', '#0b7f95', '#d62f3c']; // cores das fases
+  const MH_VERB = ['PEGAR', 'FICAR', 'CORTAR', 'ACHAR', 'OLÉ']; // na ordem do BOSS_MANHA
+  // reserva da PRESSÃO (core G.PRESS) para o desenho do Como Jogar
+  const PRESS_FB = {
+    LV: [0.15, 0.30, 0.50, 0.70, 0.85],
+    NAMES: ['CALMARIA', 'BURBURINHO', 'TENSÃO', 'CRISE', 'CAOS', 'CPI!'],
+    COLORS: ['#9aa5b8', '#3ddc84', '#ffd23f', '#ff8c1a', '#ff2a4a', '#ff3dd8'],
+  };
+  const MH_SUIT = ['#1b3fa0', '#00a651', '#0b7f95', '#8a5a12', '#d62f3c']; // cores das fases (na ordem do BOSS_MANHA)
   const smooth = (k) => (k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k));
   const lerp = (a, b, k) => a + (b - a) * k;
   function mhLabel(c, s, x, y, col, size) {
@@ -1613,6 +1756,88 @@
     }
     c.restore();
   }
+  // cofre cinza (caixa com porta, maçaneta e trinca) para a cena do ACHAR
+  function mhSafe(c, x, y, sc, open, flash) {
+    c.save(); c.translate(x, y); c.scale(sc, sc);
+    c.fillStyle = MH.INK; c.fillRect(-8, -7, 16, 14);
+    c.fillStyle = flash ? '#ffffff' : '#7d8796'; c.fillRect(-7, -6, 14, 12);
+    c.fillStyle = flash ? '#ffffff' : '#9aa5b8'; c.fillRect(-5.5, -4.5, 11, 9);
+    c.strokeStyle = MH.INK; c.lineWidth = 0.8;
+    c.beginPath(); c.arc(1.5, 0, 2.3, 0, TAU); c.stroke();
+    c.beginPath(); c.moveTo(1.5, -2.3); c.lineTo(1.5, 2.3); c.moveTo(-0.8, 0); c.lineTo(3.8, 0); c.stroke();
+    c.fillStyle = MH.INK; c.fillRect(-4.6, -1.2, 1.4, 2.4);
+    if (open) { // a porta abre para a esquerda
+      c.fillStyle = '#3b4250'; c.fillRect(-5.5, -4.5, 11, 9);
+      c.fillStyle = '#c4cad3'; c.strokeStyle = MH.INK;
+      c.beginPath(); c.moveTo(-5.5, -4.5); c.lineTo(-10, -6); c.lineTo(-10, 6); c.lineTo(-5.5, 4.5); c.closePath(); c.fill(); c.stroke();
+    }
+    c.restore();
+  }
+  function mhBag(c, x, y, sc) { // saquinho verde com "R$"
+    c.save(); c.translate(x, y); c.scale(sc, sc);
+    c.fillStyle = MH.INK; c.beginPath(); c.ellipse(0, 1, 5.4, 4.9, 0, 0, TAU); c.fill();
+    c.fillStyle = '#2f9e44'; c.beginPath(); c.ellipse(0, 1, 4.4, 3.9, 0, 0, TAU); c.fill();
+    c.fillStyle = '#2f9e44'; c.strokeStyle = MH.INK; c.lineWidth = 0.8;
+    c.beginPath(); c.moveTo(-1.8, -3); c.lineTo(-2.6, -5.2); c.lineTo(2.6, -5.2); c.lineTo(1.8, -3); c.closePath(); c.fill(); c.stroke();
+    c.font = '4.2px ' + G.FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffffff';
+    c.fillText('R$', 0, 1.4);
+    c.restore();
+  }
+  // cena do ACHAR (MH.SEG s): devolve o tempo desde o acerto (-1 = ainda não)
+  const MH_CF = { SHOW: 0.5, SW: 0.42, GAP: 0.08, PICK: 1.5, TOUCH: 1.95 };
+  const mhCfX = new Float32Array(3);
+  function mhCofre(c, w, h, u, t, bx, by) {
+    const X = [w * 0.24, w * 0.5, w * 0.76], cy = h * 0.52, ARC = 7;
+    // o dinheiro entra no cofre 1 (meio); troca 1↔2 e depois 0↔2: termina no cofre da esquerda
+    const SWAPS = [[1, 2], [0, 2]];
+    const slot = [0, 1, 2]; // slot[cofre] = posição
+    for (let i = 0; i < 3; i++) mhCfX[i] = X[i];
+    let lift = [0, 0, 0], scl = [1, 1, 1];
+    for (let k = 0; k < SWAPS.length; k++) {
+      const t0 = MH_CF.SHOW + k * (MH_CF.SW + MH_CF.GAP), q = clamp((u - t0) / MH_CF.SW, 0, 1);
+      const [pa, pb] = SWAPS[k];
+      const ca = slot.indexOf(pa), cb = slot.indexOf(pb);
+      if (q >= 1) { slot[ca] = pb; slot[cb] = pa; continue; }
+      if (q > 0) {
+        const e = 0.5 - 0.5 * Math.cos(Math.PI * q), s = Math.sin(Math.PI * q), arc = ARC * (Math.abs(pa - pb) > 1 ? 1.4 : 1);
+        // quem vai para a direita passa por cima (sobe e encolhe), o outro por baixo
+        const right = X[pa] < X[pb] ? ca : cb, left = right === ca ? cb : ca;
+        mhCfX[ca] = lerp(X[pa], X[pb], e); mhCfX[cb] = lerp(X[pb], X[pa], e);
+        lift[right] = -arc * s; scl[right] = 1 - 0.08 * s;
+        lift[left] = arc * s; scl[left] = 1 + 0.08 * s;
+      }
+      break;
+    }
+    for (let i = 0; i < 3; i++) if (!(lift[i] || scl[i] !== 1)) mhCfX[i] = X[slot[i]];
+    const money = 1, hit = u >= MH_CF.TOUCH ? u - MH_CF.TOUCH : -1;
+    mhBoss(c, 3, bx, by, t, hit >= 0 ? hit + 0.001 : 0);
+    // o saquinho cai no cofre do meio
+    if (u < MH_CF.SHOW) {
+      const k = smooth(u / (MH_CF.SHOW * 0.8));
+      mhBag(c, X[1], lerp(by + 12, cy - 4, k), 0.9);
+    }
+    const flash = u >= MH_CF.SHOW * 0.8 && u < MH_CF.SHOW;
+    for (let i = 0; i < 3; i++) {
+      const x = mhCfX[i], y = cy + lift[i] + (u >= MH_CF.PICK && hit < 0 ? Math.sin(t * 6 + i) * 1.2 : 0);
+      if (hit >= 0 && i !== money) { c.globalAlpha = Math.max(0, 1 - hit * 2.5); }
+      mhSafe(c, x, y, scl[i] * 0.95, hit >= 0 && i === money, flash && i === money);
+      c.globalAlpha = 1;
+      if (u >= MH_CF.PICK && hit < 0) mhRing(c, x, y, 10.5, t, { solid: u > MH_CF.TOUCH - 0.3 });
+    }
+    if (u >= MH_CF.PICK && hit < 0) mhLabel(c, 'QUAL?', w / 2, cy - 15, '#ffffff', 6);
+    // o Fusca sobe e encosta no cofre da esquerda
+    const tx = X[0], ty = cy + 10, sx = w * 0.5, sy = h * 0.95;
+    const k = smooth(clamp((u - (MH_CF.PICK - 0.2)) / (MH_CF.TOUCH - MH_CF.PICK + 0.2), 0, 1));
+    drawPlayer(c, lerp(sx, tx, k), lerp(sy, ty, k), 0.55, { t, weapon: 'voto', level: 1, tilt: k > 0 && k < 1 ? -0.6 : 0 });
+    if (hit >= 0 && hit < 0.9) {
+      // o dinheiro volta: "R$" pula do cofre certo
+      const s2 = hit < 0.15 ? 0.6 + (hit / 0.15) * 0.8 : 1.4 - Math.min(0.4, (hit - 0.15) * 0.8);
+      c.save(); c.translate(X[0], cy - 9 - hit * 14); c.scale(s2, s2);
+      mhLabel(c, 'R$', 0, 0, MH.GOLD, 9);
+      c.restore();
+    }
+    return hit;
+  }
   const mhQuad = (a, b, cc, s) => (1 - s) * (1 - s) * a + 2 * s * (1 - s) * cc + s * s * b;
   const mhCablePts = new Float32Array(22);
   // Uma linha por arma no cartão do P (o que cada uma faz de verdade no core)
@@ -1632,6 +1857,7 @@
     { t: 'O ITEM P MUDA DE COR', d: howtoPower, draw: 'power', weapons: true },
     { t: 'DELAÇÃO PREMIADA', d: 'Um <b>toque rápido</b> no botão redondo: todo mundo entrega todo mundo e a <b>tela fica limpa</b>. Arrastar a partir dele só pilota, não gasta.', draw: 'bomb' },
     { t: 'APROVAÇÃO', d: 'Derrube políticos sem parar e a aprovação sobe, <b>multiplicando os votos</b> (até ×5). Levar tiro derruba ela.', draw: 'approval' },
+    { t: 'PRESSÃO', d: 'Quanto mais forte e mais tempo vivo, mais <b>PRESSÃO</b>: tiros mais rápidos e mais densos, mas <b>pontos e Pix rendem mais</b>. Morrer ou usar a Delação alivia.', draw: 'press' },
     { t: 'PIX E LOJINHA', d: 'Político derrubado solta <b>Pix</b>. Junte e gaste em melhorias permanentes na Lojinha do Zé.', draw: 'pix' },
     { t: 'O LEÃO DA RECEITA', d: 'Ele dá o bote no Fusca e <b>morde parte do seu Pix</b>. Fique de olho na linha laranja e derrube-o antes. No Planalto, use isso a seu favor...', draw: 'leao' },
   ];
@@ -1726,6 +1952,40 @@
       c.fillText('×' + mult.toFixed(1).replace('.', ','), w / 2, h * 0.5);
       c.font = '8px ' + G.FONT_DISPLAY; c.fillStyle = '#ffd23f'; c.fillText('APROVAÇÃO', w / 2, h * 0.88);
     },
+    // PRESSÃO: o medidor do HUD enche (CALMARIA → CPI!), os tiros aceleram e engrossam; o Fusca leva um tiro e ela alivia
+    press(c, w, h, t) {
+      tileBG(c, w, h);
+      const P = G.PRESS || {};
+      const LV = P.LV || PRESS_FB.LV, NAMES = P.NAMES || PRESS_FB.NAMES, COLS = P.COLORS || PRESS_FB.COLORS;
+      const CYC = 7.6, u = t % CYC, RISE = 6, HIT = 6.6;
+      const R = u < RISE ? u / RISE : u < HIT ? 1 : Math.max(0.42, 1 - ((u - HIT) / 0.35) * 0.58);
+      let lv = 0;
+      for (const th of LV) if (R >= th) lv++;
+      const col = COLS[lv] || '#ffffff';
+      // tiros caindo: mais rápidos e mais numerosos com a pressão (como no jogo)
+      const n = 3 + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0), spd = 34 * (1 + 1.3 * R), top = h * 0.3, span = h * 0.6;
+      for (let i = 0; i < n; i++) {
+        const x = w * (0.5 + (i - (n - 1) / 2) * 0.17), y = top + ((t * spd + i * 19) % span);
+        drawBullet(c, 'small', lv >= 4 ? '#ff2a4a' : '#ff5d8f', x, y, 0.85);
+      }
+      const hurt = u >= HIT && u < HIT + 0.9;
+      if (!hurt || ((u * 16) | 0) % 2 === 0) drawPlayer(c, w / 2 + Math.sin(t * 1.4) * 12, h * 0.86, 0.5, { t, weapon: 'voto', level: Math.min(5, 1 + Math.floor(R * 4.99)) });
+      // medidor: rótulo + 5 pips (o próximo enche aos poucos), igual ao HUD
+      c.font = '6px ' + G.FONT_DISPLAY; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillStyle = 'rgba(255,255,255,0.75)'; c.fillText('PRESSÃO', 4, 8);
+      const pw = 7, gap = 2, x0 = w - 4 - 5 * pw - 4 * gap;
+      for (let i = 0; i < 5; i++) {
+        const x = x0 + i * (pw + gap), lo = i === 0 ? 0 : LV[i - 1], hi = LV[i];
+        const k = clamp((R - lo) / (hi - lo), 0, 1);
+        c.fillStyle = 'rgba(255,255,255,0.18)'; c.fillRect(x, 6, pw, 4);
+        if (k > 0) { c.fillStyle = COLS[i + 1] || '#ffffff'; c.fillRect(x, 6, pw * k, 4); }
+      }
+      const pulse = lv === 5 ? 0.65 + 0.35 * Math.sin(t * 8) : 1;
+      c.globalAlpha = pulse;
+      mhLabel(c, NAMES[lv] || '', w / 2, 19, col, 7.5);
+      c.globalAlpha = 1;
+      if (u >= HIT) mhLabel(c, 'PRESSÃO ALIVIOU', w / 2, h * 0.68, '#9aa5b8', 5.6);
+    },
     pix(c, w, h, t) {
       tileBG(c, w, h);
       const px = w / 2, py = h * 0.78;
@@ -1749,10 +2009,11 @@
       c.fillStyle = '#ff8c1a'; c.font = '10px ' + G.FONT_DISPLAY; c.textAlign = 'center';
       if (ph > 0.75) c.fillText('NHAC! −15%', w / 2, h * 0.92);
     },
-    // CADA CHEFÃO TEM UMA MANHA: 4 cenas de MH.SEG s em sequência; no acerto o chefão fica tonto e pula um "×2"
+    // CADA CHEFÃO TEM UMA MANHA: uma cena de MH.SEG s por chefão, em sequência; no acerto o chefão fica tonto e pula um "×2"
     manha(c, w, h, t) {
       tileBG(c, w, h);
-      const seg = Math.floor(t / MH.SEG) % 4, u = t % MH.SEG;
+      const nSeg = clamp(nStages(), 1, MH_VERB.length);
+      const seg = Math.floor(t / MH.SEG) % nSeg, u = t % MH.SEG;
       const bx = w / 2, by = h * 0.2;
       let hit = -1; // tempo desde o acerto (-1 = ainda não)
       if (seg === 0) {
@@ -1821,6 +2082,9 @@
         c.fillRect(hx - 5, hy - 3, 10, 5); c.strokeRect(hx - 5, hy - 3, 10, 5);
         c.fillStyle = hit >= 0 ? '#9aa5b8' : MH.TEAL; c.fillRect(hx - 3, hy - 1.5, 2, 2); c.fillRect(hx + 1, hy - 1.5, 2, 2);
         drawPlayer(c, fx, fy, 0.6, { t, weapon: 'voto', level: 1, tilt: u < CUT * 1.3 ? 0.5 : 0 });
+      } else if (seg === 3) {
+        // ACHAR: o dinheiro entra num dos 3 cofres, eles trocam de lugar 2 vezes e o Fusca encosta no certo
+        hit = mhCofre(c, w, h, u, t, bx, by);
       } else {
         // OLÉ: fique embaixo do chefão enquanto o Leão mira (linha dourada) e saia na hora: ele morde o bolso do chefão
         const ENTER = 0.6, GOLD = 0.8, SIDE = 1.15, LUNGE = 1.45, BITE = 1.75, ly0 = h * 0.86, fy = h * 0.6;
@@ -1856,12 +2120,12 @@
         }
       }
       if (hit >= 0) mhPop(c, bx, by, hit, t);
-      // qual manha está passando (verbo no canto + 4 casinhas)
+      // qual manha está passando (verbo no canto + uma casinha por chefão)
       c.textAlign = 'left'; c.textBaseline = 'middle'; c.font = '6.5px ' + G.FONT_DISPLAY;
       c.lineWidth = 2.4; c.strokeStyle = MH.INK; c.lineJoin = 'round';
-      const verb = ['PEGAR', 'FICAR', 'CORTAR', 'OLÉ'][seg];
+      const verb = MH_VERB[seg];
       c.strokeText(verb, 4, 7); c.fillStyle = MH.TEAL_L; c.fillText(verb, 4, 7);
-      for (let i = 0; i < 4; i++) { c.fillStyle = i === seg ? MH.TEAL_L : 'rgba(255,255,255,0.22)'; c.fillRect(w - 27 + i * 6, h - 6, 4, 3); }
+      for (let i = 0; i < nSeg; i++) { c.fillStyle = i === seg ? MH.TEAL_L : 'rgba(255,255,255,0.22)'; c.fillRect(w - 3 - nSeg * 6 + i * 6, h - 6, 4, 3); }
     },
   };
   function showHowTo() {

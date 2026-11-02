@@ -12,7 +12,7 @@
 
   // ---------- Armas do Zé ----------
   // As 4 armas. O item "P" alterna entre elas a cada 3 s: a cor escolhe a arma.
-  // Todo P (de qualquer cor) enche a barra de força: 1, 2, 3 e 3 P para subir do nível 1 ao 5.
+  // Todo P (de qualquer cor) enche a barra de força: 2, 3, 4 e 4 P para subir do nível 1 ao 5.
   G.WEAPONS = {
     voto:   { id: 'voto',   name: 'VOTO',         color: '#3ddc84', desc: 'Tiro reto. Simples e honesto.' },
     boca:   { id: 'boca',   name: 'BOCA DE URNA', color: '#ffd23f', desc: 'Leque largo. Pega todo mundo.' },
@@ -36,14 +36,15 @@
 
   // ---------- Lojinha do Zé (melhorias permanentes, pagas com Pix) ----------
   G.UPGRADES = [
-    // Custos pensados para ~6 partidas (jogador bom) a ~9 (casual) até comprar tudo (total R$ 22.700).
-    // A compra vale na hora: na parada entre fases a vida, a delação e o nível entram na partida em andamento.
-    { id: 'vida',   name: 'Plano de Saúde',          desc: '+1 vida em toda partida',                  costs: [900, 2700] },
-    { id: 'bomba',  name: 'Arquivo de Delações',     desc: '+1 Delação em toda partida',                costs: [700, 2100] },
-    { id: 'turbo',  name: 'Gatilho Turbinado',       desc: 'Atira 10% mais rápido por nível',           costs: [600, 1700, 3600] },
-    { id: 'ima',    name: 'Chave Pix Aleatória',     desc: 'Puxa Pix e itens (menos o P) de mais longe', costs: [600, 1100, 2200] },
-    { id: 'arma',   name: 'Emenda Bélica',           desc: '+1 nível de arma em toda partida',           costs: [1200, 3400] },
-    { id: 'habeas', name: 'Habeas Corpus Preventivo', desc: 'Começa cada fase com escudo',               costs: [1900] },
+    // Custos pensados para ~6 partidas (jogador bom) a ~8 (casual) até comprar tudo (total R$ 44.200).
+    // A compra vale na hora: na parada entre fases a vida, a delação, o nível e o recurso entram na partida em andamento.
+    { id: 'vida',    name: 'Plano de Saúde',           desc: '+1 vida em toda partida',                    costs: [1500, 4200] },
+    { id: 'bomba',   name: 'Arquivo de Delações',      desc: '+1 Delação em toda partida',                 costs: [1100, 3300] },
+    { id: 'turbo',   name: 'Gatilho Turbinado',        desc: 'Atira 10% mais rápido por nível',            costs: [1000, 2800, 5600] },
+    { id: 'ima',     name: 'Chave Pix Aleatória',      desc: 'Puxa Pix e itens (menos o P) de mais longe', costs: [800, 1600, 3200] },
+    { id: 'arma',    name: 'Emenda Bélica',            desc: '+1 nível de arma em toda partida',           costs: [2000, 5600] },
+    { id: 'habeas',  name: 'Habeas Corpus Preventivo', desc: 'Começa cada fase com escudo',                costs: [3000] },
+    { id: 'recurso', name: 'Embargos de Declaração',   desc: '+1 recurso em toda partida',                 costs: [2500, 6000] },
   ];
 
   // ---------- Conquistas ----------
@@ -67,6 +68,16 @@
     { id: 'reeleito',      name: 'Reeleito',         desc: 'Vença o 2º Mandato' },
     { id: 'cacador',       name: 'Caçador de Marajás', desc: 'Derrube 1.000 políticos no total',            counter: 'kills', goal: 1000 },
     { id: 'magnata',       name: 'Magnata do Pix',   desc: 'Junte R$ 10.000 no total',                       counter: 'pixTotal', goal: 10000 },
+    // Rodada 5: Fazenda, Janjinha, PRESSÃO e o mandato sem recurso ('cofre' e 'cartao' são contadores dos módulos)
+    { id: 'taxad',        name: 'Taxa Zero',            desc: 'Derrote Fernando Taxad' },
+    { id: 'restituicao',  name: 'Restituição na Conta', desc: 'Ache o seu dinheiro em 10 cofres do Taxad', counter: 'cofre', goal: 10 },
+    { id: 'isento',       name: 'Isento!',              desc: 'Vença o Taxad sem errar nenhum cofre' },
+    { id: 'embarcou',     name: 'Embarque Imediato',    desc: 'Mande a Janjinha para uma viagem oficial' },
+    { id: 'cartao',       name: 'Cartão Bloqueado',     desc: 'Faça o Leão bloquear o cartão corporativo' },
+    { id: 'carimbo_ouro', name: 'Nota de Ouro',         desc: 'Ganhe 3 Carimbos de Ouro na mesma partida' },
+    { id: 'cpi',          name: 'Instalaram a CPI',     desc: 'Derrote um chefão com a PRESSÃO em CPI!' },
+    { id: 'transito',     name: 'Trânsito em Julgado',  desc: 'Vença um mandato inteiro sem entrar com recurso (libera o Fusca Dourado)' },
+    { id: 'quinto',       name: 'Quinto Mandato? Não!', desc: 'Derrote o Lule 5.0' },
   ];
 
   // ---------- Elenco (para retratos e textos) ----------
@@ -79,6 +90,8 @@
     erika:      { name: 'Erika Viralton',  color: '#ffc531' },
     pavanatto:  { name: 'Lucas Pavanatto', color: '#2f6fd6' },
     lule:       { name: 'Lule',            color: '#e63946' },
+    taxad:      { name: 'Fernando Taxad',  color: '#ffb02e' },
+    janjinha:   { name: 'Janjinha',        color: '#ff3d7f' },
   };
 
   // ---------- História ----------
@@ -94,9 +107,13 @@
     ],
     ending: [
       { scene: 'planalto', text: 'Fatura entregue em mãos, com juros e correção monetária. Nunca antes na história deste país um governo leu a conta até o fim.' },
-      { scene: 'brasilia', text: 'No dia seguinte criaram o 40º ministério: o da Fatura. O Centrão já pediu três cargos e a deputada abriu um fio sobre ele.' },
+      { scene: 'brasilia', text: 'No dia seguinte criaram o 40º ministério: o da Fatura. O Taxad já criou uma taxa pra ele, o Centrão pediu três cargos e a deputada abriu um fio.' },
       { scene: 'fusca',    text: 'Zé devolveu o Fusca para a Vó Dirce e foi dormir. Segunda-feira tem corrida às seis da manhã. Escala 7x0, como sempre.' },
       { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em quinto mandato." Zé: "Liga o motor, vó."' },
+    ],
+    // Painel extra do final (ui.js mostra antes do último painel quando info.secret === 'won': venceu o Lule 5.0)
+    endingQuinto: [
+      { scene: 'planalto', text: 'Quinto mandato? Não desta vez. O Zé entregou a fatura, o recibo e a segunda via, tudo com firma reconhecida. O Lule 5.0 saiu prometendo picanha pro sexto.' },
     ],
     // Diálogos por fase (id da fase). intro: antes da fase. Os diálogos de chefão ficam em STORY.boss.
     stages: {
@@ -128,12 +145,21 @@
           { who: 'vo', text: 'Cuidado com o servidor do Ministério da Verdade. O que ele não gosta, ele apaga!' },
         ],
       },
+      fazenda: {
+        intro: [
+          { who: 'vo', text: 'Ministério da Fazenda, Zezinho. Olha aquele placar enorme: é o Impostômetro.' },
+          { who: 'ze', text: 'Vó, esse número sobe mais rápido que taxímetro de aeroporto.' },
+          { who: 'vo', text: 'Cuidado com o Fiscal da Receita. Ele joga a malha fina, mas a malha sempre tem um furo!' },
+          { who: 'vo', text: 'E o chefe daqui? Dizem que ele já saiu, mas a calculadora ficou ligada.' },
+        ],
+      },
       planalto: {
         intro: [
           { who: 'vo', text: 'Zezinho... é ali. O Palácio do Planalto. Tá vindo um cheiro de churrasco.' },
           { who: 'ze', text: 'Chegou a hora de entregar a fatura. Com juros e correção monetária.' },
           { who: 'vo', text: 'O Leão da Receita está solto. Se ele te morder, leva parte do seu Pix!' },
           { who: 'ze', text: 'Se o Leão gosta tanto de imposto, vou apresentar ele pro Lule.' },
+          { who: 'vo', text: 'E dizem que a Ministra Sem Pasta voltou de viagem. De mala pronta pra próxima.' },
         ],
       },
     },
@@ -177,6 +203,25 @@
           { who: 'ze', text: 'Saiu voando, carregada pelos drones. Ainda filmando, claro.' },
         ],
       },
+      taxad: {
+        pre: [
+          { who: 'taxad', text: 'Boa noite, contribuinte. Meu nome é Taxad. Fernando Taxad.' },
+          { who: 'ze', text: 'Seu Taxad, eu só tô de passagem. Vou pro Planalto.' },
+          { who: 'taxad', text: 'Passagem? Isso é uma operação. E toda operação tem uma taxinha.' },
+          { who: 'ze', text: 'Taxa de quê?!' },
+          { who: 'taxad', mood: 'smug', text: 'Calma! Não vou taxar o Pix... ainda. Agora me diz: cadê o seu dinheiro?' },
+          { who: 'vo', text: 'Zezinho, ele esconde o seu dinheiro num dos cofres e embaralha. Não tira o olho do cofre certo e encosta o Fusca nele!' },
+        ],
+        post: [
+          { who: 'taxad', text: 'Tá bom, você ganhou. Mas a restituição só cai no ano que vem, viu?' },
+          { who: 'ze', text: 'Pegou um táxi e foi embora. Com a bandeira 2 ligada. Por nossa conta.' },
+        ],
+        // ISENTO! (nenhum cofre errado): o taxad.js troca as falas do fim por estas (G.game.postLines)
+        postIsento: [
+          { who: 'taxad', text: 'Nenhum cofre errado? Isso é... isenção total! Vou criar uma taxa pra isso.' },
+          { who: 'ze', text: 'Isento, vó! Pela primeira vez na vida.' },
+        ],
+      },
       lule: {
         pre: [
           { who: 'lule', text: 'Companheiro! Que bom que você veio. Senta aí, tem picanha e cervejinha pra todo mundo!' },
@@ -188,6 +233,23 @@
         voltou: [
           { who: 'lule', text: 'Achou que tinha acabado, companheiro? Eu SEMPRE volto!' },
           { who: 'ze', text: 'Ah, não. De novo não.' },
+        ],
+        // Na 2ª vida a Janjinha entra na luta (janjinha.js chama G.STORY.boss.lule.janjinha)
+        janjinha: [
+          { who: 'janjinha', text: 'Pode deixar comigo. Agora o cerimonial é meu!' },
+          { who: 'ze', text: 'Pronto. Virou comitiva oficial.' },
+          { who: 'janjinha', text: 'Sorri pra selfie, contribuinte! A viagem é de trabalho e o cartão é da União.' },
+          { who: 'vo', text: 'Zezinho, enquanto ela tá ali, o Lule fica atrás do cordão do cerimonial. Tira ela da luta primeiro!' },
+        ],
+        // LULE 5.0 (luta secreta: venceu a 2ª vida sem entrar com recurso)
+        quinto: [
+          { who: 'lule', text: 'Calma, companheiro! Ninguém sai do Planalto sem o quinto mandato!' },
+          { who: 'ze', text: 'Vó, ele voltou DE NOVO.' },
+          { who: 'vo', text: 'Zezinho, você não entrou com recurso nenhuma vez. Ele tá desesperado! Termina isso!' },
+        ],
+        postQuinto: [
+          { who: 'lule', text: 'Tá bom, tá bom! Sem quinto mandato. Mas do sexto eu não prometo nada.' },
+          { who: 'ze', text: 'Vó, liga o motor. Antes que ele volte.' },
         ],
         post: [
           { who: 'lule', text: 'Tá bom, tá bom... eu pago a conta. Mas parcelado em 12 vezes no carnê, viu?' },
@@ -204,5 +266,7 @@
     'Nenhum político foi ferido na produção deste jogo. Só a reputação.',
     'Vote consciente. E guarde a nota fiscal.',
     'Nenhum fio foi cortado na produção deste jogo. Só os da live.',
+    'Nenhuma blusinha foi taxada na produção deste jogo. Só a paciência do Zé.',
+    'O cartão corporativo deste jogo é de mentira. O sofá também.',
   ];
 })();

@@ -3,7 +3,7 @@
    Brasília vista de cima (pop chapado, leve vista 3/4), rolando
    para baixo enquanto o Fusca voa para cima.
    G.BG.draw(ctx, id, scrollY, t, W, H) pinta a tela inteira a cada quadro.
-   ids: menu, rodoviaria, esplanada, paranoa, planalto.
+   ids: menu, rodoviaria, esplanada, paranoa, fazenda, planalto.
 
    Como funciona
    - O chão é uma pilha de BLOCOS (chunks) de 360 px de largura,
@@ -12,7 +12,7 @@
      pistas/margens nas bordas, então encaixam sem emenda.
    - O mundo tem posição própria (S.pos). Normalmente anda junto com
      scrollY; quando o chefão aparece, o próximo bloco é o MARCO da fase
-     (Torre de TV, Congresso, Alvorada, Planalto): o mundo acelera,
+     (Torre de TV, Congresso, Alvorada, Ministério da Fazenda, Planalto): o mundo acelera,
      freia e ESTACIONA com o marco atrás do chefão. Saiu o chefão, volta.
    - Por quadro: 1–2 drawImage do chão, trânsito/brilhos baratos,
      faixas "por cima" (plataforma da Rodoviária, Ponte JK), camada
@@ -223,12 +223,18 @@
     rect(x, '#191c25', X - 1, py - 1, w + 2, ph + 2);
     rect(x, P.board, X, py, w, ph);
     const band = o.band || R.pick(P.bands);
+    const label = o.label || 'VOTE';
+    if (o.noFace) { // só texto (frase longa): faixa estreita de cor e o texto na largura toda
+      rect(x, band, X, py, w * 0.08, ph);
+      txt(x, label, X + w * 0.54, py + ph * 0.3, Math.max(3, ph * 0.26), P.ink, { maxW: w * 0.86 });
+      txt(x, o.num || '171', X + w * 0.54, py + ph * 0.7, Math.max(4, ph * 0.46), band, { maxW: w * 0.86 });
+      return;
+    }
     rect(x, band, X, py, w * 0.36, ph);
     // cabeção genérico do candidato
     circ(x, P.skin, X + w * 0.18, py + ph * 0.58, ph * 0.27);
     rect(x, '#2a2526', X + w * 0.18 - ph * 0.27, py + ph * 0.25, ph * 0.54, ph * 0.16);
     rect(x, 'rgba(25,20,25,0.7)', X + w * 0.18 - ph * 0.12, py + ph * 0.66, ph * 0.24, ph * 0.06);
-    const label = o.label || 'VOTE';
     txt(x, label, X + w * 0.68, py + ph * 0.3, Math.max(3, ph * 0.26), P.ink, { maxW: w * 0.6 });
     txt(x, o.num || '171', X + w * 0.68, py + ph * 0.7, Math.max(4, ph * 0.46), band, { maxW: w * 0.6 });
   }
@@ -330,7 +336,28 @@
     capi: '#8a6446', capiD: '#5e4330',
     beams: '255,215,170', beamA: 0.06, light: '255,180,110', lightA: 0.08,
   };
-  // Fase 4: noite, céu vermelho-alaranjado, churrasco do Lule
+  // Fase 4: a Esplanada à noite (Ministério da Fazenda): grama e asfalto mais escuros,
+  // janelas quentes acesas, postes, painel de LED do Impostômetro
+  PAL.fazenda = Object.assign({}, PAL.esplanada, {
+    grass: '#1b2624', lawn: '#1e2b28', lawn2: '#212f2b', g1: 'rgba(140,160,230,0.035)', g2: 'rgba(0,0,0,0.07)', path: 'rgba(8,8,6,0.24)',
+    asphalt: '#191b23', asphalt2: '#1c1e27', asphalt3: '#16181f', lane: 'rgba(215,205,185,0.15)', laneEdge: 'rgba(215,205,185,0.09)', zebra: 'rgba(215,205,185,0.13)',
+    walk: '#2c2b33', curb: '#34333c', plaza: '#2d2c35', plaza2: '#34333c', lot: '#202129', lotLine: 'rgba(215,205,185,0.09)',
+    roof: ['#343947', '#383d4b', '#313643'], facade: '#20242e', edge: 'rgba(0,0,0,0.42)',
+    win: 'rgba(100,115,165,0.12)', winLit: 'rgba(255,217,138,0.5)', litP: 0.45, // #ffd98a
+    tree: ['#141e1a', '#17221d', '#121a17'], treeHi: 'rgba(160,180,255,0.05)', palm: '#15201b',
+    shadow: 'rgba(0,0,0,0.3)', sx: 0.25, sy: 0.18,
+    cars: ['#4a3036', '#2e3a52', '#4a4c56', '#3a3c2e', '#5a4e3a', '#26282e', '#151519'],
+    bus: ['#2e5068', '#3d5e42'],
+    crowd: ['#4a4252', '#3e4a56', '#564a44', '#4a5040', '#5a5048', '#3a4250'],
+    board: '#6a655a', ink: '#1a181e', skin: '#9a7458', bands: ['#7a2a2a', '#2a3f6a', '#2a5a3a', '#7a6020'],
+    marble: '#67646f', marble2: '#52505a', glassDark: '#181a24', water: '#1a2434', water2: '#202b3c',
+    flagG: '#1d5e37', flagY: '#9c8228', flagB: '#203a6c',
+    beams: '255,225,170', beamA: 0.13, light: '255,205,130', lightA: 0.12,
+    gold: '#b8902a', gold2: '#6e5416', goldHi: 'rgba(255,228,150,0.5)',
+    parcel: ['#57432f', '#614a33', '#50402c', '#685036'], sticker: '#7e4419',
+    armor: '#5d626e', armorD: '#43474f', led: '#0c0a10', ledRim: 'rgba(200,102,26,0.7)',
+  });
+  // Fase 5: noite, céu vermelho-alaranjado, churrasco do Lule
   PAL.planalto = {
     grass: '#18241f', grass2: '#1b2822', g1: 'rgba(255,170,110,0.03)', g2: 'rgba(0,0,0,0.08)', path: 'rgba(10,8,6,0.22)',
     asphalt: '#1b1c25', asphalt2: '#1f2029', asphalt3: '#18191f', lane: 'rgba(220,200,180,0.16)', laneEdge: 'rgba(220,200,180,0.1)', zebra: 'rgba(220,200,180,0.15)',
@@ -362,7 +389,7 @@
     S.lastLoop = k;
     return k;
   }
-  // Cartão-postal do meio da fase (def.landmark = { kind, prog, dist }: Itamaraty, Ponte JK).
+  // Cartão-postal do meio da fase (def.landmark = { kind, prog, dist }: Itamaraty, Ponte JK, Impostômetro).
   // Entra quando o roteiro pede (g.landmark ou G.BG.landmark(id, g)), quando g.progress passa de prog,
   // ou — se a fase não manda sinal nenhum — depois de `dist` px de mundo rolado.
   let LMREQ = null; // pedido de G.BG.landmark(id, g)
@@ -1327,7 +1354,303 @@
   }
 
   // =================================================================
-  // FASE 4 — PRAÇA DOS TRÊS PODERES (noite, céu vermelho do churrasco)
+  // FASE 4 — MINISTÉRIO DA FAZENDA (a Esplanada à noite)
+  // Mesma seção da Esplanada: via 0–8 | ministérios 12–84 | calçada | pista 92–120 | gramado 120–240 |
+  // pista 240–268 | calçada | ministérios 276–348 | via 352–360. Alturas dos blocos múltiplas de 64.
+  // Marco do meio: o prédio do IMPOSTÔMETRO. Os dígitos do painel de LED andam a cada quadro, copiados
+  // de uma TIRA DE DÍGITOS pré-pintada (item 'dig' do conjunto da fase, na resolução da tela): por quadro
+  // só 13 drawImage pequenos enquanto o painel está na tela, nunca um fillText.
+  // =================================================================
+  const FAZ_LABELS = ['RECEITA FEDERAL', 'MIN. DA FAZENDA', 'MIN. DA TAXAÇÃO', 'MIN. DO IOF', 'MIN. DAS BLUSINHAS', 'MIN. DO ARCABOUÇO FURADO',
+    'MIN. DO PIX VIGIADO', 'SECR. DO DÉFICIT ZERO', 'MIN. DA MALHA FINA', 'MIN. DO CARIMBO', 'TESOURO (VAZIO)', 'MIN. DA RECOMPOSIÇÃO'];
+  function pickFaz(R, n) { const out = []; for (let i = 0; i < n; i++) out.push(FAZ_LABELS[Math.floor(R() * FAZ_LABELS.length)]); return out; }
+  // chão da Esplanada + postes acesos nas calçadas (período de 64 alinhado à base do bloco: emenda sem degrau)
+  function baseF(x, P, R, h, F) {
+    base2(x, P, R, h, { F });
+    for (let y = h - 24; y > 8; y -= 64) { lampPost(x, P, 88, y, true); lampPost(x, P, 272, y, true); }
+  }
+
+  // ---------- painel de LED: dígitos de 7 segmentos ----------
+  // célula de 7×11 (ponto: 3×11). Mesmo desenho no bloco (valor parado) e na tira (valor andando).
+  const LED = { cw: 7, ch: 11, sw: 3, th: 1.3, on: '#ff4a38', glow: 'rgba(255,74,56,0.26)', off: 'rgba(255,74,56,0.07)' };
+  const SEG7 = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f]; // bits a b c d e f g
+  const SEGS = (function () {
+    const t = LED.th, x0 = 1, x1 = LED.cw - 1, y0 = 1, y1 = LED.ch - 1, ym = LED.ch / 2, hl = x1 - x0 - t * 1.2;
+    const vu = ym - y0 - t * 0.9, vd = y1 - ym - t * 0.9;
+    return [
+      [x0 + t * 0.6, y0, hl, t], [x1 - t, y0 + t * 0.6, t, vu], [x1 - t, ym + t * 0.3, t, vd], [x0 + t * 0.6, y1 - t, hl, t],
+      [x0, ym + t * 0.3, t, vd], [x0, y0 + t * 0.6, t, vu], [x0 + t * 0.6, ym - t / 2, hl, t],
+    ];
+  })();
+  const LED_N = 13; // 0–9, casa apagada (10), ponto aceso (11), ponto apagado (12)
+  function ledCell(x, P, X, Y, k) {
+    const bg = P.led || '#0c0a10';
+    if (k >= 11) {
+      rect(x, bg, X, Y, LED.sw, LED.ch);
+      const rx = X + 0.8, ry = Y + LED.ch - 1 - LED.th;
+      if (k === 11) { rect(x, LED.glow, rx - 0.5, ry - 0.5, 2.4, LED.th + 1); rect(x, LED.on, rx, ry, 1.4, LED.th); } else rect(x, LED.off, rx, ry, 1.4, LED.th);
+      return;
+    }
+    rect(x, bg, X, Y, LED.cw, LED.ch);
+    const m = k <= 9 ? SEG7[k] : 0;
+    for (let i = 0; i < 7; i++) { const s = SEGS[i]; if (!((m >> i) & 1)) rect(x, LED.off, X + s[0], Y + s[1], s[2], s[3]); }
+    for (let i = 0; i < 7; i++) { const s = SEGS[i]; if ((m >> i) & 1) rect(x, LED.glow, X + s[0] - 0.5, Y + s[1] - 0.5, s[2] + 1, s[3] + 1); }
+    for (let i = 0; i < 7; i++) { const s = SEGS[i]; if ((m >> i) & 1) rect(x, LED.on, X + s[0], Y + s[1], s[2], s[3]); }
+  }
+  // tira de dígitos na resolução do conjunto: cada célula começa num pixel inteiro do aparelho
+  // (1 px de folga transparente à direita), para o blit ficar 1:1 e sem filtro
+  function buildDigits(pc) {
+    const res = pc.res, slots = [];
+    let w = 0;
+    for (let k = 0; k < LED_N; k++) { const pw = Math.ceil((k >= 11 ? LED.sw : LED.cw) * res) + 1; slots.push(w, pw); w += pw; }
+    const ph = Math.ceil(LED.ch * res), c = mkCanvas(w, ph), x = c.getContext('2d');
+    for (let k = 0; k < LED_N; k++) { x.setTransform(res, 0, 0, res, slots[k * 2], 0); ledCell(x, pc.P, 0, 0, k); }
+    return { c: bake(c), slots, ph, res };
+  }
+  // o placar: R$ 1.171.171.171 subindo (as 3 últimas casas mudam a cada quadro); depois que o
+  // Impostômetro do meio da fase é zerado (g.impZero), volta a R$ 0 e começa a subir de novo
+  const IMP_BASE = 1171171171, IMP_RATE = 4321;
+  function drawImpo(ctx, st, I, top, H, t) {
+    const y0 = top + I.y;
+    if (y0 < -LED.ch - 2 || y0 > H + 2) return;
+    let D = st.cache.dig;
+    if (!D) { queueItem(st, 'dig'); D = st.fb && st.fb.dig; if (!D) return; } // ainda na fila: fica o valor parado pintado no bloco
+    const g = st.g, zero = !!(g && g.impZero);
+    let v;
+    if (zero) { if (st.impZ == null) st.impZ = t; v = Math.floor(Math.max(0, t - st.impZ) * IMP_RATE); }
+    else v = IMP_BASE + Math.floor(Math.max(0, t) * IMP_RATE);
+    v %= 1e10;
+    ctx.imageSmoothingEnabled = smoothFor(st, D.res);
+    const y = snap(st, y0), dh = D.ph / D.res, last = I.n - 1;
+    let rest = v;
+    for (let i = last; i >= 0; i--) {
+      let k;
+      if (I.sep[i]) k = zero && rest === 0 ? 12 : 11;
+      else { k = zero && rest === 0 && i !== last ? 10 : rest % 10; rest = Math.floor(rest / 10); }
+      const sx = D.slots[k * 2], sw = D.slots[k * 2 + 1];
+      ctx.drawImage(D.c, sx, 0, sw, D.ph, snap(st, I.x[i]), y, sw / D.res, dh);
+    }
+    ctx.imageSmoothingEnabled = true;
+  }
+  // prédio do IMPOSTÔMETRO: torre de escritórios com o painel de LED gigante na fachada
+  function impoTower(x, P, R, F, cx, by) {
+    const w = 118, d = 26, z = 58, X = cx - w / 2, Y = by - d, fy = Y + d - z;
+    pool(x, cx, by + 16, 78, '255,64,44', 0.1); // o painel tinge a praça de vermelho
+    shadowBox(x, P, X, Y, w, d, z);
+    rect(x, '#191c25', X, fy, w, z);
+    winGrid(x, X + 2, fy + 36, w - 4, z - 38, P.win, P.winLit, P.litP, R, 3.4, 4.6);
+    rect(x, 'rgba(255,217,138,0.22)', cx - 12, by - 9, 24, 8); // portaria
+    for (let xx = cx - 12; xx <= cx + 12; xx += 6) rect(x, 'rgba(0,0,0,0.35)', xx - 0.4, by - 9, 0.8, 8);
+    rect(x, 'rgba(0,0,0,0.2)', X, by - 1, w, 1);
+    // painel
+    const bx = X + 4, bw = w - 8, bt = fy + 3, bh = 30;
+    rect(x, 'rgba(0,0,0,0.5)', bx - 1.5, bt - 1.5, bw + 3, bh + 3);
+    rect(x, P.ledRim, bx - 1, bt - 1, bw + 2, bh + 2);
+    rect(x, P.led, bx, bt, bw, bh);
+    for (let yy = bt + 1; yy < bt + bh - 1; yy += 2) rect(x, 'rgba(255,255,255,0.025)', bx + 1, yy, bw - 2, 0.6);
+    txt(x, 'IMPOSTÔMETRO', cx, bt + 6.5, 8, 'rgba(255,176,70,0.92)', { maxW: bw - 10 });
+    // R$ + 1.171.171.171 (10 casas e 3 pontos)
+    const total = 14 + 10 * LED.cw + 3 * LED.sw, x0 = Math.round(cx - total / 2), dy = bt + 15;
+    txt(x, 'R$', x0 + 6, dy + LED.ch / 2 + 0.5, 9, LED.on);
+    const I = { y: dy, n: 13, x: [], sep: [] }, val = String(IMP_BASE);
+    let xx = x0 + 14, di = 0;
+    for (let i = 0; i < 13; i++) {
+      const sep = i === 1 || i === 5 || i === 9;
+      I.x.push(xx); I.sep.push(sep);
+      ledCell(x, P, xx, dy, sep ? 11 : +val[di++]);
+      xx += sep ? LED.sw : LED.cw;
+    }
+    F.impo = I;
+    // teto
+    rect(x, P.roof[1], X, Y - z, w, d);
+    x.strokeStyle = P.edge; x.lineWidth = 1; x.strokeRect(X + 0.5, Y - z + 0.5, w - 1, d - 1);
+    rect(x, 'rgba(255,255,255,0.06)', X + 1, Y - z + 1, w - 2, 1);
+    roofJunk(x, P, R, X + 6, Y - z + 3, 44, d - 6); roofJunk(x, P, R, X + w - 50, Y - z + 3, 44, d - 6);
+  }
+  // encomendas da alfândega (caixas de papelão; as grandes com o adesivo '+20%')
+  function parcel(x, P, R, X, Y, w, d, z, sticker) {
+    box(x, P, X, Y, w, d, z, { roof: R.pick(P.parcel), facade: '#47372a', win: false });
+    rect(x, 'rgba(220,200,160,0.16)', X + w / 2 - 0.6, Y - z, 1.2, d); // fita
+    if (!sticker) return;
+    const big = w >= 20, sw = big ? 15 : w * 0.55, sh = big ? 5.2 : 2.6, sx = X + (big ? 2 : 1.4), sy = Y - z + d - sh - 1.4;
+    rect(x, P.sticker, sx, sy, sw, sh);
+    if (big) txt(x, '+20%', sx + sw / 2, sy + sh / 2 + 0.3, 4.4, 'rgba(255,236,210,0.6)', { body: true, w: 800, maxW: sw - 1 });
+  }
+  function parcelStack(x, P, R, X, Y) {
+    rect(x, 'rgba(90,70,45,0.5)', X - 1, Y + 14, 24, 2); // palete
+    if (R() < 0.4) parcel(x, P, R, X, Y, 22, 14, R.r(7, 11), true);
+    else { parcel(x, P, R, X, Y + 2, 10, 12, R.r(4, 7), R() < 0.5); parcel(x, P, R, X + 12, Y, 10, 14, R.r(5, 9), R() < 0.6); }
+  }
+  // carro-forte estacionado (de lado, frente à esquerda)
+  function carroForte(x, P, X, Y) {
+    box(x, P, X, Y, 32, 12, 7, { roof: P.armor, facade: P.armorD, win: false });
+    rect(x, 'rgba(15,20,32,0.75)', X + 1.5, Y + 6, 5, 4);   // para-brisa
+    rect(x, 'rgba(0,0,0,0.25)', X + 7.5, Y - 7, 0.8, 12);    // cabine | baú
+    rect(x, '#0d0e12', X + 3, Y + 11, 6, 1.8); rect(x, '#0d0e12', X + 23, Y + 11, 6, 1.8);
+    rect(x, 'rgba(200,170,90,0.32)', X + 9, Y + 2.6, 22, 0.8);
+    txt(x, 'CARRO-FORTE', X + 20, Y - 1.2, 4.2, 'rgba(225,228,236,0.6)', { body: true, w: 800, maxW: 22 });
+  }
+  // Ministério da Fazenda: caixa modernista comprida com brises, letreiro dourado e o selo R$ no teto
+  function fazendaHQ(x, P, R, cx, by) {
+    const w = 236, d = 40, z = 30, X = cx - w / 2, Y = by - d, fy = Y + d - z;
+    for (let xx = X + 14; xx < X + w; xx += 26) pool(x, xx, by + 4, 16, '255,205,130', 0.1); // holofotes no chão
+    shadowBox(x, P, X, Y, w, d, z);
+    rect(x, P.facade, X, fy, w, z);
+    winGrid(x, X + 2, fy + 10, w - 4, z - 11, P.win, P.winLit, P.litP, R, 3, 4.2);
+    for (let xx = X + 3; xx < X + w - 2; xx += 6) rect(x, 'rgba(110,116,132,0.32)', xx, fy + 9.5, 1.2, z - 9.5); // brises verticais
+    rect(x, '#12141b', X, fy, w, 9.5);
+    rect(x, P.gold2, X, fy + 9.5, w, 0.8);
+    txt(x, 'MINISTÉRIO DA FAZENDA', cx, fy + 5, 8, P.gold, { maxW: w - 30 });
+    rect(x, 'rgba(255,217,138,0.26)', cx - 16, by - 10, 32, 10); // portaria
+    for (let xx = cx - 16; xx <= cx + 16; xx += 8) rect(x, 'rgba(0,0,0,0.4)', xx - 0.5, by - 10, 1, 10);
+    rect(x, 'rgba(0,0,0,0.2)', X, by - 1, w, 1);
+    // laje do teto, brises na borda e o selo
+    rect(x, P.roof[0], X, Y - z, w, d);
+    x.strokeStyle = P.edge; x.lineWidth = 1; x.strokeRect(X + 0.5, Y - z + 0.5, w - 1, d - 1);
+    rect(x, 'rgba(255,255,255,0.05)', X + 1, Y - z + 1, w - 2, 1.5);
+    for (let k = 0; k < 19; k++) rect(x, 'rgba(0,0,0,0.14)', X + 4 + k * 12.2, Y - z + d - 3.5, 8, 1.5);
+    roofJunk(x, P, R, X + 8, Y - z + 4, 60, d - 10); roofJunk(x, P, R, X + w - 68, Y - z + 4, 60, d - 10);
+    const sx = cx, sy = Y - z + d / 2;
+    circ(x, 'rgba(0,0,0,0.3)', sx + 1.5, sy + 1.5, 14.5);
+    circ(x, P.gold, sx, sy, 14.5);
+    circ(x, '#241d10', sx, sy, 12);
+    x.strokeStyle = P.goldHi; x.lineWidth = 0.8; x.beginPath(); x.arc(sx, sy, 10.3, 0, TAU); x.stroke();
+    for (let i = 0; i < 16; i++) { const a = (i * TAU) / 16; rect(x, P.gold, sx + Math.cos(a) * 13.2 - 0.6, sy + Math.sin(a) * 13.2 - 0.6, 1.2, 1.2); }
+    txt(x, 'R$', sx, sy + 0.5, 11, P.gold);
+  }
+
+  STAGES.fazenda = {
+    pal: PAL.fazenda, first: 'a', firstAt: 0, bossKind: 'fazenda', digits: true,
+    landmark: { kind: 'impostometro', prog: 0.55, dist: 3800 },
+    kinds: {
+      a: {
+        h: 512,
+        paint(x, P, R, h, F) {
+          baseF(x, P, R, h, F);
+          ministryRow(x, P, R, -1, 0, h, pickFaz(R, 8)); ministryRow(x, P, R, 1, 0, h, pickFaz(R, 8));
+          for (let i = 0; i < 3; i++) trail(x, P, R, 122, R.r(20, h - 20), 238, R.r(20, h - 20));
+          for (let i = 0; i < 3; i++) crowd(x, P, R, R.r(130, 210), R.r(30, h - 50), 18, 18, R.i(3, 9));
+        },
+      },
+      // fila do IR: o posto da Receita e a fila serpenteando pelo gramado
+      b: {
+        h: 512,
+        paint(x, P, R, h, F) {
+          baseF(x, P, R, h, F);
+          ministryRow(x, P, R, -1, 0, h, pickFaz(R, 8)); ministryRow(x, P, R, 1, 0, h, pickFaz(R, 8));
+          billboard(x, P, R, 124, 96, 50, { label: 'CPF NA NOTA?', num: '171' });
+          box(x, P, 150, 140, 60, 18, 7, { roof: P.roof[1], facade: P.facade, R, win: P.win, lit: P.winLit, litP: 0.7 });
+          rect(x, P.board, 145, 110, 70, 9); txt(x, 'DECLARAÇÃO IRPF · SENHA 171', 180, 114.5, 4.4, P.ink, { body: true, w: 800, maxW: 68 });
+          let px = 180, py = 162;
+          for (let i = 0; i < 190; i++) {
+            const k = i / 190;
+            px = 180 + Math.sin(k * 15) * 44; py = 162 + k * 280;
+            x.fillStyle = R.pick(P.crowd); x.fillRect(px + R.r(-1.2, 1.2) - 0.8, py + R.r(-1, 1), 1.6, 1.6);
+          }
+          crowd(x, P, R, px - 10, py, 20, 10, 12);
+          billboard(x, P, R, 150, 504, 62, { label: 'NÃO VAI TAXAR O PIX', num: '...AINDA', noFace: true });
+        },
+      },
+      // alfândega: pátio de encomendas taxadas com a guarita no portão (sem marca de transportadora)
+      c: {
+        h: 512,
+        paint(x, P, R, h, F) {
+          baseF(x, P, R, h, F);
+          ministryRow(x, P, R, -1, 0, h, pickFaz(R, 8)); ministryRow(x, P, R, 1, 0, h, pickFaz(R, 8));
+          const y0 = 110, y1 = 380, X0 = 124, X1 = 236;
+          rect(x, P.plaza, X0, y0, X1 - X0, y1 - y0);
+          for (let y = y0 + 12; y < y1; y += 24) rect(x, 'rgba(255,255,255,0.02)', X0, y, X1 - X0, 1);
+          barricade(x, P, X0, y0, X1 - X0);
+          for (let y = y0; y < y1; y += 3) { rect(x, 'rgba(170,170,180,0.22)', X0, y, 1, 2); rect(x, 'rgba(170,170,180,0.22)', X1 - 1, y, 1, 2); }
+          barricade(x, P, X0, y1 - 1.4, 40); barricade(x, P, X1 - 40, y1 - 1.4, 40); // portão no meio
+          for (let y = y0 + 30; y < y1 - 20; y += 36) for (const xx of [X0 + 5, X0 + 29, X1 - 51, X1 - 27]) parcelStack(x, P, R, xx, y);
+          crowd(x, P, R, 172, y0 + 16, 16, y1 - y0 - 36, 14); // fiscais no corredor
+          box(x, P, 162, y1 + 30, 36, 12, 10, { roof: '#3b4050', facade: P.facade, R, win: P.win, lit: P.winLit, litP: 0.8 });
+          rect(x, P.board, 154, y1 + 6, 52, 10); txt(x, 'ALFÂNDEGA', 180, y1 + 11.2, 6.4, P.ink, { maxW: 48 });
+          for (let i = 0; i < 2; i++) trail(x, P, R, 122, R.r(y1 + 50, h - 20), 238, R.r(y1 + 50, h - 20));
+        },
+      },
+      // marco do meio: o prédio do Impostômetro (dígitos animados em drawImpo)
+      impostometro: {
+        h: 512,
+        paint(x, P, R, h, F) {
+          baseF(x, P, R, h, F);
+          ministryRow(x, P, R, -1, 0, h, pickFaz(R, 8)); ministryRow(x, P, R, 1, 0, h, pickFaz(R, 8));
+          rect(x, P.plaza, 120, 330, 120, 88);
+          for (let y = 342; y < 418; y += 12) rect(x, 'rgba(255,255,255,0.02)', 120, y, 120, 1);
+          impoTower(x, P, R, F, 180, 330);
+          crowd(x, P, R, 128, 342, 104, 56, 70, true); // gente parada olhando o placar
+          for (let i = 0; i < 4; i++) treeC(x, P, R, R.r(128, 232), R.r(30, 170), 8, R.i(2, 4));
+          for (let i = 0; i < 2; i++) trail(x, P, R, 122, R.r(430, h - 20), 238, R.r(430, h - 20));
+        },
+      },
+      // Chefão: o Ministério da Fazenda (o mundo estaciona com o prédio atrás do Taxad)
+      fazenda: {
+        h: 768, park: { local: 404, screen: 128 }, lanes: [[660, 768]],
+        paint(x, P, R, h, F) {
+          rect(x, P.grass, 0, 0, WW, h);
+          speckle(x, R, 0, 0, WW, h, h * 0.4, P.g1, P.g2);
+          for (let y = h - 32, i = 0; y > 640; y -= 32, i++) rect(x, i % 2 ? P.lawn2 : P.lawn, 120, y, 120, 32);
+          // as pistas contornam o Ministério e voltam ao eixo lá em cima
+          roadPath(x, P, [106, h + 4, 106, 690, 106, 650, 34, 596, 28, 470, 28, 320, 32, 220, 106, 160, 106, 100, 106, -4], 28);
+          roadPath(x, P, [254, h + 4, 254, 690, 254, 650, 326, 596, 332, 470, 332, 320, 328, 220, 254, 160, 254, 100, 254, -4], 28);
+          for (let y = h - 23; y > 690; y -= 32) { rect(x, P.lane, 105.5, y, 1, 14); rect(x, P.lane, 253.5, y, 1, 14); }
+          for (let y = h - 23 - 32 * Math.ceil((h - 23 - 100) / 32); y > -14; y -= 32) { if (y < 90) { rect(x, P.lane, 105.5, y, 1, 14); rect(x, P.lane, 253.5, y, 1, 14); } }
+          rect(x, P.asphalt, 0, 0, 8, h); rect(x, P.asphalt, 352, 0, 8, h);
+          // atrás: jardim, anexos e o estacionamento dos carros oficiais
+          for (let i = 0; i < 7; i++) treeC(x, P, R, R.r(130, 230), R.r(30, 140), 10, R.i(3, 6));
+          for (let i = 0; i < 5; i++) { treeC(x, P, R, R.r(52, 72), R.r(190, 300), 8, 3); treeC(x, P, R, R.r(288, 308), R.r(190, 300), 8, 3); }
+          box(x, P, 62, 330, 52, 22, 14, { roof: P.roof[1], R });
+          box(x, P, 246, 330, 52, 22, 14, { roof: P.roof[2], R });
+          rect(x, P.lot, 126, 384, 108, 60);
+          for (let xx = 128; xx < 234; xx += 8) { rect(x, P.lotLine, xx, 386, 0.6, 12); rect(x, P.lotLine, xx, 430, 0.6, 12); }
+          for (let xx = 130; xx + 7 < 234; xx += 8) { if (R() < 0.7) car(x, xx + 3.5, 392, '#151519', 0); if (R() < 0.6) car(x, xx + 3.5, 436, '#151519', Math.PI); }
+          for (let i = 0; i < 4; i++) { treeC(x, P, R, R.r(70, 110), R.r(380, 470), 7, 3); treeC(x, P, R, R.r(250, 290), R.r(380, 470), 7, 3); }
+          // calçada e praça na frente
+          rect(x, P.walk, 56, 556, 248, 18);
+          rect(x, P.plaza, 118, 574, 124, 68);
+          for (let y = 586; y < 642; y += 12) rect(x, 'rgba(255,255,255,0.02)', 118, y, 124, 1);
+          fazendaHQ(x, P, R, 180, 556);
+          fountain(x, P, 208, 610, 18); F.fount.push({ x: 208, y: 610, r: 18 });
+          carroForte(x, P, 64, 560); carroForte(x, P, 264, 562);
+          // fila na porta, entre fitas de catraca
+          for (let r = 0; r < 4; r++) {
+            const yy = 584 + r * 13, x0 = 124, x1 = 180;
+            seg(x, 'rgba(200,170,90,0.32)', 0.7, x0, yy + 3, x1, yy + 3);
+            rect(x, '#7a7a84', x0 - 0.7, yy + 1.5, 1.4, 2.4); rect(x, '#7a7a84', x1 - 0.7, yy + 1.5, 1.4, 2.4);
+            for (let qx = x0 + 2; qx < x1 - 1; qx += 3.1) {
+              x.fillStyle = R.pick(P.crowd); x.fillRect(qx + R.r(-0.5, 0.5) - 0.9, yy - 0.2 + R.r(-0.6, 0.6), 1.8, 1.7);
+              x.fillStyle = 'rgba(18,14,18,0.5)'; x.fillRect(qx - 0.5, yy - 0.6, 1, 0.9);
+            }
+          }
+          crowd(x, P, R, 172, 574, 14, 9, 10);
+          crowd(x, P, R, 120, 634, 30, 8, 14);
+          for (const [lx, ly] of [[114, 576], [246, 576], [114, 642], [246, 642]]) lampPost(x, P, lx, ly, true);
+          for (let i = 0; i < 3; i++) trail(x, P, R, 122, R.r(660, h - 20), 238, R.r(660, h - 20));
+        },
+      },
+      after: {
+        h: 512,
+        paint(x, P, R, h, F) { baseF(x, P, R, h, F); ministryRow(x, P, R, -1, 0, h, pickFaz(R, 8)); ministryRow(x, P, R, 1, 0, h, pickFaz(R, 8)); },
+      },
+    },
+    next(S, g, n) {
+      const f = S.flags;
+      if (g && g.boss && !f.boss) { const lm = lateLandmark(S, g); if (lm) return lm; f.boss = true; f.after = false; return 'fazenda'; }
+      if (f.boss && !f.after) { f.after = true; return 'after'; }
+      if (landmarkDue(S, g)) { f.lm = true; return 'impostometro'; }
+      return loopPick(S, ['a', 'b', 'a', 'c'], n);
+    },
+    traffic: [
+      { x: 99, dir: -1, v: 80, n: 4 }, { x: 113, dir: -1, v: 60, n: 4 },
+      { x: 247, dir: 1, v: 55, n: 4 }, { x: 261, dir: 1, v: 35, n: 3 },
+    ],
+    upper: 'dusk', lamps: true,
+    tint: [0, 'rgba(20,30,80,0.22)', 1, 'rgba(5,5,25,0.45)'],
+  };
+
+  // =================================================================
+  // FASE 5 — PRAÇA DOS TRÊS PODERES (noite, céu vermelho do churrasco)
   // Seção: grama 0–34 | pista 38–98 (4 faixas) | passeio 102–258 | pista 262–322 | grama 326–360
   // =================================================================
   function lampPost(x, P, X, Y, glow) {
@@ -1573,7 +1896,7 @@
   const caches = {};      // cacheId -> { id, res, kinds: {nome: {c,h,feats,over,res}}, ov: {chave: {c,W,H,res}}, spr, up }
   let S = null;           // estado corrente
   let EDGE = null;        // faixas vermelhas da borda (iguais em todas as fases)
-  const MAP = ['rodoviaria', 'esplanada', 'paranoa', 'planalto'];
+  const MAP = ['rodoviaria', 'esplanada', 'paranoa', 'fazenda', 'planalto'];
   const Q_DPR = { high: 2, mid: 1.5, low: 1 }; // mesma regra do core (resize)
   const PLAY_GAP = 250;   // ms entre construções durante o jogo (no mínimo)
   const PLAY_DUTY = 8;    // jogando: depois de uma construção de N ms, espera N×8 ms (≤ 12% do tempo)
@@ -1609,6 +1932,7 @@
     for (const k in c.kinds) freeKind(c.kinds[k]);
     for (const k in c.ov) freeCanvas(c.ov[k].c);
     freeSprites(c.spr); freeUpper(c.up);
+    if (c.dig) freeCanvas(c.dig.c);
     if (c.puffs) for (const k in c.puffs) freeCanvas(c.puffs[k]);
     delete caches[cacheId];
     if (S && S.fb === c) S.fb = null;
@@ -1625,7 +1949,8 @@
   // contexto mínimo para pintar um item de uma fase (não precisa do estado de rolagem)
   function paintCtx(id, res) { const def = STAGES[id]; return { id, def, P: def.pal, res }; }
   // Constrói um item de um conjunto. Devolve true se trabalhou (false = já estava pronto).
-  // Itens: 'spr' (trânsito), 'up' (nuvens), 'ov0' (tinta), 'ov1' (vinheta do chefão), 'edge', ou o nome de um bloco.
+  // Itens: 'spr' (trânsito), 'up' (nuvens), 'ov0' (tinta), 'ov1' (vinheta do chefão), 'edge', 'dig' (tira de
+  // dígitos do placar de LED), ou o nome de um bloco.
   function buildItem(pc, cache, item, W, H) {
     const t0 = nowMs();
     switch (item) {
@@ -1646,6 +1971,10 @@
         cache.puffsAll = true;
         break;
       }
+      case 'dig': // tira de dígitos do placar (Impostômetro)
+        if (!pc.def.digits || cache.dig) return false;
+        cache.dig = buildDigits(pc);
+        break;
       case 'ov0': case 'ov1': {
         if ((item === 'ov1' && !pc.def.bossKind) || cache.ov[item + '|' + H]) return false;
         for (const k in cache.ov) if (k.indexOf(item + '|') === 0) { freeCanvas(cache.ov[k].c); delete cache.ov[k]; } // altura antiga
@@ -1675,6 +2004,7 @@
     if (def.upper && quality() !== 'low') L.push('up'); // sem nuvens na qualidade baixa
     if (def.puffs) L.push('puff');
     for (const k of ks) if (L.indexOf(k) < 0 && k !== def.bossKind) L.push(k);
+    if (def.digits) L.push('dig');
     if (def.bossKind) { L.push(def.bossKind, 'ov1'); if (quality() === 'high') L.push('edge'); }
     return L;
   }
@@ -1684,6 +2014,7 @@
       case 'spr': return !!c.spr;
       case 'up': return !!c.up || !UPPER[st.def.upper];
       case 'puff': return !!c.puffsAll || !st.def.puffs;
+      case 'dig': return !!c.dig || !st.def.digits;
       case 'ov0': case 'ov1': return !!c.ov[item + '|' + H] || (item === 'ov1' && !st.def.bossKind);
       case 'edge': return !!(EDGE && EDGE.H === H && EDGE.res === st.res) || !st.def.bossKind;
       default: return !!c.kinds[item] || !st.def.kinds[item];
@@ -1733,7 +2064,7 @@
     const kd = st.def.kinds[name];
     const res = st.res, h = kd.h;
     const s = surface(WW, h, res);
-    const F = { glints: [], flags: [], fount: [], smoke: [], capis: [] };
+    const F = { glints: [], flags: [], fount: [], smoke: [], capis: [], impo: null };
     const R = rng(hashStr(st.id + ':' + name));
     try { kd.paint(s.x, st.P, R, h, F); } catch (err) { G.reportError(err, 'bg.paint ' + st.id + '/' + name); }
     sealRow(s.c, h * res);
@@ -1937,13 +2268,18 @@
   function uiKind() { try { return G.UI && G.UI.current ? G.UI.current() : null; } catch (e) { return null; } }
   // telas do menu que o core desenha sem fundo (ver render no core)
   const NO_BG_UI = /^(title|story|roll)$/;
+  // fundo da fase i: o da lista de fases (stages.js) quando ela tem um fundo conhecido, senão MAP
+  function stageBg(i) {
+    const L = G.Stages && G.Stages.list, s = L && L[i], id = s && (s.bg || s.id);
+    return id && STAGES[id] ? id : MAP[i];
+  }
   function preTargets() {
     const st = G.state, g = G.game;
-    if (st === 'clear' && g) { const nx = MAP[(g.stageIdx | 0) + 1]; return nx ? [nx] : null; }
+    if (st === 'clear' && g) { const nx = stageBg((g.stageIdx | 0) + 1); return nx ? [nx] : null; }
     if (st === 'menu' || st === 'ending' || (st === 'intro' && !g)) {
       const sv = G.save || {}, un = sv.unlocked || 1;
       // provável próxima escolha: a 1ª fase (ou o 2º Mandato) ou a fase mais nova liberada
-      const stage = st === 'intro' || sv.cleared || un <= 1 ? 'rodoviaria' : MAP[Math.min(3, un - 1)];
+      const stage = st === 'intro' || sv.cleared || un <= 1 ? 'rodoviaria' : stageBg(Math.min(MAP.length - 1, un - 1));
       if (st === 'intro') return [stage];
       // a fase antes do menu (o título não desenha fundo e JOGAR é o toque provável),
       // a não ser que uma tela com o fundo do menu já esteja aberta (fases, lojinha...)
@@ -2171,6 +2507,8 @@
         capi(ctx, st.P, ex, y, dir, graze, t + e.p, 1);
         if (e.cub) capi(ctx, st.P, ex - dir * 7, y + 1.5, dir, !graze, t + e.p + 0.7, 0.6);
       }
+      // placar do Impostômetro (fase 4): dígitos da tira pré-pintada
+      if (F.impo) drawImpo(ctx, st, F.impo, top, H, t);
       // bandeirão do Brasil no mastro da Praça (fatias com onda)
       if (F.bigflag) {
         const bx = F.bigflag.x, by = top + F.bigflag.y;
@@ -2568,6 +2906,7 @@
       if (c.spr) for (const set of [c.spr.up, c.spr.down]) for (const l of [set.car, set.bus]) for (const cv of l) add(id, cv);
       if (c.up) { for (const sh of c.up.shapes) add(id, sh.c); for (const sh of c.up.dark) add(id, sh.c); }
       if (c.puffs) for (const k in c.puffs) add(id, c.puffs[k]);
+      if (c.dig) add(id, c.dig.c);
     }
     if (EDGE) { add('edge', EDGE.c); add('edge', EDGE.r); }
     for (const id in sets) sets[id] = +(sets[id] / 1e6).toFixed(2);
@@ -2586,11 +2925,11 @@
       for (const id in caches) if (!S || (id !== S.cacheId && !(S.fb && id === S.fb.id))) freeCache(id);
       PRE.key = ''; PRE.jobs = []; PRE.i = 0; PRE.keep = {};
     },
-    // o roteiro da fase avisa que o cartão-postal deve passar agora ('itamaraty', 'jk'); ver landmarkDue
+    // o roteiro da fase avisa que o cartão-postal deve passar agora ('itamaraty', 'jk', 'impostometro'); ver landmarkDue
     landmark(id, g) { LMREQ = { id: String(id), g: g || G.game || null }; },
     // para testes: estado atual (posição do mundo, blocos visíveis, estacionamento no chefão)
     _state() { return S; },
-    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice(), fb: S.fb ? S.fb.id : null } : null; },
+    debugState() { return S ? { id: S.id, pos: Math.round(S.pos), mul: +S.mul.toFixed(2), park: S.park ? S.park.state : null, bossK: +S.bossK.toFixed(2), flags: Object.assign({}, S.flags), seq: S.seq.map((c) => c.kind), res: S.res, crisp: S.crisp, built: Object.keys(S.cache.kinds), queue: S.queue.slice(), fb: S.fb ? S.fb.id : null, dig: S.cache.dig ? S.cache.dig.res : null } : null; },
     builds() { return BUILDS.slice(); },
     cacheStats,
   });

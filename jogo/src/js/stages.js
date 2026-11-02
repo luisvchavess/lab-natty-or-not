@@ -1,8 +1,11 @@
 /* ============================================================
    FUSCA A JATO — stages.js
-   As 4 fases e seus roteiros de ondas (geradores).
+   As 5 fases e seus roteiros de ondas (geradores).
    Ordem e chefões fixos: rodoviaria→centrao, esplanada→dilmae,
-   paranoa→erika, planalto→lule. Contrato: docs/ENGINE.md §6.
+   paranoa→erika, fazenda→taxad, planalto→lule (a ordem da lista
+   é a ordem dos G.Stages.add abaixo). Contrato: docs/ENGINE.md §6.
+   PRESSÃO (G.press do core): o chuvisco (drizzle) aperta e, em CAOS
+   ou CPI! (lv ≥ 4), cada swarm/vee/bots/botRain ganha +1 (ex).
    ============================================================ */
 (function () {
   'use strict';
@@ -13,6 +16,13 @@
   const now = () => (G.game ? G.game.t : 0);
   const sp = (kind, x, y, o) => G.spawnEnemy(kind, x, y, o || {});
   const opt = (o, i) => (typeof o === 'function' ? o(i) : Object.assign({}, o || {}));
+  // PRESSÃO (sem o core novo vale 0): +1 inimigo por formação em lv ≥ 4, com teto por tipo
+  // (nunca nas fileiras row(), que têm espaçamento fixo)
+  const PRESS0 = { R: 0, lv: 0 };
+  const press = () => G.press || PRESS0;
+  const pR = () => { const R = +press().R; return R > 0 ? Math.min(1, R) : 0; };
+  const ex = (n, cap) => ((press().lv | 0) >= 4 ? Math.max(n, Math.min(cap, n + 1)) : n);
+  const CAP = { swarm: 10, vee: 9, bots: 11 };
 
   // ======================================================================
   // Tempo e trilhas paralelas
@@ -78,7 +88,7 @@
   // um inimigo seguindo uma curva
   function fly(kind, pts, dur, o) { return sp(kind, pts[0][0], pts[0][1], Object.assign({ pts, dur }, o || {})); }
   // vários na mesma curva, um atrás do outro (cobrinha)
-  function* swarm(kind, n, gap, pts, dur, o) { for (let i = 0; i < n; i++) { fly(kind, pts, dur, opt(o, i)); if (i < n - 1) yield gap; } }
+  function* swarm(kind, n, gap, pts, dur, o) { n = ex(n, CAP.swarm); for (let i = 0; i < n; i++) { fly(kind, pts, dur, opt(o, i)); if (i < n - 1) yield gap; } }
   // fileira horizontal simultânea
   function row(kind, n, y, o, margin) {
     const m = margin != null ? margin : 40;
@@ -87,6 +97,7 @@
   // formação em V (ponta embaixo)
   function vee(kind, n, cx, o, dx, dy) {
     dx = dx || 34; dy = dy || 26;
+    n = ex(n, CAP.vee);
     for (let i = 0; i < n; i++) {
       const k = Math.ceil(i / 2), s = i % 2 ? -1 : 1;
       sp(kind, M.clamp(cx + s * k * dx, 16, W() - 16), -24 - k * dy, opt(o, i));
@@ -99,11 +110,11 @@
       if (i < n - 1) yield gap;
     }
   }
-  // chuvisco de pipoca em x aleatório
+  // chuvisco de pipoca em x aleatório (a PRESSÃO encurta o intervalo: ×(1 − 0,25 R))
   function* drizzle(kind, dur, every, o) {
     const end = now() + dur;
     let i = 0;
-    while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every; }
+    while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every * (1 - 0.25 * pR()); }
   }
   // bando de motoboys da picanha passando pela lateral (alturas escalonadas)
   function* moto(n, fromLeft, y0, dy, gap, o) {
@@ -115,6 +126,7 @@
   // enxame de bots fazendo curva
   function* bots(n, fromLeft, y, o) {
     const x = fromLeft ? -16 : W() + 16;
+    n = ex(n, CAP.bots);
     for (let i = 0; i < n; i++) {
       sp('bot', x, y, Object.assign({ path: 'curve', ang: fromLeft ? 0.35 : Math.PI - 0.35, spd: 150, turn: fromLeft ? 0.75 : -0.75, turnStop: 2.6 }, opt(o, i)));
       if (i < n - 1) yield 0.16;
@@ -122,6 +134,7 @@
   }
   // enxame de bots descendo do alto em S
   function* botRain(n, x, o) {
+    n = ex(n, CAP.bots);
     for (let i = 0; i < n; i++) {
       sp('bot', x, -16, Object.assign({ path: 'curve', ang: Math.PI / 2, spd: 135, turn: 1.4, flip: 1.1, phase: 0 }, opt(o, i)));
       if (i < n - 1) yield 0.17;
@@ -174,6 +187,7 @@
     rodoviaria: ['cabo', 'fantasma'],
     esplanada: ['deputado', 'cabo', 'fantasma', 'assessor'],
     paranoa: ['sindicalista', 'assessor', 'deputado', 'cabo', 'bot'],
+    fazenda: ['cabo', 'deputado', 'fiscal', 'ministro', 'assessor'],
     planalto: ['lobista', 'deputado', 'marqueteiro', 'cabo', 'ministro'],
   };
   let introWarm = null;
@@ -184,7 +198,8 @@
     pre(...(OPENING[g.stage.id] || []));
   }, 250);
   // Sinais para o cenário (bg.js): g.progress (0..1, sobe nos marcos do roteiro; 1 = chegada do chefão)
-  // e g.landmark (id do cartão-postal que deve passar agora: 'itamaraty' na Esplanada, 'jk' no Paranoá).
+  // e g.landmark (id do cartão-postal que deve passar agora: 'itamaraty' na Esplanada, 'jk' no Paranoá,
+  // 'impostometro' na Fazenda).
   // Também chama G.BG.landmark(id, g) se o bg.js tiver.
   function mark(p, landmark) {
     const g = G.game; if (!g) return;
@@ -206,7 +221,7 @@
   // ======================================================================
   G.Stages.add({
     id: 'rodoviaria', name: 'Rodoviária do Plano', subtitle: 'A campanha começou',
-    bg: 'rodoviaria', music: 'stage1', bossMusic: 'boss', boss: 'centrao', scrollSpeed: 40,
+    bg: 'rodoviaria', music: 'stage1', bossMusic: 'boss', boss: 'centrao', scrollSpeed: 42,
     script: function* (S) {
       const L2 = S.g.loop > 1;
       const T0 = now();
@@ -594,7 +609,126 @@
   });
 
   // ======================================================================
-  // FASE 4 — PALÁCIO DO PLANALTO (o teste de verdade)
+  // FASE 4 — MINISTÉRIO DA FAZENDA (entre o Paranoá e o Planalto)
+  // novos: fiscal (malha fina) → maquininha (anéis de IOF); meio: O Impostômetro
+  // 2º Mandato: +1 fiscal em cada onda de fiscais, chuviscos a 0,55 s, bots mergulhando (0,45)
+  // ======================================================================
+  G.Stages.add({
+    id: 'fazenda', name: 'Ministério da Fazenda', subtitle: 'O Impostômetro não para',
+    bg: 'fazenda', music: 'fazenda', bossMusic: 'boss', boss: 'taxad', scrollSpeed: 48,
+    script: function* (S) {
+      const L2 = S.g.loop > 1;
+      const T0 = now();
+      const T = (s) => at(T0 + s);
+      const fis = (x, ty, o) => sp('fiscal', x, -30, Object.assign({ ty }, o || {}));
+      const dive = L2 ? { dive: 0.45 } : null;
+      mark(0); pre(...OPENING.fazenda);
+      yield* withAmbient(function* () {
+        // --- PROTOCOLO: a turma das outras fases na porta do ministério ---
+        yield T(1.6);
+        row('deputado', 3, -30, { ty: 150, hold: 5 });
+        yield* swarm('cabo', 6, 0.34, path('uL'), 6);
+        yield T(6);
+        vee('ministro', 5, W() / 2);
+        yield* swarm('cabo', 6, 0.34, path('uL', true), 6);
+        // --- FISCAL DA RECEITA (apresentação) ---
+        yield T(10);
+        pre('maquininha', 'bot');
+        yield* par(
+          once(() => fis(W() * 0.3, 140, { hold: 7 })),
+          after(1.2, once(() => fis(W() * 0.7, 165, { hold: 7 }))),
+          L2 ? after(2.4, once(() => fis(W() / 2, 115, { hold: 7 }))) : null);
+        yield T(16);
+        carrier('deputado', W() / 2, -30, 'power', { ty: 120, hp: 20 });
+        // --- MAQUININHA DA TAXA ---
+        yield T(18);
+        mark(0.08);
+        pre('lobista', 'marqueteiro', 'sindicalista');
+        yield* par(swarm('maquininha', 8, 0.32, path('conga'), 10), after(2, bots(8, false, 90, dive)));
+        yield T(27);
+        sp('lobista', W() * 0.3, -34, { ty: 125 });
+        sp('marqueteiro', W() / 2, -30, { ty: 85, hold: 8 });
+        sp('sindicalista', W() * 0.75, -30, { ty: 150 });
+        yield T(33);
+        pre('motoqueiro', 'carro_som', 'drone');
+        yield* par(
+          drizzle('assessor', 5, L2 ? 0.55 : 0.8),
+          once(() => { fis(60, 120); fis(W() - 60, 120); if (L2) fis(W() / 2, 150); }));
+        yield T(39);
+        yield S.clear(5);
+        carrier('cabo', W() * 0.3, -22, 'power', { ty: 150, hold: 3.5, hp: 12 });
+        // --- FILA DO IR ---
+        yield T(41);
+        mark(0.25);
+        yield* par(
+          swarm('ministro', 8, 0.32, path('sL'), 8),
+          side('maquininha', 5, true, 120, 0.4),
+          side('maquininha', 5, false, 170, 0.4));
+        yield T(50);
+        sp('carro_som', 80, -36, { vy: 26 });
+        yield* moto(4, true, 110, 35, 0.4);
+        yield T(52);
+        carrier('cabo', W() * 0.7, -22, 'power', { ty: 150, hold: 3.5, hp: 12 });
+        // --- MALHA FINA: três fiscais e os drones (mais baixos, sem cobrir os fiscais) ---
+        yield T(57);
+        fis(W() * 0.2, 110); fis(W() / 2, 150); fis(W() * 0.8, 110);
+        if (L2) fis(W() * 0.65, 185);
+        sp('drone', 60, -24, { ty: 180 }); sp('drone', W() - 60, -24, { ty: 180 });
+        yield T(64);
+        pre('impostometro');
+        carrier('deputado', W() / 2, -30, 'life', { ty: 115, hp: 24, hold: 6 });
+        yield T(66);
+        vee('ministro', 7, W() / 2);
+        yield* swarm('maquininha', 10, 0.28, path('loopL'), 9);
+        yield T(73);
+        yield S.clear(8);
+        // --- CHEFE INTERMEDIÁRIO: O IMPOSTÔMETRO (o placar da fase passa junto) ---
+        mark(0.55, 'impostometro');
+        yield 0.6;
+        yield* midboss('impostometro', W() / 2, -60);
+        const R = now();
+        const Rt = (s) => at(R + s);
+        mark(0.7);
+        yield Rt(1);
+        vee('ministro', 7, W() * 0.3);
+        yield Rt(3);
+        vee('ministro', 7, W() * 0.7);
+        yield Rt(7);
+        fis(W() / 2, 130);
+        if (L2) fis(W() * 0.25, 165);
+        yield* swarm('maquininha', 8, 0.32, path('conga'), 10);
+        yield Rt(12);
+        carrier('deputado', W() * 0.75, -30, 'power', { ty: 140, hp: 20 });
+        sp('lobista', W() / 2, -34, { ty: 115 });
+        sp('marqueteiro', W() * 0.3, -30, { ty: 88 });
+        yield Rt(18);
+        sp('carro_som', 80, -36, { vy: 26 });
+        sp('drone', W() - 80, -24, { ty: 120 }); sp('drone', W() - 150, -24, { ty: 170 });
+        yield* botRain(10, W() / 2, dive);
+        // --- ÚLTIMA ALFÂNDEGA ---
+        yield Rt(24);
+        fis(W() * 0.25, 120); fis(W() / 2, 150); fis(W() * 0.75, 120);
+        if (L2) fis(W() * 0.4, 185);
+        carrier('assessor', W() / 2, -24, 'power', { vy: 60, amp: 30, hp: 12 });
+        yield* par(
+          drizzle('cabo', 6, L2 ? 0.55 : 0.6),
+          side('assessor', 4, true, 120, 0.6),
+          side('assessor', 4, false, 160, 0.6));
+        yield Rt(32);
+        yield S.clear(9);
+        mark(0.92);
+      }, ['cabo', 'ministro', 'maquininha', 'assessor'], 2.8, 15);
+      carrier('deputado', W() / 2, -30, 'power', { ty: 130, hp: 20, hold: 3.5 });
+      carrier('cabo', W() * 0.25, -22, 'bomb', { vy: 70, hp: 8, fire: 0 });
+      yield S.clear(6);
+      yield 1.2;
+      mark(1);
+      yield S.boss('taxad');
+    },
+  });
+
+  // ======================================================================
+  // FASE 5 — PALÁCIO DO PLANALTO (o teste de verdade)
   // novos: ministro → leão; meio: Comitiva dos 38 Ministros
   // ======================================================================
   G.Stages.add({
@@ -651,7 +785,8 @@
         yield* par(moto(4, true, 110, 35, 0.4), after(1.5, once(() => vee('ministro', 7, W() / 2, (i) => ({ vy: 90, v: i })))));
         yield T(63);
         mark(0.33);
-        carrier('deputado', W() / 2, -30, 'life', { ty: 115, hp: 24, hold: 6 });
+        // (o 13º Salário agora cai na Esplanada e na Fazenda; aqui o carregador traz escudo)
+        carrier('deputado', W() / 2, -30, 'shield', { ty: 115, hp: 24, hold: 6 });
         sp('carro_som', 80, -36, { vy: 26 });
         yield* par(
           once(() => { sp('fantasma', W() - 80, -30, { ty: 160 }); sp('fantasma', W() / 2, -30, { ty: 120, delay: 1.2 }); }),

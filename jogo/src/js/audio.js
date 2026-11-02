@@ -2,7 +2,7 @@
    FUSCA A JATO — audio.js
    Som 100% sintetizado com WebAudio: todos os efeitos (SFX) e a
    trilha procedural (bossa, valsinha, baião, samba, rock da live,
-   frevo, funk carioca e marchinha). Nenhum arquivo de áudio.
+   funk de repartição, frevo, funk carioca e marchinha). Nenhum arquivo de áudio.
 
    - O AudioContext só nasce no primeiro toque/tecla (unlock()); o motor
      é montado logo depois em fatias curtas e o reverb ≥ 1,5 s depois.
@@ -420,6 +420,7 @@
   // S(nome, prioridade 1..5, intervalo mínimo entre disparos (s), fn(E, t, out, p) -> duração)
   const SFX = {};
   function S(name, pri, rate, fn) { SFX[name] = { pri, rate, fn }; }
+  const SFX_PARAM = { swap: 1 }; // sons que recebem o 2º argumento de G.Audio.sfx(name, p)
 
   // --- tiros do jogador: suaves e curtos (tocam o tempo todo) ---
   S('shot_voto', 1, 0.06, (E, t, o) => {
@@ -738,6 +739,60 @@
       E.tone('sine', f / 2, 0, t + dt, 0.08 + i * 0.03, 0.1, o, 0.004);
     });
     return 0.42;
+  });
+  // --- Rodada 5: Taxad (cofres, caixa registradora), Janjinha (foguete), Pavanatto (bipe), PRESSÃO, último turno ---
+  S('cofre', 3, 0.08, (E, t, o) => { // cofre batendo no chão: baque grave (120 Hz) + chiado metálico curto
+    E.tone('sine', 150, 70, t, 0.2, 0.75, o, 0.002, 0.07);
+    E.tone('triangle', 240, 120, t, 0.05, 0.22, o);
+    E.hiss(t, 0.05, 0.26, o, 'bandpass', 3300, 2400, 5, 0.001);
+    for (const [f, d, p] of [[1870, 0.11, 0.05], [2730, 0.08, 0.035], [4110, 0.05, 0.025]]) E.tone('sine', f, 0, t + 0.004, d, p, o, 0.001);
+    return 0.25;
+  });
+  S('caixa', 3, 0.1, (E, t, o) => { // caixa registradora: gaveta + sino de 2,2 kHz + moedinhas
+    E.hiss(t, 0.035, 0.28, o, 'bandpass', 1600, 900, 1.2, 0.002);
+    E.tone('sine', 2200, 0, t + 0.02, 0.34, 0.24, o, 0.001);
+    E.tone('sine', 2200 * 2.76, 0, t + 0.02, 0.12, 0.06, o, 0.001);
+    for (const [dt, f] of [[0.12, 3950], [0.17, 4480], [0.22, 3720], [0.28, 5020]]) E.tone('sine', f, 0, t + dt, 0.06, 0.09, o, 0.001);
+    return 0.4;
+  });
+  S('swap', 2, 0.05, (E, t, o, p) => { // cofres trocando de lugar: chiado macio; p (0..1) sobe a cada troca
+    const k = clamp(+p || 0, 0, 1), f0 = 700 + 1300 * k;
+    E.hiss(t, 0.1, 0.5, o, 'bandpass', f0, f0 * 2.2, 1.4, 0.012);
+    E.tone('sine', 330 + 330 * k, 520 + 520 * k, t, 0.08, 0.07, o, 0.01);
+    return 0.12;
+  });
+  S('rocket', 3, 0.25, (E, t, o) => { // foguete decolando: varredura de ruído + ronco grave
+    E.hiss(t, 0.5, 0.36, o, 'bandpass', 280, 2600, 1.4, 0.06);
+    const g = E.gain(0, E.filt('lowpass', 260, 1, o));
+    E.osc('sawtooth', 52, t, t + 0.62, g); E.osc('sawtooth', 53.5, t, t + 0.62, g);
+    E.adsr(g, t, 0.06, 0.34, 0.1, 0.8, 0.42, 0.12);
+    E.tone('sine', 62, 38, t, 0.5, 0.42, o, 0.03);
+    for (let i = 0; i < 4; i++) E.hiss(t + 0.08 + i * 0.11, 0.025, 0.07, o, 'highpass', 4500, 0, 0.7);
+    return 0.6;
+  });
+  S('bleep', 4, 0.3, (E, t, o) => { // bipe de censura da TV: seno de 1 kHz chapado
+    const g = E.gain(0, o), q = g.gain;
+    E.osc('sine', 1000, t, t + 0.37, g);
+    q.setValueAtTime(0.0001, t); q.linearRampToValueAtTime(0.24, t + 0.006);
+    q.setValueAtTime(0.24, t + 0.335); q.linearRampToValueAtTime(0.0001, t + 0.35);
+    return 0.35;
+  });
+  S('press_up', 3, 0.3, (E, t, o) => { // PRESSÃO subiu: dois bipes quadrados subindo
+    const lp = E.filt('lowpass', 4200, 0.7, o);
+    E.tone('square', 660, 880, t, 0.06, 0.12, lp, 0.002, 0.04);
+    E.tone('square', 990, 1320, t + 0.09, 0.08, 0.12, lp, 0.002, 0.05);
+    E.tone('sine', 1980, 0, t + 0.09, 0.06, 0.04, o, 0.002);
+    return 0.2;
+  });
+  S('last_stand', 4, 0.5, (E, t, o) => { // ÚLTIMO RECURSO: ataque de metais (serras graves) + tímpano
+    const lp = E.filt('lowpass', 400, 1.3, o), g = E.gain(0, lp);
+    lp.frequency.setValueAtTime(400, t); lp.frequency.exponentialRampToValueAtTime(2400, t + 0.04); lp.frequency.exponentialRampToValueAtTime(650, t + 0.5);
+    for (const [m, det] of [[40, -8], [40, 8], [47, 0], [52, 5]]) { const s2 = E.osc('sawtooth', mtof(m), t, t + 0.7, g); s2.detune.setValueAtTime(det - 40, t); s2.detune.linearRampToValueAtTime(det, t + 0.05); }
+    E.adsr(g, t, 0.02, 0.22, 0.15, 0.6, 0.42, 0.2);
+    E.tone('sine', 104, 82, t, 0.6, 0.62, o, 0.003, 0.25);
+    E.tone('triangle', 208, 164, t, 0.12, 0.16, o, 0.002);
+    E.hiss(t, 0.09, 0.3, o, 'lowpass', 500, 0, 0.7, 0.002);
+    return 0.72;
   });
   S('siren', 3, 0.5, (E, t, o) => { // carro de som / sirene
     const g = E.gain(0, E.filt('lowpass', 3200, 0.7, o));
@@ -1134,6 +1189,26 @@
       else { g2.gain.linearRampToValueAtTime(0.3 * v, t + 0.02); g2.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
       E.fin(s, g);
     },
+    // tecla de calculadora (o chimbal do funk de repartição): x = tecla, X = tecla forte, b = bipe do total
+    calc(E, t, c, v, dest) {
+      const g = E.nv(dest, 1);
+      let o;
+      if (c === 'b' || c === 'B') o = E.tone('square', 2000, 0, t, 0.07, 0.07 * v, E.filt('lowpass', 3500, 0.7, g), 0.002);
+      else {
+        o = E.tone('square', c === 'X' ? 3300 : 2700, 0, t, 0.012, 0.1 * v, E.filt('bandpass', 3000, 2, g), 0.001);
+        E.hiss(t, 0.008, 0.2 * v, g, 'highpass', 6000, 0, 0.7);
+      }
+      E.fin(o, g);
+    },
+    // caixa registradora (a cada 4 compassos): gaveta, sino e moedinhas
+    cash(E, t, c, v, dest) {
+      const g = E.nv(dest, 1);
+      E.hiss(t, 0.03, 0.26 * v, g, 'bandpass', 1600, 0, 1.2);
+      const o = E.tone('sine', 2200, 0, t + 0.02, 0.5, 0.2 * v, g, 0.001);
+      E.tone('sine', 2200 * 2.76, 0, t + 0.02, 0.18, 0.05 * v, g, 0.001);
+      for (const [dt, f] of [[0.12, 3950], [0.17, 4480], [0.23, 3720], [0.3, 5020]]) E.tone('sine', f, 0, t + dt, 0.07, 0.06 * v, g, 0.001);
+      E.fin(o, g);
+    },
     // acelerada de moto (motoboy)
     rev(E, t, c, v, dest) { const g = E.nv(dest, 1); motorSynth(E, t, g, 0.35 * v, 0.9); endMarker(E, g, t + 1.1); },
     // grito "ê!" (vocal chop)
@@ -1470,6 +1545,68 @@
         chords: ['Eb', 'Bb', 'Cm', 'D7', 'Eb', 'Bb', 'Cm7 D7', 'Gm'],
         parts: [{ inst: 'brass', notes: FREVO_B, vel: 0.78, harm: 'c', hinst: 'brassLow', hvel: 0.55 }],
         drums2: { sweep: '.'.repeat(112) + once('u', 16) },
+      },
+    },
+    order: ['A', 'A2', 'B', 'A2'],
+  };
+
+  // ---------- FASE 4 — Ministério da Fazenda: "funk de repartição" (104 bpm, lá menor) ----------
+  // teclas de calculadora no lugar do chimbal, caixa registradora a cada 4 compassos, baixo andando
+  // e o motivo de 3 notas "TA-XA-DÁ" nos metais (o DÁ forte e comprido)
+  const FAZ_M = [ // metais: TA-XA-DÁ abrindo cada frase
+    'A4 . C5 . E5! - - - . . . . . . . .',
+    '. . . . . . . . . . . . . . . .',
+    'D5 . F5 . A5! - - - . . . . . . . .',
+    '. . . . . . . . . . . . . . . .',
+    'A4 . C5 . E5! - - - . . . . . . . .',
+    '. . . . . . . . . . . . . . . .',
+    'C5 . E5 . A5! - - - . . . . . . . .',
+    'B4 . D5 . G#5! - - - . . . . . . . .',
+  ];
+  const FAZ_A = [ // a resposta (o "carimbo" de cada frase)
+    '. . . . . . . . . . G5 - E5 . D5 .',
+    'C5 - - - . . A4 . C5 . D5 . E5 - - -',
+    '. . . . . . . . . . A5 - G5 . F5 .',
+    'E5 - - - . . G#4 . B4 . D5 . E5 - - -',
+    '. . . . . . . . . . G5 - E5 . D5 .',
+    'C5 - D5 - E5 - G5 - A5 - - - G5 . E5 .',
+    '. . . . . . . . . . E5 - D5 . C5 .',
+    '. . . . . . . . E5 . D5 . B4 - G#4 -',
+  ];
+  const FAZ_B = [
+    'F5 - - - E5 - D5 - . . A4 . D5 - F5 -',
+    'E5 - - - - - - - . . . . . . . .',
+    'E5 - - - D5 - C5 - . . A4 . C5 - E5 -',
+    'D5 - - - - - - - . . . . . . . .',
+    'D5 - - - C5 - Bb4 - . . F4 . Bb4 - D5 -',
+    'C5 - - - - - D5 - - - E5 - - - F5 -',
+    'G#5 - - - - - F5 - - - E5 - - - D5 -',
+    'B4 - - - - - - - A4 . C5 . E5! - - -',
+  ];
+  SONGS.fazenda = {
+    bpm: 104, swing: 0.1, scale: 'A minor', gain: 1,
+    def: {
+      bars: 8, chords: ['Am7', 'Am7', 'Dm7', 'E7', 'Am7', 'Am7', 'Fmaj7', 'E7'],
+      bass: { inst: 'bass', pat: '1 - - . 3 - - . 5 - - . a - - .', low: 33, vel: 0.85 },
+      comp: { inst: 'rhodes', pat: '..x...x...x..x..', low: 55, vel: 0.42, len: 2, v: 'rootless' },
+      drums: {
+        kick: 'X.....x...x..x..', snare: '....X.......X...', snare_g: '.......x.x......',
+        calc: 'x.xx.xX.x.xx.xX.', cash: '.'.repeat(48) + 'x' + '.'.repeat(15),
+      },
+      dv: { kick: 0.8, snare: 1.1, snare_g: 0.3, calc: 0.9, cash: 0.9 },
+      fill: { snare: '....X.......x.rr', calc: 'x.xx.xX.xxxxxxxb', kick: 'X.....x...x.x.x.' },
+    },
+    sec: {
+      A: { parts: [{ inst: 'brass', notes: FAZ_M, vel: 0.8 }, { inst: 'lead', notes: FAZ_A, vel: 0.6 }] },
+      A2: {
+        parts: [{ inst: 'brass', notes: FAZ_M, vel: 0.8, harm: 'c', hinst: 'brassLow', hvel: 0.55 }, { inst: 'lead', notes: FAZ_A, vel: 0.6, harm: -2, hvel: 0.4 }],
+        pad: { inst: 'pad', low: 52, vel: 0.22 },
+      },
+      B: {
+        chords: ['Dm7', 'Dm7', 'Am7', 'Am7', 'Bbmaj7', 'Bbmaj7', 'E7', 'E7'],
+        parts: [{ inst: 'brass', notes: FAZ_B, vel: 0.78, harm: 'c', hinst: 'brassLow', hvel: 0.5 }],
+        comp: { inst: 'rhodes', pat: 'x.....x.....x...', low: 55, vel: 0.36, len: 4, v: 'rootless' },
+        drums2: { tamb: '....x.......x...' }, dv2: { tamb: 0.5 },
       },
     },
     order: ['A', 'A2', 'B', 'A2'],
@@ -2349,7 +2486,8 @@
       L.susByUs = false;
       if (L.E && L.wanted && musicOn() && !L.cur) startTrack(L.wanted);
     },
-    sfx(name) {
+    // p (opcional): parâmetro numérico dos sons que aceitam um (SFX_PARAM: 'swap' sobe o tom 0..1 a cada troca)
+    sfx(name, p) {
       const E = L.E;
       if (!E) { if (L.building && SFX[name] && L.pend.length < 3 && L.pend.indexOf(name) < 0) L.pend.push(name); return; }
       if (!sfxOn()) return;
@@ -2361,11 +2499,12 @@
       const rate = LOWQ && LOW_RATE[name] ? Math.max(d.rate, LOW_RATE[name]) : d.rate;
       if (lt !== undefined && now >= lt && now - lt < rate) return; // limite por nome
       L.last[name] = now;
-      let p;
       if (name === 'pix') { L.pixStreak = now - L.pixT < 0.35 ? Math.min(L.pixStreak + 1, 10) : 0; L.pixT = now; p = L.pixStreak; }
+      else p = SFX_PARAM[name] && typeof p === 'number' ? p : undefined;
       E.playSfx(name, now + 0.004, p);
     },
     music(name) {
+      if (!SONGS[name]) name = ({ fazenda: 'stage2' })[name] || name; // faixa nova ausente (build parcial): cai na da Esplanada
       if (!SONGS[name]) return;
       L.wanted = name;
       if (!L.E || !musicOn()) return; // lembra e toca quando der
