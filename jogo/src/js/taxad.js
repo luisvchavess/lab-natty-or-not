@@ -587,37 +587,56 @@
     const d = b.data, W = G.W, H = G.H, p = pl(), run = G.run || {};
     say(b, 'O ARCABOUÇO É SÓLIDO!', 1.6); d.pose = 'up'; d.poseT = 1.0;
     const hw = TX.ARC_W / 2, hh = TX.ARC_H / 2;
-    const cx = clamp(p.x, hw, W - hw), cy = clamp(p.y, 0.55 * H, H - 95);
-    const A = { gen: ++d.arcGen, st: 'tele', t: 0, x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh, side: 't', f: 0, v: 0, list: [], probe: null };
-    // o furo: nunca num lado encostado na borda da tela
+    // centrada no carro: todo lado que existe fica a ≥ hh (75) px dele; lado fora da tela fica sem régua.
+    // Carro bem acima (a ≥ hh do lado de cima de uma moldura em 0,55H): a moldura fica lá, sem prender.
+    const up = p.y < 0.55 * H - 2 * hh;
+    const cx = up ? clamp(p.x, hw, W - hw) : p.x, cy = up ? 0.55 * H : p.y;
+    const A = { gen: ++d.arcGen, st: 'tele', t: 0, x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh, side: 't', f: 0, v: 0, list: [], probe: null, labT: 0 };
+    // o furo: nunca num lado encostado na borda da tela (o de cima sempre está na tela), nem com o centro ou o
+    // rótulo embaixo do botão da DELAÇÃO: sorteia de novo e, no azar, varre os lados (fica a menor nota)
     const sides = ['t'];
     if (A.x0 >= 16) sides.push('l');
     if (A.x1 <= W - 16) sides.push('r');
     if (A.y1 <= H - 30) sides.push('b');
-    A.side = M.pick(sides);
-    const len = A.side === 't' || A.side === 'b' ? TX.ARC_W : TX.ARC_H;
-    A.f = M.rand(36, len - 36);
+    const Z = bombZone();
+    let best = 99, bs = 't', bf = 36;
+    const tryF = (s, f) => { A.side = s; A.f = f; const n = furoBad(A, Z); if (n < best) { best = n; bs = s; bf = f; } };
+    for (let k = 0; k < 24 && best; k++) { A.side = M.pick(sides); const r = furoRange(A); tryF(A.side, M.rand(r[0], r[1])); }
+    for (let i = 0; i < sides.length && best; i++) {
+      A.side = sides[i];
+      const r = furoRange(A);
+      for (let f = r[0]; f <= r[1] && best; f += 6) tryF(sides[i], f);
+    }
+    A.side = bs; A.f = bf;
     d.arc = A;
     sfx('charge');
     yield TX.ARC_TELE;
     if (d.arc !== A) return; // a rodada dos cofres (ou o tonto) desfez a moldura
     const v = L2() ? TX.ARC_SPD_L2 : TX.ARC_SPD, h = TX.FURO / 2, st = TX.ARC_STEP;
     A.v = realSpd(b, v);
-    const add = (q) => { if (q) { A.list.push(q); if (!A.probe) A.probe = q; } };
+    // régua só nascendo dentro da tela
+    const add = (x, y, a) => {
+      if (x < 0 || x > W || y < 0 || y > H) return;
+      const q = txShoot(x, y, a, v, REGUA);
+      if (q) { A.list.push(q); if (!A.probe) A.probe = q; }
+    };
     for (let x = A.x0; x <= A.x1 + 0.01; x += st) {
-      if (!(A.side === 't' && Math.abs(x - (A.x0 + A.f)) < h)) add(txShoot(x, A.y0, DOWN, v, REGUA));
-      if (!(A.side === 'b' && Math.abs(x - (A.x0 + A.f)) < h)) add(txShoot(x, A.y1, -DOWN, v, REGUA));
+      if (!(A.side === 't' && Math.abs(x - (A.x0 + A.f)) < h)) add(x, A.y0, DOWN);
+      if (!(A.side === 'b' && Math.abs(x - (A.x0 + A.f)) < h)) add(x, A.y1, -DOWN);
     }
     for (let y = A.y0 + st; y <= A.y1 - st + 0.01; y += st) {
-      if (!(A.side === 'l' && Math.abs(y - (A.y0 + A.f)) < h)) add(txShoot(A.x0, y, 0, v, REGUA));
-      if (!(A.side === 'r' && Math.abs(y - (A.y0 + A.f)) < h)) add(txShoot(A.x1, y, PI, v, REGUA));
+      if (!(A.side === 'l' && Math.abs(y - (A.y0 + A.f)) < h)) add(A.x0, y, 0);
+      if (!(A.side === 'r' && Math.abs(y - (A.y0 + A.f)) < h)) add(A.x1, y, PI);
     }
     A.st = 'live'; A.t = 0;
     sfx('enemy_shot2');
     if (!run._txFuro) {
       run._txFuro = 1;
-      const q = arcFuroXY(A, 0);
-      G.text(clamp(q[0] + q[2] * 44, 50, W - 50), q[1] + q[3] * 30, 'TEM FURO!', { size: 12, color: '#ffffff', stroke: true });
+      // 1ª vez: o 'TEM FURO!' entra no lugar do rótulo 'FURO!' (que fica escondido enquanto ele vive); furo num
+      // lado em pé: um pouco acima da seta (o texto é mais largo que o rótulo)
+      const L = furoLabXY(A, 0), dy = A.side === 'l' || A.side === 'r' ? 14 : 0;
+      G.text(L[0], L[1] - dy, 'TEM FURO!', { size: 12, color: '#ffffff', stroke: true, life: 0.9 });
+      A.labT = 0.9;
     }
     yield TX.ARC_LIFE;
     if (d.arc === A) d.arc = null;
@@ -631,6 +650,48 @@
     else if (A.side === 'l') { o[0] = A.x0 + off; o[1] = A.y0 + A.f; o[2] = -1; o[3] = 0; }
     else { o[0] = A.x1 - off; o[1] = A.y0 + A.f; o[2] = 1; o[3] = 0; }
     return o;
+  }
+  // lugar do rótulo 'FURO!' (e do 'TEM FURO!' da 1ª vez): [x, y]
+  const LAB_XY = [0, 0];
+  function furoLabXY(A, off) {
+    const q = arcFuroXY(A, off);
+    LAB_XY[0] = clamp(q[0] + q[2] * 32, 24, G.W - 24); LAB_XY[1] = clamp(q[1] + q[3] * 24, 60, G.H - 10);
+    return LAB_XY;
+  }
+  // faixa do A.f no lado A.side: 36 px longe dos cantos e o centro do furo na tela, onde o carro alcança
+  function furoRange(A) {
+    const r = A.side === 't' || A.side === 'b'
+      ? [Math.max(36, 36 - A.x0), Math.min(TX.ARC_W - 36, G.W - 36 - A.x0)]
+      : [36, Math.min(TX.ARC_H - 36, G.H - 36 - A.y0)];
+    if (r[1] < r[0]) r[1] = r[0];
+    return r;
+  }
+  // botão da DELAÇÃO (DOM, opaco, canto de baixo à direita) em px do jogo, com 16 px de folga: [x0, y0, x1, y1]
+  const BOMB_Z = [0, 0, 0, 0];
+  function bombZone() {
+    const Z = BOMB_Z, m = 16, v = G.view;
+    const el = typeof document !== 'undefined' ? document.getElementById('btnBomb') : null;
+    const r = el && v && v.scale > 0 ? el.getBoundingClientRect() : null;
+    if (r && r.width > 0) {
+      Z[0] = (r.left - v.x) / v.scale - m; Z[1] = (r.top - v.y) / v.scale - m;
+      Z[2] = (r.right - v.x) / v.scale + m; Z[3] = (r.bottom - v.y) / v.scale + m;
+    } else { Z[0] = G.W - 84 - m; Z[1] = G.H - 90 - m; Z[2] = G.W + m; Z[3] = G.H + m; }
+    return Z;
+  }
+  const inZ = (Z, x, y) => x > Z[0] && x < Z[2] && y > Z[1] && y < Z[3];
+  // nota do furo (0 = livre): centro e rótulo embaixo do botão quando a moldura nasce (2 cada) e no fim do
+  // caminho, com o lado FURO_OFF px para dentro (1 cada)
+  const FURO_OFF = 70;
+  function furoBad(A, Z) {
+    let n = 0;
+    for (let i = 0; i < 2; i++) {
+      const off = i ? FURO_OFF : 0, w = i ? 1 : 2;
+      const q = arcFuroXY(A, off);
+      if (inZ(Z, q[0], q[1])) n += w;
+      const L = furoLabXY(A, off);
+      if (inZ(Z, L[0], L[1])) n += w;
+    }
+    return n;
   }
   function* txP2(b) {
     const d = b.data;
@@ -686,7 +747,11 @@
     if (Z.list.length) d.zf.push(Z);
     sfx('charge');
     const run = G.run;
-    if (run && !run._txRombo) { run._txRombo = 1; G.text(W / 2, G.H * 0.44, 'TEM ROMBO NO ZERO!', { size: 13, color: '#ffd23f', stroke: true }); }
+    if (run && !run._txRombo) {
+      run._txRombo = 1;
+      // embaixo do "00", longe dos rótulos ROMBO de baixo (cy + ry + 11) e subindo devagar: some antes de o "00" chegar
+      G.text(W / 2, Math.min(G.H - 24, cy + ry + 36), 'TEM ROMBO NO ZERO!', { size: 13, color: '#ffd23f', stroke: true, life: 1.0, vy: -8 });
+    }
   }
   function* txZeros(b) {
     const d = b.data;
@@ -704,6 +769,9 @@
     const d = b.data;
     d.mv = swayMv(2);
     yield 0.8;
+    // o 1º "00" espera o letreiro do turno sair (ele cobria os ROMBOs de cima)
+    const t0 = K.clk(b);
+    yield () => !(G.game && G.game.banner) || K.clk(b) - t0 > 2;
     for (;;) {
       yield* txZeros(b);
       yield pW(L2() ? TX.ZERO_EVERY_L2 : TX.ZERO_EVERY, d.pl);
@@ -1184,11 +1252,15 @@
       if (A.side === 'l') { c.moveTo(x0, y1); c.lineTo(x0, fy + h); c.moveTo(x0, fy - h); c.lineTo(x0, y0); } else { c.moveTo(x0, y1); c.lineTo(x0, y0); }
       c.stroke();
       c.restore();
-      K.txt(c, 'ARCABOUÇO', (x0 + x1) / 2, A.side === 't' ? y1 + 11 : y0 - 11, 10, '#ffd23f', { stroke: 3 });
+      // (furo em cima: o nome vai embaixo da moldura, ou logo dentro dela se embaixo sair da tela)
+      const ly = A.side !== 't' ? y0 - 11 : y1 + 11 <= G.H - 12 ? y1 + 11 : y0 + 13;
+      K.txt(c, 'ARCABOUÇO', clamp((x0 + x1) / 2, 50, G.W - 50), ly, 10, '#ffd23f', { stroke: 3 });
     }
-    const q = arcFuroXY(A, A.st === 'live' ? Math.min(A.t * A.v, 70) : 0);
+    const off = A.st === 'live' ? Math.min(A.t * A.v, FURO_OFF) : 0, q = arcFuroXY(A, off);
     arrow(c, q[0] - q[2] * 6, q[1] - q[3] * 6, q[2], q[3]);
-    K.txt(c, 'FURO!', clamp(q[0] + q[2] * 32, 24, G.W - 24), clamp(q[1] + q[3] * 24, 60, G.H - 10), 10, '#ffffff', { stroke: 3 });
+    if (A.st === 'live' && A.t < A.labT) return; // o 'TEM FURO!' da 1ª vez está no lugar do rótulo
+    const L = furoLabXY(A, off);
+    K.txt(c, 'FURO!', L[0], L[1], 10, '#ffffff', { stroke: 3 });
   }
   function drawZerosOver(c, b, t) {
     if (((t * 8) | 0) % 2) return;
@@ -1381,6 +1453,8 @@
         b.dmgMul = Math.min(4, b.dmgMul * (d.p5Mul || 1));
         if (!st && !d.armorTag) b.hudTag = d.p5Mul > 1 ? P5.TAG2 : P5.TAG;
       }
+      // 5º turno com ALÍQUOTA: a etiqueta da barra alterna com a do ÚLTIMO RECURSO / SEM SAÍDA a cada 1,2 s
+      if (d.p5 && d.armorTag && !st && ((b.ft / 1.2) | 0) % 2) b.hudTag = d.p5Mul > 1 ? P5.TAG2 : P5.TAG;
       b.hitboxes = HB;
       if (b.hp / b.maxHp < 0.25 && Math.random() < dt * 4 * decoK()) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 62, vx: M.rand(-10, 10), vy: -30, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
       txGoal(b);
