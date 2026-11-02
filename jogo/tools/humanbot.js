@@ -38,6 +38,7 @@
      --bossOnly 1 --startLv 4 --startW voto (pula direto ao chefão com essa arma)
      --press R (URL press=R: PRESSÃO fixa em R, 0..1)  --heat H (URL heat=H: calor inicial da partida)
      --quinto 1 (URL quinto=1: libera o LULE 5.0 mesmo sem a partida "sem recurso desde a fase 1")
+     --tune FILE.json (ajustes extras do NORMAL por cima do G.TUNE_NORMAL: { '<id>': { CAMPO: valor } }; testa sem editar o data.js)
      --cpi 1 (URL cpi=1 em todos os modos — run, ttk, mid, dps: joga no MODO CPI, a dificuldade bônus com os números
        do código; sem ele, NORMAL = os números do código + G.TUNE_NORMAL). Os relatórios dizem o modo ('modo: ...').
      --maxFight S (ttk: desiste do chefão depois de S s de luta; padrão 480, Lule 900)  --maxgt S (modo run, padrão 3600)
@@ -917,6 +918,16 @@ const HEAT = opt.heat != null && opt.heat !== '' && isFinite(+opt.heat) ? Math.m
 const QUINTO = opt.quinto === 1 || opt.quinto === '1' || opt.quinto === 'true' ? 1 : 0;
 // MODO CPI: --cpi 1 -> URL cpi=1 (todas as partidas, em todos os modos); o core diz o modo de verdade (G.debug.mode())
 const CPI = opt.cpi === 1 || opt.cpi === '1' || opt.cpi === 'true' ? 1 : 0;
+
+// --tune FILE.json: ajustes extras do NORMAL por cima do G.TUNE_NORMAL do data.js, sem editar o jogo
+// ({ '<id>': { CAMPO: valor } }; por id, os campos do arquivo vencem). Não vale com --cpi 1 (o CPI ignora TUNE_NORMAL).
+const TUNE = opt.tune ? JSON.parse(fs.readFileSync(path.resolve(String(opt.tune)), 'utf8')) : null;
+function tuneInit(t) {
+  const G = (window.G = window.G || {});
+  const merge = (x) => { const o = Object.assign({}, x || {}); for (const id in t) o[id] = Object.assign({}, (x && x[id]) || {}, t[id]); return o; };
+  let v = merge({});
+  Object.defineProperty(G, 'TUNE_NORMAL', { configurable: true, enumerable: true, get() { return v; }, set(x) { v = merge(x); } });
+}
 const modeName = (m) => (m === 'cpi' ? 'MODO CPI' : m === 'normal' ? 'NORMAL' : String(m));
 const maxFightFor = (id) => +opt.maxFight || (id === 'lule' ? 900 : 480);
 
@@ -929,6 +940,7 @@ async function runOne(browser, job) {
   const press = pressFor(job.mode);
   const cfg = Object.assign({ prof: PROFILES[job.profile] || PROFILES.casual, fast: opt.fast, shots: opt.shots, continues: opt.continues, ty: opt.ty,
     maxFight: maxFightFor(job.bossId), mech: MECH, press, heat: HEAT, quinto: QUINTO, cpi: CPI }, job);
+  if (TUNE) await page.addInitScript({ content: '(' + tuneInit.toString() + ')(' + JSON.stringify(TUNE) + ');' });
   await page.addInitScript({ content: '(' + pageMain.toString() + ')(' + JSON.stringify(cfg) + ');' });
   const q = new URLSearchParams({ stage: String(job.stage), loop: String(job.loop || 1), skipui: '1', autocontinue: '1', ts: String(opt.ts), quality: String(opt.quality || 'high') });
   if (job.mode !== 'run') q.set('god', '1');

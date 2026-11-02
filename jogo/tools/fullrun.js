@@ -2,7 +2,7 @@
 /* Partida completa automática: joga as 5 fases (piloto automático) e mede tempos.
    Rodoviária (Centrão) → Esplanada (Dilmãe) → Paranoá (Erika) → Fazenda (Taxad) → Planalto (Lule + Janjinha).
    node tools/fullrun.js [--page dev|index] [--god 1] [--ts 6] [--loop 1] [--timeout 1200] [--out DIR] [--shotsEvery 0]
-                         [--quality high] [--press R] [--heat H] [--quinto 0|1] [--stage 0] [--cpi 0|1]
+                         [--quality high] [--press R] [--heat H] [--quinto 0|1] [--stage 0] [--cpi 0|1] [--tune FILE.json]
    Sem --god (--god 0), usa autocontinue (recontagens) para seguir adiante e conta mortes por fase.
    --quality high|mid|low|auto (padrão high: o sandbox rasteriza na CPU e o modo auto baixaria a resolução).
    --press R / --heat H: PRESSÃO fixa em R / calor inicial (URL press= / heat=).
@@ -30,6 +30,15 @@ for (let i = 0; i < a.length; i += 2) o[a[i].replace(/^--/, '')] = isNaN(+a[i + 
   if (o.heat !== '' && isFinite(+o.heat)) q += '&heat=' + o.heat;
   if (+o.quinto === 1) q += '&quinto=1';
   if (+o.cpi === 1) q += '&cpi=1'; // MODO CPI
+  if (o.tune) { // --tune FILE.json: ajustes extras do NORMAL por cima do G.TUNE_NORMAL do data.js (por id, o arquivo vence)
+    const t = JSON.parse(fs.readFileSync(path.resolve(String(o.tune)), 'utf8'));
+    await page.addInitScript((t) => {
+      const G = (window.G = window.G || {});
+      const merge = (x) => { const r = Object.assign({}, x || {}); for (const id in t) r[id] = Object.assign({}, (x && x[id]) || {}, t[id]); return r; };
+      let v = merge({});
+      Object.defineProperty(G, 'TUNE_NORMAL', { configurable: true, enumerable: true, get() { return v; }, set(x) { v = merge(x); } });
+    }, t);
+  }
   await page.goto('file://' + path.resolve(__dirname, '..', o.page + '.html') + '?' + q);
   // continues infinitos para medir o jogo inteiro sem god
   if (!o.god) await page.evaluate(() => { const f = () => { if (G.run) G.run.maxContinues = 999; }; setInterval(f, 200); });
