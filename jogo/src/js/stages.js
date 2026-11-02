@@ -16,13 +16,17 @@
   const now = () => (G.game ? G.game.t : 0);
   const sp = (kind, x, y, o) => G.spawnEnemy(kind, x, y, o || {});
   const opt = (o, i) => (typeof o === 'function' ? o(i) : Object.assign({}, o || {}));
-  // PRESSÃO (sem o core novo vale 0): +1 inimigo por formação em lv ≥ 4, com teto por tipo
-  // (nunca nas fileiras row(), que têm espaçamento fixo)
+  // MODO CPI / NORMAL (core: G.tune): os números do bloco 'stages.T' são os do MODO CPI; o NORMAL só muda o que estiver
+  // em G.TUNE_NORMAL['stages.T'] (lido na hora, a cada formação / chuvisco).
+  const tune = G.tune || ((id, o) => o);
+  // PRESSÃO (sem o core novo vale 0): +EX inimigo por formação em lv ≥ EX_LV, com teto CAP por tipo
+  // (nunca nas fileiras row(), que têm espaçamento fixo); DRIZZLE = o chuvisco ×(1 − DRIZZLE·R);
+  // AMB_L2 = intervalo da pipoca de fundo no 2º Mandato (×)
+  const ST = tune('stages.T', { EX_LV: 4, EX: 1, CAP: { swarm: 10, vee: 9, bots: 11 }, DRIZZLE: 0.25, AMB_L2: 0.75 });
   const PRESS0 = { R: 0, lv: 0 };
   const press = () => G.press || PRESS0;
   const pR = () => { const R = +press().R; return R > 0 ? Math.min(1, R) : 0; };
-  const ex = (n, cap) => ((press().lv | 0) >= 4 ? Math.max(n, Math.min(cap, n + 1)) : n);
-  const CAP = { swarm: 10, vee: 9, bots: 11 };
+  const ex = (n, cap) => ((press().lv | 0) >= ST.EX_LV ? Math.max(n, Math.min(cap, n + ST.EX)) : n);
 
   // ======================================================================
   // Tempo e trilhas paralelas
@@ -88,7 +92,7 @@
   // um inimigo seguindo uma curva
   function fly(kind, pts, dur, o) { return sp(kind, pts[0][0], pts[0][1], Object.assign({ pts, dur }, o || {})); }
   // vários na mesma curva, um atrás do outro (cobrinha)
-  function* swarm(kind, n, gap, pts, dur, o) { n = ex(n, CAP.swarm); for (let i = 0; i < n; i++) { fly(kind, pts, dur, opt(o, i)); if (i < n - 1) yield gap; } }
+  function* swarm(kind, n, gap, pts, dur, o) { n = ex(n, ST.CAP.swarm); for (let i = 0; i < n; i++) { fly(kind, pts, dur, opt(o, i)); if (i < n - 1) yield gap; } }
   // fileira horizontal simultânea
   function row(kind, n, y, o, margin) {
     const m = margin != null ? margin : 40;
@@ -97,7 +101,7 @@
   // formação em V (ponta embaixo)
   function vee(kind, n, cx, o, dx, dy) {
     dx = dx || 34; dy = dy || 26;
-    n = ex(n, CAP.vee);
+    n = ex(n, ST.CAP.vee);
     for (let i = 0; i < n; i++) {
       const k = Math.ceil(i / 2), s = i % 2 ? -1 : 1;
       sp(kind, M.clamp(cx + s * k * dx, 16, W() - 16), -24 - k * dy, opt(o, i));
@@ -114,7 +118,7 @@
   function* drizzle(kind, dur, every, o) {
     const end = now() + dur;
     let i = 0;
-    while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every * (1 - 0.25 * pR()); }
+    while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every * (1 - ST.DRIZZLE * pR()); }
   }
   // bando de motoboys da picanha passando pela lateral (alturas escalonadas)
   function* moto(n, fromLeft, y0, dy, gap, o) {
@@ -126,7 +130,7 @@
   // enxame de bots fazendo curva
   function* bots(n, fromLeft, y, o) {
     const x = fromLeft ? -16 : W() + 16;
-    n = ex(n, CAP.bots);
+    n = ex(n, ST.CAP.bots);
     for (let i = 0; i < n; i++) {
       sp('bot', x, y, Object.assign({ path: 'curve', ang: fromLeft ? 0.35 : Math.PI - 0.35, spd: 150, turn: fromLeft ? 0.75 : -0.75, turnStop: 2.6 }, opt(o, i)));
       if (i < n - 1) yield 0.16;
@@ -134,7 +138,7 @@
   }
   // enxame de bots descendo do alto em S
   function* botRain(n, x, o) {
-    n = ex(n, CAP.bots);
+    n = ex(n, ST.CAP.bots);
     for (let i = 0; i < n; i++) {
       sp('bot', x, -16, Object.assign({ path: 'curve', ang: Math.PI / 2, spd: 135, turn: 1.4, flip: 1.1, phase: 0 }, opt(o, i)));
       if (i < n - 1) yield 0.17;
@@ -147,7 +151,7 @@
   function* ambient(kinds, every, flag) {
     let i = 0;
     while (!flag.done) {
-      yield every * M.rand(0.8, 1.25) * (G.game.loop > 1 ? 0.75 : 1);
+      yield every * M.rand(0.8, 1.25) * (G.game.loop > 1 ? ST.AMB_L2 : 1);
       if (flag.done) return;
       const g = G.game;
       let alive = 0, busy = false;

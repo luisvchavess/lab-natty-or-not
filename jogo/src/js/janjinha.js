@@ -36,6 +36,9 @@
   const L2 = () => !!(G.game && G.game.loop > 1);
   // partículas puramente decorativas: 'high' tudo, 'mid' metade, 'low' nada (ENGINE §10)
   const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
+  // MODO CPI / NORMAL (core: G.tune): os números do JN e do JX são os do MODO CPI; o NORMAL só muda o que estiver em
+  // G.TUNE_NORMAL['janjinha.JN'] / ['janjinha.JX']. Tudo é lido na hora (nada copiado no carregamento).
+  const tune = G.tune || ((id, o) => o);
 
   // ======================================================================
   // Afinação (SPEC5 §8.1). Os números ficam aqui (passe de balanço: só este bloco e o JX).
@@ -47,7 +50,7 @@
   // SOFA_* = sofazinhos (abaixo de SOFA_AT do HP); GAP = intervalo entre ataques; LION_DMG = mordida no cartão
   // (fração do HP dela); CARD_BACK = s até a segunda via; SCORE/PIX = prêmio do EMBARCOU PRO EXTERIOR!
   // ======================================================================
-  const JN = {
+  const JN = tune('janjinha.JN', {
     HP: 3000, SHIELD: 0.3, Y: 112, STOPS: [0.18, 0.82], DWELL: [4.0, 5.0], OUT: 0.7, OFF: 0.3, IN: 0.7, R: 26, ENTER: 1.6,
     FAT: 40, FAT_FULL: 30, LEAVE_T: 75, STUN_K: 1.5,
     CARD_N: 5, CARD_N_L2: 7, CARD_SPD: 150, CARD_SPREAD: 0.9, CARD_TELL: 0.45,
@@ -55,18 +58,27 @@
     GRAWLIX_N: 9, GRAWLIX_SPD: 130, ROCKET_WARN: 1.1, ROCKET_WARN_L2: 0.9, ROCKET_SPD: 330, ROCKET_SEP: 70,
     SOFA_AT: 0.5, SOFA_N: 3, SOFA_SPD: 110,
     GAP: 1.6, GAP_L2: 1.3, LION_DMG: 0.2, CARD_BACK: 12, SCORE: 150000, PIX: 60,
-  };
+  }, ['HP', 'SHIELD', 'DWELL', 'OUT', 'OFF', 'IN', 'ENTER', 'FAT', 'FAT_FULL', 'LEAVE_T', 'STUN_K',
+    'CARD_N', 'CARD_N_L2', 'CARD_SPD', 'CARD_SPREAD', 'CARD_TELL', 'MALA_N', 'MALA_SPD', 'MALA_Y', 'MALA_RING', 'MALA_RING_SPD',
+    'GRAWLIX_N', 'GRAWLIX_SPD', 'ROCKET_WARN', 'ROCKET_WARN_L2', 'ROCKET_SPD', 'ROCKET_SEP', 'SOFA_N', 'SOFA_SPD',
+    'GAP', 'GAP_L2', 'LION_DMG', 'CARD_BACK']);
+  // (fora do modo: Y/STOPS/R = lugar e caixa de acerto, SOFA_AT = degrau da escada de ataques, SCORE/PIX = prêmio)
   // Afinação de apoio (não está na SPEC; mesma regra do JN): JET_* = o jatinho da entrada (y, s até largar o sofá),
   // DROP = o sofá caindo do jatinho, DLG_AT = s depois de largar até o diálogo, SKIP_WAIT = espera sem diálogo,
   // EXIT = o embarque (KO ou saída), GRAWLIX_SPREAD / SOFA_SPREAD = abertura dos leques (rad), SOFA_GAP = s entre
   // os 3 leques de sofá, MALA_X = faixa (fração de W) para onde as malas descem, ROCKET_Y = y de saída do foguete,
   // ROCKET_SEP2 = folga extra aleatória da 2ª coluna, CHAT = intervalo das falas soltas, FIRST = 1º ataque depois de
   // entrar, ARRIVE = espera mínima ao chegar numa parada, ROPE_IN / ROPE_FALL = cordão subindo / caindo.
-  const JX = {
+  // GAP_LOW = fator do GAP abaixo de SOFA_AT, ROCKET_AT / ROCKET_END = s do grito até o foguete sair / até o fim do
+  // ataque, SOFA_FANS = leques de sofá, PN3 / PN5 = tiros a mais por leque com o Lule travado em lv ≥ 3 / lv 5.
+  const JX = tune('janjinha.JX', {
     JET_Y: 100, JET_IN: 1.4, DROP: 0.4, DLG_AT: 0.6, SKIP_WAIT: 1.6, EXIT: 2.2,
     GRAWLIX_SPREAD: 1.3, SOFA_SPREAD: 0.5, SOFA_GAP: 0.4, MALA_X: [0.2, 0.8], ROCKET_Y: 56, ROCKET_SEP2: 40,
     CHAT: [6, 9], FIRST: 1.0, ARRIVE: 0.5, ROPE_IN: 0.6, ROPE_FALL: 1.0,
-  };
+    GAP_LOW: 0.85, ROCKET_AT: 0.6, ROCKET_END: 0.8, SOFA_FANS: 3, PN3: 1, PN5: 1,
+  }, ['GRAWLIX_SPREAD', 'SOFA_SPREAD', 'SOFA_GAP', 'MALA_X', 'ROCKET_SEP2', 'CHAT', 'FIRST', 'ARRIVE',
+    'GAP_LOW', 'ROCKET_AT', 'ROCKET_END', 'SOFA_FANS', 'PN3', 'PN5']);
+  // (fora do modo: JET_* / DROP / DLG_AT / SKIP_WAIT / EXIT = cena de entrada e saída, ROCKET_Y e ROPE_* = desenho)
   // desenho: tamanho dela (Lule 136 continua a estrela), âncora da pessoa (y relativo a e.y), barra de HP
   const PS = 100, PY = -8, SY = 16, BAR_W = 64, BAR_H = 5, BAR_DY = 66, OFFX = 64; // SY: o sofá abaixo da âncora (o blazer aparece)
   const FLASH = 0.034, FLASH_CD = 0.35; // ≤ 3 flashes brancos por segundo (ela não é 'big')
@@ -114,7 +126,7 @@
   }
   // variantes da PRESSÃO (cópia local da fórmula do BossKit, com o nível travado do Lule, d.pl)
   function lvOf(b) { const d = b && b.data; if (d && d.pl != null) return d.pl; const pr = G.press; return (pr && pr.lv) || 0; }
-  const pN = (n, lv) => n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0);
+  const pN = (n, lv) => n + (lv >= 3 ? JX.PN3 : 0) + (lv >= 5 ? JX.PN5 : 0);
   function say(e, s, dur) { G.say(e, s, dur || 2); }
   function pose(jj, name, dur) { jj.pose = name; jj.poseT = dur || 0.8; }
   function mood(jj, name, dur) { jj.mood = name; jj.moodT = dur || 0.8; }
@@ -425,7 +437,7 @@
   // ======================================================================
   // Ataques
   // ======================================================================
-  function gapOf(e) { return (L2() ? JN.GAP_L2 : JN.GAP) * (e.hp / e.maxHp < JN.SOFA_AT ? 0.85 : 1); }
+  function gapOf(e) { return (L2() ? JN.GAP_L2 : JN.GAP) * (e.hp / e.maxHp < JN.SOFA_AT ? JX.GAP_LOW : 1); }
   function nextKind(e, jj) {
     const cyc = e.hp / e.maxHp < JN.SOFA_AT ? CYCLE_LOW : CYCLE;
     let k = cyc[jj.atkI % cyc.length];
@@ -528,10 +540,10 @@
             shoot(b, h.x, h.y, n > 1 ? ang - sp / 2 + (sp * i) / (n - 1) : ang, JN.GRAWLIX_SPD, { style: 'jan_grawlix', color: GRAWLIX[i % GRAWLIX.length][0] });
           }
           sfx('enemy_shot2');
-        } else if (a.step === 1 && a.t >= 0.6) {
+        } else if (a.step === 1 && a.t >= JX.ROCKET_AT) {
           a.step = 2;
           rocketReply(b, jj);
-        } else if (a.step === 2 && a.t >= 0.8) endAttack(e, jj);
+        } else if (a.step === 2 && a.t >= JX.ROCKET_END) endAttack(e, jj);
         break;
       }
       case 'sofa': {
@@ -544,7 +556,7 @@
           fan(b, h.x, h.y, G.aim(h.x, h.y), pN(JN.SOFA_N, lv), JX.SOFA_SPREAD, JN.SOFA_SPD, { style: 'jan_sofa', color: COL.violet });
           sfx('enemy_shot');
           a.n++; a.next += JX.SOFA_GAP;
-          if (a.n >= 3) { a.step = 2; a.end = a.t + 0.3; }
+          if (a.n >= JX.SOFA_FANS) { a.step = 2; a.end = a.t + 0.3; }
         } else if (a.step === 2 && a.t >= a.end) endAttack(e, jj);
         break;
       }
