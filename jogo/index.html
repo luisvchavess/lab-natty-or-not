@@ -357,6 +357,23 @@ html { font-size: calc(10px * var(--gs, 1)); }
   animation: u-drop .4s cubic-bezier(.2, .9, .3, 1.2) both .1s;
 }
 #ui .chip span { display: flex; flex-direction: column; line-height: 1; }
+/* recorde do MODO CPI: borda vermelho-magenta e a plaquinha no canto (não muda o tamanho do chip) */
+#ui .chip-best { position: relative; }
+#ui .chip-best.is-cpi { border-color: rgba(255, 61, 127, .85); }
+#ui .chip-cpi {
+  position: absolute;
+  top: -.75rem;
+  right: .4rem;
+  padding: .2rem .4rem .15rem;
+  border-radius: .3rem;
+  background: #ff3d7f;
+  color: #fff;
+  font: 900 .78rem/1 var(--font-display);
+  font-style: normal;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  box-shadow: 0 .15rem 0 #b3124f;
+}
 #ui .chip small { font: 800 .88rem/1 var(--font-body); letter-spacing: .14em; color: rgba(255, 255, 255, .62); }
 #ui .chip b { margin-top: .2rem; font: 900 1.5rem/1.1 var(--font-display); color: #fff; }
 #ui .chip-pix b { color: #85f2e4; }
@@ -712,6 +729,37 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .tiny .has-final .sant:not(.final) .sant-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #ui .tiny .has-final .sant.final .sant-photo { min-height: 5rem; }
 
+/* ---------- dificuldade: NORMAL | MODO CPI (no alto da tela FASES) ----------
+   Duas teclas coladas e a frase embaixo. MODO CPI ligado = vermelho-magenta (#ff3d7f), nunca verde-água. */
+#ui .mode-pick { flex: none; margin: 0 0 .8rem; }
+#ui .mode-seg { display: flex; padding: .25rem; border: .2rem solid var(--u-lcd-ink); border-radius: .9rem; background: #c4cab9; gap: .25rem; }
+/* (.mode-seg na frente: as regras gerais do .seg-b vêm depois neste arquivo) */
+#ui .mode-seg .mode-b { min-height: 2.9rem; border-width: 0; border-radius: .6rem; background: transparent; font-size: 1.2rem; letter-spacing: .03em; color: #4a5a4e; }
+#ui .mode-seg .mode-b.on { background: var(--u-lcd-ink); color: #fff; box-shadow: inset 0 -.25rem 0 rgba(0, 0, 0, .3); }
+#ui .mode-seg .mode-b[data-mode="cpi"].on { background: #ff3d7f; color: #fff; box-shadow: inset 0 -.25rem 0 #b3124f; text-shadow: 0 .1rem 0 rgba(90, 0, 30, .45); }
+#ui .mode-pick.is-cpi .mode-seg { border-color: #b3124f; background: #f2c2d2; }
+#ui .mode-line { margin: .4rem 0 0; font: 700 1rem/1.15 var(--font-body); color: var(--u-lcd-dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui .mode-pick.is-cpi .mode-line { color: #b3124f; }
+#ui .scr-stages.is-cpi .lcd-head { border-bottom-color: #ff3d7f; }
+#ui .scr-stages .sant-grid.has-final { gap: .8rem; }
+/* telas baixas: o seletor e os santinhos apertam para as 5 fases continuarem sem rolar
+   (as fotos 2×2 só ficam no mínimo quando o texto do santinho já é a parte mais alta) */
+#ui .short .mode-pick { margin-bottom: .5rem; }
+#ui .short .mode-seg { padding: .15rem; }
+#ui .short .mode-seg .mode-b { min-height: 2.3rem; font-size: 1.1rem; }
+#ui .short .mode-line { margin-top: .25rem; font-size: .98rem; }
+#ui .short.scr-stages .lcd-head { padding: .55rem 1.1rem .45rem; }
+#ui .short.scr-stages .lcd-titles small { margin-bottom: .2rem; }
+#ui .short.scr-stages .sant-grid.has-final { gap: .55rem; }
+#ui .short.scr-stages .has-final .sant { padding-bottom: .4rem; }
+#ui .short.scr-stages .has-final .sant.final { padding-bottom: 0; }
+#ui .short.scr-stages .has-final .sant:not(.final) .sant-photo { flex-basis: 3.4rem; min-height: 3.4rem; }
+#ui .short.scr-stages .has-final .sant.final .sant-photo { min-height: 4.8rem; }
+#ui .short.scr-stages .has-final .sant-name { margin-top: .4rem; }
+/* nome do chefão numa linha só: altura de linha maior para o til (O CENTRÃO, DILMÃE) não ser cortado */
+#ui .short.scr-stages .has-final .sant-boss { line-height: 1.3; }
+#ui .tiny .mode-seg .mode-b { min-height: 2.2rem; }
+
 /* ============================================================
    HISTÓRIA (quadrinhos)
    ============================================================ */
@@ -1009,6 +1057,9 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .rc-row.rc-goldrow .v { color: #a87b00; }
 /* COM RECURSO: etiqueta vermelha no cabeçalho do boletim */
 #ui .rc-tag { display: inline-block; margin-top: .45rem; padding: .25rem .55rem .2rem; border: .2rem solid #c8323e; border-radius: .35rem; color: #c8323e; font: 900 1rem/1 var(--font-display); letter-spacing: .05em; transform: rotate(-2deg); }
+/* MODO CPI: etiqueta cheia (vermelho-magenta) antes da COM RECURSO; as duas podem aparecer juntas */
+#ui .rc-tag.rc-cpi { border-color: #d81b60; background: #ff3d7f; color: #fff; transform: rotate(2deg); }
+#ui .rc-tag + .rc-tag { margin-left: .5rem; }
 /* CARIMBO DE OURO: selo dourado que entra depois da nota */
 #ui .rc-gold {
   display: flex;
@@ -1287,6 +1338,9 @@ html { font-size: calc(10px * var(--gs, 1)); }
   transform: rotate(-5deg);
   animation: u-fin-stamp .34s cubic-bezier(.3, 1.4, .5, 1) both .9s;
 }
+/* CPI ENCERRADA!: o mesmo carimbo, em vermelho-magenta, numa linha só dele (bate primeiro; o SEM RECURSO! logo depois) */
+#ui .fin-stamp.fin-cpi { border-color: #ff3d7f; color: #ff6b9b; }
+#ui .fin-stamp.fin-2nd { animation-delay: 1.3s; }
 #ui .rm .fin-stamp { animation: none; }
 @keyframes u-fin-stamp { 0% { opacity: 0; transform: rotate(-18deg) scale(2.6); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
 #ui .fin .k-menu { max-width: 30rem; }
@@ -1467,7 +1521,8 @@ body.in-play #toasts { opacity: 0; }
 <script>/* data.js */
 /* ============================================================
    FUSCA A JATO — data.js
-   Textos da história, armas, melhorias (lojinha) e conquistas.
+   Textos da história, armas, melhorias (lojinha), conquistas e os
+   ajustes do modo NORMAL sobre o MODO CPI (G.TUNE_NORMAL).
    Carregado ANTES do core.js.
    ============================================================ */
 (function () {
@@ -1514,6 +1569,18 @@ body.in-play #toasts { opacity: 0; }
     { id: 'recurso', name: 'Embargos de Declaração',   desc: '+1 recurso em toda partida',                 costs: [2500, 6000] },
   ];
 
+  // ---------- Modos de dificuldade: o que o NORMAL muda em relação ao MODO CPI ----------
+  // Os números escritos nos módulos (registrados com G.tune('<modulo>.<BLOCO>', obj), veja docs/ENGINE.md
+  // "Modos") são os do MODO CPI, a dificuldade bônus, e nunca são mexidos para facilitar. O modo NORMAL é o
+  // mesmo jogo depois do balanço: TODA mudança que deixa o jogo mais FÁCIL entra só aqui, por bloco e campo:
+  //   G.TUNE_NORMAL = { 'taxad.TX': { ARC_SPD: 26 }, 'erika.T': { HP: 7600 }, 'core.T': { EXTENDS: [1500000, 4000000, 8000000] } };
+  // (array ou objeto entra inteiro no lugar do valor do CPI, no mesmo objeto). Mudança que deixa o jogo mais
+  // DIFÍCIL ou mais JUSTO para os dois (ex.: abrir um vão de uma parede de tiros) vai direto no valor do módulo.
+  // Preços da Lojinha (G.UPGRADES), recursos, fases e padrões são iguais nos dois modos.
+  // Campo que não bate com nada registrado aparece em G.tuneCheck().bad (os testes exigem []).
+  // Vazio = o NORMAL ainda é igual ao MODO CPI (antes do balanço).
+  G.TUNE_NORMAL = {};
+
   // ---------- Conquistas ----------
   // counter/goal: liberada automaticamente quando G.count(counter) chega na meta.
   G.ACHIEVEMENTS = [
@@ -1544,6 +1611,8 @@ body.in-play #toasts { opacity: 0; }
     { id: 'carimbo_ouro', name: 'Nota de Ouro',         desc: 'Ganhe 3 Carimbos de Ouro na mesma partida' },
     { id: 'cpi',          name: 'Instalaram a CPI',     desc: 'Derrote um chefão com a PRESSÃO em CPI!' },
     { id: 'transito',     name: 'Trânsito em Julgado',  desc: 'Vença um mandato inteiro sem entrar com recurso (libera o Fusca Dourado)' },
+    // MODO CPI (a dificuldade bônus): liberada pelo core no fim do 1º Mandato jogado inteiro no MODO CPI
+    { id: 'cpi_mandato',  name: 'CPI Encerrada',        desc: 'Vença o 1º Mandato no MODO CPI.' },
     { id: 'quinto',       name: 'Quinto Mandato? Não!', desc: 'Derrote o Lule 5.0' },
   ];
 
@@ -1853,11 +1922,13 @@ body.in-play #toasts { opacity: 0; }
     return {
       // saveV: versão do save (5 = jogo de 5 fases; os saves antigos não têm o campo e são migrados no loadSave)
       saveV: 5,
-      pix: 0, upgrades: {}, unlocked: 1, best: 0, cleared: false, cleared2: false, seenIntro: false,
+      // best / bestCpi: recorde de cada modo (NORMAL / MODO CPI)
+      pix: 0, upgrades: {}, unlocked: 1, best: 0, bestCpi: 0, cleared: false, cleared2: false, seenIntro: false,
       achievements: {}, counters: {},
       // quality: 'auto' (o jogo escolhe pelo desempenho) | 'high' | 'mid' | 'low'
       // skin: 'azul' | 'ouro' (FUSCA DOURADO: só vale com a conquista 'transito')
-      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto', skin: 'azul' },
+      // mode: 'normal' | 'cpi' (MODO CPI, a dificuldade bônus; escolhido na tela FASES)
+      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto', skin: 'azul', mode: 'normal' },
       qualityTier: 'high', // nível escolhido pelo modo automático (lembrado entre sessões)
     };
   }
@@ -1894,7 +1965,8 @@ body.in-play #toasts { opacity: 0; }
   G.saveGame = function () { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.save)); } catch (e) { /* nada */ } };
   if (migrated) G.saveGame(); // grava a migração na hora (saveV 5)
   // APAGAR PROGRESSO: a qualidade volta para 'auto' (começando do 'high') e o medidor recomeça
-  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); };
+  // (o modo volta para o NORMAL: os números dos menus acompanham)
+  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); if (!runLive) G.applyMode(selMode()); };
   G.upg = (id) => G.save.upgrades[id] || 0;
   G.upgradeCost = function (id) {
     const u = G.UPGRADES.find((x) => x.id === id);
@@ -1984,7 +2056,8 @@ body.in-play #toasts { opacity: 0; }
   //  drawOver: def.drawOver(ctx, b, g) desenha por cima dos tiros e lasers; mech: b.mech + G.debug.mech().
   //  Rodada 5: postLines (G.game.postLines troca as falas do fim da fase), press (PRESSÃO: G.press / G.PRESS),
   //  lastPhase (fase com last: true mostra 'ÚLTIMO RECURSO'), defeatText (b.defeatText no carimbo).
-  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true, postLines: true, press: true, lastPhase: true, defeatText: true };
+  //  mode: NORMAL / MODO CPI (G.tune, G.applyMode, G.mode(); ENGINE.md "Modos").
+  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true, postLines: true, press: true, lastPhase: true, defeatText: true, mode: true };
 
   // ===================== Estilos de tiro inimigo (sprites em cache) =====================
   // def: { r: raio de colisão, size: tamanho do sprite em px lógicos, rotate: gira na direção do tiro,
@@ -2437,11 +2510,101 @@ body.in-play #toasts { opacity: 0; }
   }
   G.vibrate = function (ms) { if (!G.save.settings.vibrate) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* nada */ } };
 
+  // ===================== Modos de dificuldade: NORMAL e MODO CPI (bônus) =====================
+  // Cada módulo registra seus blocos de números com G.tune(id, obj[, keys]) (ids 'modulo.BLOCO', ex. 'taxad.TX').
+  // Os valores escritos no código são os do MODO CPI (a dificuldade pesada). Os ajustes do modo NORMAL ficam todos
+  // num lugar só, G.TUNE_NORMAL (data.js): { 'taxad.TX': { ARC_SPD: 26 }, 'erika.T': { HP: 7600 } }.
+  // G.applyMode(mode) devolve tudo ao valor do CPI e, no NORMAL, aplica os ajustes. Arrays e objetos são alterados
+  // no lugar (quem guardou a referência vê a mudança). Só o que é lido em tempo de jogo muda: nada de copiar um
+  // número registrado para uma constante solta no carregamento do módulo.
+  const TUNES = {};
+  let tuneMode = null;
+  let tuneGen = 0; // sobe a cada applyMode (quem guarda uma cópia mesclada sabe que precisa refazer: PC())
+  function tSnap(v) {
+    if (Array.isArray(v)) return v.map(tSnap);
+    if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) { const o = {}; for (const k in v) o[k] = tSnap(v[k]); return o; }
+    return v;
+  }
+  function tPut(obj, k, v) {
+    const cur = obj[k];
+    if (Array.isArray(v) && Array.isArray(cur)) { cur.length = 0; for (let i = 0; i < v.length; i++) cur.push(tSnap(v[i])); return; }
+    if (v && typeof v === 'object' && !Array.isArray(v) && cur && typeof cur === 'object' && !Array.isArray(cur)) { for (const kk in v) tPut(cur, kk, v[kk]); return; }
+    obj[k] = tSnap(v);
+  }
+  function tApply(id) {
+    const t = TUNES[id];
+    for (const k in t.base) tPut(t.obj, k, t.base[k]);
+    const ov = tuneMode === 'normal' && G.TUNE_NORMAL && G.TUNE_NORMAL[id];
+    if (ov) for (const k in ov) if (k in t.base) tPut(t.obj, k, ov[k]);
+  }
+  G.tune = function (id, obj, keys) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const base = {};
+    for (const k of (keys || Object.keys(obj))) if (typeof obj[k] !== 'function') base[k] = tSnap(obj[k]);
+    TUNES[id] = { obj, base };
+    if (tuneMode) tApply(id); // módulo carregado depois do applyMode: já entra no modo certo
+    return obj;
+  };
+  G.applyMode = function (mode) {
+    tuneMode = mode === 'cpi' ? 'cpi' : 'normal';
+    tuneGen++;
+    for (const id in TUNES) tApply(id);
+    return tuneMode;
+  };
+  G.tuneMode = function () { return tuneMode || 'normal'; };
+  // testes: ajustes do NORMAL que não batem com nada registrado (erro de digitação no balanço não passa calado)
+  G.tuneCheck = function () {
+    const bad = [], tn = G.TUNE_NORMAL || {};
+    for (const id in tn) {
+      if (!TUNES[id]) { bad.push(id + ' (bloco não registrado)'); continue; }
+      for (const k in tn[id]) if (!(k in TUNES[id].base)) bad.push(id + '.' + k);
+    }
+    return { ids: Object.keys(TUNES), bad };
+  };
+  // testes: os valores registrados como estão agora ({ id: { campo: valor } }; G.debug.tunes())
+  function tuneDump(only) {
+    const out = {};
+    for (const id in TUNES) {
+      if (only && id !== only) continue;
+      const t = TUNES[id], o = {};
+      for (const k in t.base) o[k] = tSnap(t.obj[k]);
+      out[id] = o;
+    }
+    return out;
+  }
+
+  // ---------- O modo da partida ----------
+  // G.save.settings.mode guarda a escolha da tela FASES ('normal' é o padrão; o MODO CPI vale desde o começo).
+  // URL ?cpi=1 / ?cpi=0 força um modo só nesta sessão (o save não muda; tocar no seletor da tela vale mais).
+  // G.startRun trava run.mode e chama G.applyMode ANTES de montar a partida; recursos e as fases seguintes
+  // continuam no mesmo modo. G.mode(): run.mode durante a partida (de G.startRun a G.toMenu), senão a escolha.
+  // Recompensas do MODO CPI (não são números de dificuldade: ficam fora do registro): pontos ×1,5 (G.addScore,
+  // junto com a PRESSÃO) e Pix ×1,25 (G.dropPix, mesmo com noPress, e o Pix da nota no fim da fase).
+  const MODE_SCORE = 1.5, MODE_PIX = 1.25;
+  let modeForce = null; // ?cpi=1 -> 'cpi', ?cpi=0 -> 'normal'
+  let runLive = false;  // entre G.startRun e G.toMenu
+  const normMode = (m) => (m === 'cpi' ? 'cpi' : 'normal');
+  function selMode() { return modeForce || normMode(G.save && G.save.settings && G.save.settings.mode); }
+  G.mode = () => (runLive && G.run && G.run.mode) || selMode();
+  // seletor da tela FASES: grava a escolha e já põe os números do modo nos menus (demos do Como Jogar)
+  G.setMode = function (m) {
+    m = normMode(m);
+    modeForce = null;
+    G.save.settings.mode = m;
+    G.saveGame();
+    if (!runLive) G.applyMode(m);
+    return m;
+  };
+  const cpiRun = () => !!(G.run && G.run.mode === 'cpi');
+  // recorde de cada modo: save.best (NORMAL) e save.bestCpi (MODO CPI)
+  G.bestFor = (m) => (normMode(m) === 'cpi' ? G.save.bestCpi : G.save.best) || 0;
+
   // ===================== PRESSÃO (dificuldade dinâmica) =====================
   // Um "rank" visível de 0 a 1 (G.press.R). Sobe com o nível da arma (forte no 4-5) e com o tempo vivo
   // (run.heat); cai na morte e na Delação. Acelera e adensa os tiros, engrossa os inimigos e PAGA de volta:
   // pontos ×(1+R), mais Pix, tonto do chefão mais forte. (g.rank continua sendo a nota S/A/B/C da fase.)
-  // Bloco de ajuste do balanço: G.PRESS pode ser trocado inteiro; o que faltar volta para estes padrões.
+  // Bloco de ajuste do balanço ('core.PRESS'; estes são os valores do MODO CPI, o NORMAL vem de G.TUNE_NORMAL).
+  // G.PRESS pode ser trocado inteiro (testes); o que faltar na troca vem deste bloco, no modo aplicado.
   const PRESS = {
     W: [0, 0.04, 0.10, 0.20, 0.35],       // peso por run.level 1..5 (concentrado no 4-5)
     TURBO: 0.02,                          // por nível de G.upg('turbo')
@@ -2459,17 +2622,33 @@ body.in-play #toasts { opacity: 0; }
     STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
     GOLD_AVG: 0.5, GOLD_PIX: 400,
   };
-  const PRESS_DEF = JSON.parse(JSON.stringify(PRESS));
+  // Registro dos modos (bloco 'core.PRESS'): os números acima são os do MODO CPI; o NORMAL aplica
+  // G.TUNE_NORMAL['core.PRESS'] por cima, no próprio objeto. NAMES e COLORS são texto e desenho: ficam fora.
+  G.tune('core.PRESS', PRESS, Object.keys(PRESS).filter((k) => k !== 'NAMES' && k !== 'COLORS'));
   G.PRESS = PRESS;
-  // constantes em uso: o próprio PRESS (ajustes nele valem na hora) ou a troca completada com os padrões
-  let pcRef = null, pcObj = PRESS_DEF;
+  // constantes em uso: o próprio PRESS (no modo aplicado), ou a troca de G.PRESS (testes) completada com ele.
+  // A cópia mesclada é refeita quando G.PRESS muda de objeto ou quando o modo é aplicado de novo (tuneGen):
+  // o que a troca não traz segue o modo; o que ela traz vale como está.
+  let pcRef = null, pcObj = PRESS, pcGen = -1;
   function PC() {
     const p = G.PRESS;
     if (p === PRESS) return PRESS;
-    if (!p || typeof p !== 'object') return PRESS_DEF;
-    if (p !== pcRef) { pcRef = p; pcObj = Object.assign({}, PRESS_DEF, p); }
+    if (!p || typeof p !== 'object') return PRESS;
+    if (p !== pcRef || pcGen !== tuneGen) { pcRef = p; pcGen = tuneGen; pcObj = Object.assign({}, PRESS, p); }
     return pcObj;
   }
+  // Números soltos do core que o balanço pode mexer (bloco 'core.T'; os valores aqui são os do MODO CPI).
+  // Todos lidos na hora do jogo (nada copiado no carregamento). Recompensas (SEM ARRANHÃO!, nota, Pix da
+  // nota, bônus do fim da fase) não entram: são iguais nos dois modos.
+  const T = G.tune('core.T', {
+    POWER_NEED: [0, 2, 3, 4, 4],          // P para subir do nível lv para lv+1 (G.powerNeed; 13 P do nível 1 ao 5)
+    EXTENDS: [1500000, 4500000, 9000000], // vidas extras pelos pontos da partida inteira (run.total)
+    RESTORE_LIFE: 7,                      // s que o P "de volta" (o nível perdido na morte) fica na tela
+    GRAZE_BOMB: 1.0,                      // carga da Delação de graça por raspão (100 = uma Delação)
+    RESPAWN_INV: 3,                       // s de invencibilidade quando o Fusca volta depois de uma morte
+    START_LIVES: 3, START_BOMBS: 2,       // vidas e Delações no começo da partida (+ as melhorias da Lojinha)
+    L2_DIFF: 1.15, L2_EHP: 1.3, L2_BHP: 1.25, // 2º Mandato: velocidade dos tiros, vida dos inimigos, vida do chefão
+  });
   // um objeto só, atualizado a cada quadro de jogo (os módulos leem G.press.R / G.press.lv)
   G.press = { R: 0, lv: 0, name: PRESS.NAMES[0], color: PRESS.COLORS[0], tgt: 0 };
   G.pressK = (k) => 1 + k * G.press.R;
@@ -2555,7 +2734,7 @@ body.in-play #toasts { opacity: 0; }
     const st = G.Stages.list[stageIdx];
     const g = {
       t: 0, frame: 0, stageIdx, stage: st, loop: G.run.loop,
-      diff: G.run.loop > 1 ? 1.15 : 1, // multiplicador de velocidade dos tiros inimigos
+      diff: G.run.loop > 1 ? T.L2_DIFF : 1, // multiplicador de velocidade dos tiros inimigos
       player: null, enemies: [], eb: [], pb: [], pickups: [], parts: [], texts: [], lasers: [], fx: [],
       boss: null, banner: null, stamp: null, shake: 0, hitstop: 0, flashA: 0, flashC: '#fff',
       scrollY: 0, scrollSpeed: st && st.scrollSpeed ? st.scrollSpeed : 42,
@@ -2590,7 +2769,7 @@ body.in-play #toasts { opacity: 0; }
     const def = G.Enemies.defs[kind];
     if (!def) { G.reportError('Inimigo inexistente: ' + kind, 'spawnEnemy'); return null; }
     o = o || {};
-    const hpMul = g.loop > 1 ? 1.3 : 1;
+    const hpMul = g.loop > 1 ? T.L2_EHP : 1;
     const e = {
       kind, def, x, y, vx: o.vx || 0, vy: o.vy || 0, r: o.r || def.r || 14,
       hp: (o.hp || def.hp || 5) * hpMul, t: 0, flash: 0, dead: false,
@@ -2674,10 +2853,12 @@ body.in-play #toasts { opacity: 0; }
     g.pickups.push(it);
     return it;
   };
-  // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: valor exato), arredondado na sorte
+  // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: sem a PRESSÃO), arredondado na sorte.
+  // MODO CPI: ×1,25 sempre (é prêmio do modo, não da PRESSÃO: vale também com noPress)
   G.dropPix = function (x, y, amount, o) {
     let a = +amount || 0;
     if (!(o && o.noPress)) a *= 1 + PC().PIX * G.press.R;
+    if (cpiRun()) a *= MODE_PIX;
     const fa = Math.floor(a);
     let left = fa + (Math.random() < a - fa ? 1 : 0);
     while (left > 0) {
@@ -2802,10 +2983,10 @@ body.in-play #toasts { opacity: 0; }
 
   // ===================== Placar / aprovação =====================
   G.mult = function () { const g = G.game; return g ? 1 + g.approval / 25 : 1; };
-  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que o recurso
+  // Vidas extras por pontuação (T.EXTENDS). Contam os pontos da partida inteira (run.total), que o recurso
   // NÃO zera: cada marca só dá vida uma vez por partida.
-  const EXTENDS = [1500000, 4500000, 9000000];
   function checkExtends(run) {
+    const EXTENDS = T.EXTENDS;
     while ((run.extGiven || 0) < EXTENDS.length && (run.total || 0) >= EXTENDS[run.extGiven || 0]) {
       run.extGiven = (run.extGiven || 0) + 1;
       run.lives = Math.min(9, run.lives + 1);
@@ -2815,10 +2996,11 @@ body.in-play #toasts { opacity: 0; }
   }
   G.addScore = function (base, x, y, showText) {
     const run = G.run; if (!run) return 0;
-    const pts = Math.round(base * G.mult() * (1 + PC().SCORE * G.press.R)); // PRESSÃO paga: pontos ×(1+R)
+    // PRESSÃO paga: pontos ×(1+R); o MODO CPI paga ×1,5 por cima
+    const pts = Math.round(base * G.mult() * (1 + PC().SCORE * G.press.R) * (run.mode === 'cpi' ? MODE_SCORE : 1));
     run.score += pts;
     run.total = (run.total || 0) + pts;
-    if (run.total >= EXTENDS[run.extGiven || 0]) checkExtends(run);
+    if (run.total >= T.EXTENDS[run.extGiven || 0]) checkExtends(run);
     if (showText && x != null) G.text(x, y, G.fmt(pts), { color: '#fff', size: 10, life: 0.7 });
     return pts;
   };
@@ -2899,7 +3081,7 @@ body.in-play #toasts { opacity: 0; }
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
     // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,00 (R 0,75) … ×1,07 (R 1)
     const P = PC(), R = G.press.R;
-    const hpMul = (g.loop > 1 ? 1.25 : 1) * (P.BHP0 + P.BHP1 * R);
+    const hpMul = (g.loop > 1 ? T.L2_BHP : 1) * (P.BHP0 + P.BHP1 * R);
     const b = {
       id, def, name: def.name || id.toUpperCase(), title: def.title || '', press0: R,
       x: G.W / 2, y: -160, homeX: G.W / 2, homeY: def.homeY || 150, r: def.r || 40, hitboxes: null,
@@ -3234,7 +3416,7 @@ body.in-play #toasts { opacity: 0; }
       if (p.respawnT <= 0) {
         if (run.lives <= 0) { gameOver(); return; }
         // o dedo que ficou na tela continua valendo: reancora quando o carro terminar de entrar
-        p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.tx = G.W / 2; p.ty = G.H * 0.8; p.inv = 3;
+        p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.tx = G.W / 2; p.ty = G.H * 0.8; p.inv = T.RESPAWN_INV;
       }
       return;
     }
@@ -3320,8 +3502,8 @@ body.in-play #toasts { opacity: 0; }
     run.level = Math.max(1, run.level - 1);
     run.pp = 0; // a barra de força do próximo nível zera
     // o nível perdido cai como um P "de volta" (cor da arma, sem trocar de cor): pegou, recupera o nível na hora.
-    // Dura 7 s (pisca nos 2 últimos) e some.
-    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true, life: 7 });
+    // Dura T.RESTORE_LIFE s (7; pisca nos 2 últimos) e some.
+    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true, life: T.RESTORE_LIFE });
     else if (M.chance(0.5)) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon });
     run.bombs = Math.max(run.bombs, run.baseBombs);
     pressOnDeath(p);
@@ -3363,9 +3545,8 @@ body.in-play #toasts { opacity: 0; }
     return true;
   };
 
-  // Quantos P para subir do nível lv para lv+1 (13 P do nível 1 ao 5)
-  const POWER_NEED = [0, 2, 3, 4, 4];
-  function powerNeed(lv) { return POWER_NEED[lv] || 4; }
+  // Quantos P para subir do nível lv para lv+1 (T.POWER_NEED: 13 P do nível 1 ao 5)
+  function powerNeed(lv) { return T.POWER_NEED[lv] || 4; }
   G.powerNeed = powerNeed;
   function collectPickup(it) {
     const g = G.game, run = G.run, p = g.player;
@@ -3554,7 +3735,7 @@ body.in-play #toasts { opacity: 0; }
         g.grazes++; run.grazes++;
         G.addScore(40);
         G.addApproval(0.3);
-        g.delacao += 1.0; // 100 raspões por Delação de graça
+        g.delacao += T.GRAZE_BOMB; // 1,0: 100 raspões por Delação de graça
         if (g.delacao >= 100) {
           g.delacao = 0;
           G.drop('bomb', p.x, p.y - 60, { vy: -60, magnet: true });
@@ -4018,7 +4199,7 @@ body.in-play #toasts { opacity: 0; }
   // A faixa de cima (votos, Pix, vidas, aprovação) vai para um canvas guardado e só é redesenhada
   // quando algum valor muda (no máximo ~15x/s para o placar). A barra do chefão e a arma são diretas.
   const HUD_BAND_H = 48;
-  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1 };
+  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1, mode: '' };
   function paintHudBand(g, run, k) {
     const W = G.W, hc = hudCache;
     if (!hc.c || hc.k !== k) {
@@ -4057,10 +4238,21 @@ body.in-play #toasts { opacity: 0; }
     const ap = Math.round(g.approval) / 100;
     x.fillStyle = ap > 0.66 ? G.C.greenL : ap > 0.33 ? G.C.yellow : G.C.red;
     x.fillRect(ax, ay, aw * ap, 5);
-    // o multiplicador mostrado já inclui a PRESSÃO (pontos ×(1+R))
-    const P = PC(), pr = G.press;
+    // o multiplicador mostrado já inclui a PRESSÃO (pontos ×(1+R)) e o MODO CPI (×1,5)
+    const P = PC(), pr = G.press, cpi = run.mode === 'cpi';
     x.textAlign = 'center'; x.font = '700 10px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.85)';
-    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + (G.mult() * (1 + P.SCORE * pr.R)).toFixed(1).replace('.', ','), W / 2, ay - 3);
+    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + (G.mult() * (1 + P.SCORE * pr.R) * (cpi ? MODE_SCORE : 1)).toFixed(1).replace('.', ','), W / 2, ay - 3);
+    // MODO CPI: plaquinha vermelha no alto, no meio (entre o placar e o Pix, acima da aprovação)
+    if (cpi) {
+      x.font = '8px ' + G.FONT_DISPLAY;
+      const tw = Math.ceil(x.measureText('MODO CPI').width), cw = tw + 10, cx = Math.round(W / 2 - cw / 2), cy = 3;
+      x.fillStyle = '#ff3d7f';
+      x.beginPath();
+      if (x.roundRect) x.roundRect(cx, cy, cw, 12, 3); else x.rect(cx, cy, cw, 12);
+      x.fill();
+      x.fillStyle = '#ffffff'; x.textAlign = 'center';
+      x.fillText('MODO CPI', W / 2, cy + 9);
+    }
     // PRESSÃO: rótulo + 5 casas entre a barra da aprovação (acaba em W/2 + 50) e o botão de pausa (W - 48).
     // As casas cheias usam a cor do nível; a próxima enche aos poucos (do limiar atual ao próximo).
     // Em CPI! (lv 5) o rótulo sai daqui: o drawHUD pisca 'CPI!' a cada quadro.
@@ -4087,12 +4279,12 @@ body.in-play #toasts { opacity: 0; }
     k = k || scale * dpr;
     // faixa de cima (guardada)
     const apr = Math.round(g.approval);
-    const plv = G.press.lv, ppr = Math.round(G.press.R * 50);
+    const plv = G.press.lv, ppr = Math.round(G.press.R * 50), md = run.mode || 'normal';
     const now = performance.now();
-    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives || hc.plv !== plv || hc.pr !== ppr;
-    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || hc.plv !== plv || now - hc.t >= 66))) {
+    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives || hc.plv !== plv || hc.pr !== ppr || hc.mode !== md;
+    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || hc.plv !== plv || hc.mode !== md || now - hc.t >= 66))) {
       paintHudBand(g, run, k);
-      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.plv = plv; hc.pr = ppr; hc.t = now;
+      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.plv = plv; hc.pr = ppr; hc.mode = md; hc.t = now;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(hc.c, 0, 0);
@@ -4190,6 +4382,8 @@ body.in-play #toasts { opacity: 0; }
   G.toMenu = function () {
     G.state = 'menu';
     G.game = null;
+    runLive = false;
+    G.applyMode(selMode()); // menus e demos do Como Jogar com os números do modo escolhido
     setPlayButtons(false);
     call(G.Audio, 'music', 'menu');
     call(G.UI, 'title');
@@ -4197,9 +4391,16 @@ body.in-play #toasts { opacity: 0; }
   G.startRun = function (stageIdx, loop) {
     stageIdx = stageIdx || 0;
     loop = loop || 1;
-    const lives = 3 + G.upg('vida');
-    const bombs = 2 + G.upg('bomba');
+    // o modo vale para a partida inteira (recursos e fases seguintes): os números entram no lugar ANTES de
+    // qualquer coisa da partida (vidas, PRESSÃO inicial, primeira fase, vida travada do chefão)
+    const mode = selMode();
+    G.applyMode(mode);
+    runLive = true;
+    const lives = T.START_LIVES + G.upg('vida');
+    const bombs = T.START_BOMBS + G.upg('bomba');
     G.run = {
+      mode,                     // 'normal' | 'cpi' (G.mode(), G.debug.mode())
+      cpiSign: mode === 'cpi',  // aviso 'MODO CPI: SEM MOLEZA!' pendente (primeiro quadro de jogo; recurso não repete)
       loop, stageIdx, startStage: stageIdx, score: 0, lives, baseLives: lives, bombs, baseBombs: bombs,
       weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, grazes: 0, pix: 0, hits: 0,
       continues: 0, maxContinues: 2 + G.upg('recurso'), // recursos: 2 + Embargos de Declaração
@@ -4237,6 +4438,11 @@ body.in-play #toasts { opacity: 0; }
       setPlayButtons(true);
       try { g.script = { gen: st.script(STAGE_API), wait: null, done: false }; }
       catch (err) { G.reportError(err, 'stage.script init'); g.script = { done: true }; }
+      // MODO CPI: o aviso no primeiro quadro de jogo da partida (uma vez só; o recurso não repete)
+      if (G.run.cpiSign) {
+        G.run.cpiSign = false;
+        G.text(G.W / 2, G.H * 0.4, 'MODO CPI: SEM MOLEZA!', { color: '#ff3d7f', size: 17, life: 2, vy: -10, stroke: true });
+      }
     };
     const story = G.STORY.stages[st.id];
     const afterIntro = () => {
@@ -4252,7 +4458,8 @@ body.in-play #toasts { opacity: 0; }
     const g = G.game; if (!g) return;
     const d = g.pixStage - g.pixCommitted;
     if (d > 0) { G.save.pix += d; G.count('pixTotal', d); g.pixCommitted = g.pixStage; }
-    if (G.run && G.run.score > G.save.best) G.save.best = G.run.score;
+    // recorde do modo da partida (best = NORMAL, bestCpi = MODO CPI)
+    if (G.run) { const bk = G.run.mode === 'cpi' ? 'bestCpi' : 'best'; if (G.run.score > (G.save[bk] || 0)) G.save[bk] = G.run.score; }
     G.saveGame();
   }
   G.commitPix = commitPix;
@@ -4294,11 +4501,11 @@ body.in-play #toasts { opacity: 0; }
     run.total = (run.total || 0) + total;
     checkExtends(run);
     // Pix da nota: cresce com a fase (fases difíceis pagam mais), com a PRESSÃO média da fase (R̄)
-    // e dobra no 2º Mandato. CARIMBO DE OURO: nota S com R̄ >= 0,5 paga um extra.
-    const P = PC(), avg = pressAvg(g), l2k = run.loop > 1 ? 2 : 1;
-    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (1 + P.CLEARPIX * avg) * l2k);
+    // e dobra no 2º Mandato. CARIMBO DE OURO: nota S com R̄ >= 0,5 paga um extra. MODO CPI: os dois ×1,25.
+    const P = PC(), avg = pressAvg(g), l2k = run.loop > 1 ? 2 : 1, mk = run.mode === 'cpi' ? MODE_PIX : 1;
+    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (1 + P.CLEARPIX * avg) * l2k * mk);
     const gold = rank === 'S' && avg >= P.GOLD_AVG;
-    const goldPix = gold ? Math.round(P.GOLD_PIX * (1 + 0.25 * g.stageIdx) * l2k) : 0;
+    const goldPix = gold ? Math.round(P.GOLD_PIX * (1 + 0.25 * g.stageIdx) * l2k * mk) : 0;
     run.pix += pixBonus + goldPix; g.pixStage += pixBonus + goldPix;
     if (gold) { run.gold = (run.gold || 0) + 1; if (run.gold >= 3) G.unlock('carimbo_ouro'); }
     commitPix();
@@ -4312,6 +4519,7 @@ body.in-play #toasts { opacity: 0; }
       last: g.stageIdx >= G.Stages.list.length - 1, loop: run.loop,
       press: { avg, lv: pressLevelOf(avg), name: P.NAMES[pressLevelOf(avg)] || '', color: P.COLORS[pressLevelOf(avg)] || '#fff', mul: 1 + avg },
       gold, goldPix, continued: run.continues > 0,
+      mode: run.mode || 'normal', // MODO CPI: etiqueta no boletim, nota guardada em save.ui.ranksCpi
     };
     const next = () => {
       if (stats.last) { G.finishGame(); return; }
@@ -4335,7 +4543,7 @@ body.in-play #toasts { opacity: 0; }
     // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
     commitPix();
     call(G.Audio, 'music', 'gameover');
-    const info = { score: run.score, stage: g.stage, index: g.stageIdx, continuesLeft: run.maxContinues - run.continues, pix: G.save.pix, best: G.save.best };
+    const info = { score: run.score, stage: g.stage, index: g.stageIdx, continuesLeft: run.maxContinues - run.continues, pix: G.save.pix, best: G.bestFor(run.mode), mode: run.mode || 'normal' };
     if (G.debug.autoContinue && info.continuesLeft > 0) { G.continueRun(); return; }
     call(G.UI, 'gameOver', info, {
       onContinue: () => G.continueRun(),
@@ -4372,12 +4580,14 @@ body.in-play #toasts { opacity: 0; }
     // TRÂNSITO EM JULGADO: o mandato inteiro (da fase 1) sem entrar com recurso — libera o Fusca Dourado
     const oneCC = run.startStage === 0 && run.continues === 0;
     if (oneCC) G.unlock('transito');
+    // CPI ENCERRADA: o 1º Mandato inteiro (da fase 1) no MODO CPI, com ou sem recurso
+    if (run.mode === 'cpi' && run.loop === 1 && run.startStage === 0) G.unlock('cpi_mandato');
     G.save.cleared = true;
     G.saveGame();
     G.state = 'ending';
     setPlayButtons(false);
     call(G.Audio, 'music', 'victory');
-    call(G.UI, 'ending', { loop: run.loop, score: run.score, best: G.save.best, oneCC, secret: run.secret }, () => G.toMenu());
+    call(G.UI, 'ending', { loop: run.loop, score: run.score, best: G.bestFor(run.mode), oneCC, secret: run.secret, mode: run.mode || 'normal' }, () => G.toMenu());
   };
   G.pause = function () {
     if (G.state !== 'play') return;
@@ -4493,6 +4703,10 @@ body.in-play #toasts { opacity: 0; }
     pressFix: null, // ?press=R: PRESSÃO fixa em R (0..1); lv/nome seguem, o calor continua contando
     heat0: 0,       // ?heat=H: calor inicial da partida (run.heat)
     forceQuinto: false, // ?quinto=1: libera o LULE 5.0 mesmo sem a partida sem recurso
+    // modo da partida ('normal' | 'cpi'; fora de uma partida, o escolhido). ?cpi=1 / ?cpi=0 força na sessão
+    mode() { return G.mode(); },
+    // valores atuais de todo bloco registrado em G.tune (ou só do id): testes de equivalência entre os modos
+    tunes(id) { return tuneDump(id); },
     press() {
       const pr = G.press, g = G.game, run = G.run;
       return { R: +pr.R.toFixed(4), lv: pr.lv, name: pr.name, heat: run ? +(run.heat || 0).toFixed(4) : 0, tgt: +pr.tgt.toFixed(4),
@@ -4523,7 +4737,7 @@ body.in-play #toasts { opacity: 0; }
     weapon(w, lv) { if (G.run) { G.run.weapon = w; G.run.level = lv || G.run.level; } },
     stats() {
       const g = G.game;
-      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length, press: G.debug.press() } : { state: G.state, quality: G.quality, errors: G.errors.length, press: G.debug.press() };
+      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length, press: G.debug.press(), mode: G.mode() } : { state: G.state, quality: G.quality, errors: G.errors.length, press: G.debug.press(), mode: G.mode() };
     },
     // estado da manha do chefão (testes / humanbot): null sem chefão
     mech() {
@@ -4627,6 +4841,11 @@ body.in-play #toasts { opacity: 0; }
     if (P.press != null && P.press !== '' && isFinite(+P.press)) G.debug.pressFix = M.clamp(+P.press, 0, 1);
     if (P.heat != null && P.heat !== '' && isFinite(+P.heat)) G.debug.heat0 = M.clamp(+P.heat, 0, 1);
     if (P.quinto === '1' || P.quinto === 'true') G.debug.forceQuinto = true;
+    // MODO CPI: ?cpi=1 força o CPI nesta sessão, ?cpi=0 força o NORMAL (o save não muda)
+    if (P.cpi === '1' || P.cpi === 'true') modeForce = 'cpi';
+    else if (P.cpi === '0' || P.cpi === 'false') modeForce = 'normal';
+    // todos os módulos já registraram seus números (G.tune): menus e demos já no modo escolhido
+    G.applyMode(selMode());
     G.state = 'menu';
     requestAnimationFrame(frame);
     if (P.stage != null) {
@@ -13121,6 +13340,11 @@ body.in-play #toasts { opacity: 0; }
   const M = G.m, TAU = Math.PI * 2, PI = Math.PI, DOWN = Math.PI / 2;
   const INK = '#101418';
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
+  // MODO CPI / NORMAL (core: G.tune): os números dos blocos registrados abaixo são os do MODO CPI; o NORMAL só muda o
+  // que estiver em G.TUNE_NORMAL['enemies.T'] etc. Tudo é lido na hora (no spawn ou no quadro), nunca copiado no
+  // carregamento. Blocos: enemies.T (nível por fase, PRESSÃO, revanches), enemies.HP (vida de cada tipo), enemies.FIS,
+  // enemies.MQ, enemies.MB (cansaço e duração dos chefes intermediários), enemies.TRIO_DUR / LOBMOR_DUR / SERV_DUR, enemies.IMP.
+  const tune = G.tune || ((id, o) => o);
 
   // Cores de tiro inimigo (saturadas, legíveis contra o cenário e os tiros do Zé)
   const COL = {
@@ -13191,21 +13415,30 @@ body.in-play #toasts { opacity: 0; }
   // Utilidades
   // ======================================================================
   // nível de dificuldade por fase (5 fases): Rodoviária 0 · Esplanada 1 · Paranoá 2 · Fazenda 2,6 · Planalto 3,2;
-  // +1,5 no 2º Mandato. A mesma tabela escala a vida dos inimigos comuns (define, abaixo).
-  const LVL = [0, 1, 2, 2.6, 3.2];
-  const stageLvl = (g) => { const i = (g && g.stageIdx) || 0; return LVL[Math.min(LVL.length - 1, Math.max(0, i))]; };
-  const lvl = () => { const g = G.game; return g ? stageLvl(g) + (g.loop > 1 ? 1.5 : 0) : 0; };
+  // +LVL_L2 (1,5) no 2º Mandato. A mesma tabela escala a vida dos inimigos comuns (define, abaixo: ×(1 + LVL_HP·nível)).
+  // LVL_SPD = tiro ×(1 + LVL_SPD·nível); LVL_IVL / LVL_FIRST = intervalo / 1º tiro ×(1 − k·nível − P_IVL/P_FIRST·R), com
+  // piso IVL_MIN / FIRST_MIN. PRESSÃO: P_FAN3 / P_FAN5 = tiros a mais no leque mirado em lv ≥ 3 / lv 5, P_RING = anel
+  // ×(1 + P_RING·R). REV_* = revanche do 2º Mandato (1 tiro / leque); PREV_* = revanche da PRESSÃO (a partir de lv PREV_LV,
+  // PREV_CHANCE de 1 tiro; em lv 5 sempre um leque de PREV_N5).
+  const ET = tune('enemies.T', {
+    LVL: [0, 1, 2, 2.6, 3.2], LVL_L2: 1.5, LVL_HP: 0.2, LVL_SPD: 0.065, LVL_IVL: 0.1, LVL_FIRST: 0.13,
+    IVL_MIN: 0.5, FIRST_MIN: 0.5, P_IVL: 0.22, P_FIRST: 0.22, P_FAN3: 1, P_FAN5: 1, P_RING: 0.25,
+    REV_SPD1: 105, REV_SPD: 95, REV_SPREAD: 0.55,
+    PREV_LV: 3, PREV_CHANCE: 0.5, PREV_N5: 3, PREV_SPREAD: 0.5, PREV_SPD: 95,
+  });
+  const stageLvl = (g) => { const i = (g && g.stageIdx) || 0, L = ET.LVL; return L[Math.min(L.length - 1, Math.max(0, i))]; };
+  const lvl = () => { const g = G.game; return g ? stageLvl(g) + (g.loop > 1 ? ET.LVL_L2 : 0) : 0; };
   // PRESSÃO (core: G.press = { R 0..1, lv 0..5 }); sem o core novo vale 0
   const PRESS0 = { R: 0, lv: 0 };
   const press = () => G.press || PRESS0;
   const pR = () => { const R = +press().R; return R > 0 ? Math.min(1, R) : 0; };
   const pLv = () => press().lv | 0;
-  const spd = (v) => v * (1 + 0.065 * lvl());                       // velocidade de tiro por fase (a PRESSÃO entra no G.fire)
-  const ivl = (v) => v * Math.max(0.5, 1 - 0.1 * lvl() - 0.22 * pR());          // intervalo entre ataques
-  const first = (a, b) => M.rand(a, b) * Math.max(0.5, 1 - 0.13 * lvl() - 0.22 * pR()); // demora do 1º tiro
+  const spd = (v) => v * (1 + ET.LVL_SPD * lvl());                       // velocidade de tiro por fase (a PRESSÃO entra no G.fire)
+  const ivl = (v) => v * Math.max(ET.IVL_MIN, 1 - ET.LVL_IVL * lvl() - ET.P_IVL * pR());          // intervalo entre ataques
+  const first = (a, b) => M.rand(a, b) * Math.max(ET.FIRST_MIN, 1 - ET.LVL_FIRST * lvl() - ET.P_FIRST * pR()); // demora do 1º tiro
   // densidade: leque mirado +1 tiro em CRISE (lv 3) e +1 em CPI! (lv 5); anel ×(1 + 0,25 R)
-  const nP = (n) => n + (pLv() >= 3 ? 1 : 0) + (pLv() >= 5 ? 1 : 0);
-  const nRing = (n) => Math.round(n * (1 + 0.25 * pR()));
+  const nP = (n) => n + (pLv() >= 3 ? ET.P_FAN3 : 0) + (pLv() >= 5 ? ET.P_FAN5 : 0);
+  const nRing = (n) => Math.round(n * (1 + ET.P_RING * pR()));
   // Leque mirado com a PRESSÃO: os tiros extras abrem o leque no MESMO passo angular
   // (o vão entre dois tiros nunca encolhe). odd = mantém o nº ímpar (o tiro do meio vem em você).
   function pFan(x, y, n, spread, speed, o, odd) {
@@ -13244,18 +13477,18 @@ body.in-play #toasts { opacity: 0; }
     if (!loop2() || bossDying() || !okShot(e, 115)) return;
     e.data.rev = true;
     const o = { style: 'small', color: COL.pink };
-    if (n <= 1) G.pat.aimed(e.x, e.y, spd(speed || 105), o);
-    else G.pat.aimedFan(e.x, e.y, n, 0.55, spd(speed || 95), o);
+    if (n <= 1) G.pat.aimed(e.x, e.y, spd(speed || ET.REV_SPD1), o);
+    else G.pat.aimedFan(e.x, e.y, n, ET.REV_SPREAD, spd(speed || ET.REV_SPD), o);
   }
   // Revanche da PRESSÃO (todos os comuns, pelo define): CRISE+ 50% de 1 tiro; CPI! sempre um leque de 3
   const REV_O = { style: 'small', color: '#ff3d7f' };
   function pressRevenge(e, opts) {
     const lv = pLv();
-    if (lv < 3 || (opts && opts.silent) || e.big || e.data.rev || bossDying()) return;
+    if (lv < ET.PREV_LV || (opts && opts.silent) || e.big || e.data.rev || bossDying()) return;
     const g = G.game, p = player();
     if (!g || g.eb.length >= 300 || !okShot(e, 115) || (p && (p.inv > 0 || p.bombT > 2.0))) return;
-    if (lv >= 5) G.pat.aimedFan(e.x, e.y, 3, 0.5, spd(95), REV_O);
-    else if (Math.random() < 0.5) G.pat.aimed(e.x, e.y, spd(95), REV_O);
+    if (lv >= 5) G.pat.aimedFan(e.x, e.y, ET.PREV_N5, ET.PREV_SPREAD, spd(ET.PREV_SPD), REV_O);
+    else if (Math.random() < ET.PREV_CHANCE) G.pat.aimed(e.x, e.y, spd(ET.PREV_SPD), REV_O);
   }
 
   // Mão de um personagem (para encaixar adereços)
@@ -13523,12 +13756,22 @@ body.in-play #toasts { opacity: 0; }
     G.call(G.Art, 'pickup', ctx, type, 0, 0, t, BADGE_ITEM);
     ctx.restore();
   }
+  // Vida de cada tipo (bloco 'enemies.HP', registrado no fim do arquivo: { cabo: 3, ..., impostometro: 1600 }).
+  // def.hp vira um getter que lê daqui: o core lê def.hp no spawnEnemy, então o modo vale a partir do próximo spawn.
+  // (fora: as zonas de acerto 'mb_hit' e o placar 'imp_zero', que não são vida de verdade; o o.hp dos roteiros
+  // continua mandando quando vem)
+  const HP = {};
+  const HP_SKIP = { mb_hit: 1, imp_zero: 1 };
   // Define com moldura: chama introdução, desenha carregador/etiqueta em volta do desenho próprio
   function define(kind, def) {
     const draw = def.draw, update = def.update, init = def.init, onDeath = def.onDeath;
+    if (typeof def.hp === 'number' && !HP_SKIP[kind]) {
+      HP[kind] = def.hp;
+      Object.defineProperty(def, 'hp', { get() { return HP[kind]; }, enumerable: true, configurable: true });
+    }
     def.init = function (e, o, g) {
       // fases mais adiantadas: inimigos comuns mais resistentes (o Zé também chega mais forte)
-      if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * stageLvl(g); e.hp *= k; e.maxHp = e.hp; }
+      if (!def.big && !def.noScale && g) { const k = 1 + ET.LVL_HP * stageLvl(g); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
       introduce(e, g);
@@ -14676,7 +14919,13 @@ body.in-play #toasts { opacity: 0; }
   // alterna a MALHA FINA (rede de DARFs caindo, com um furo) e um leque mirado de DARFs. Sai de lado.
   // ======================================================================
   const FISCAL = { skin: '#e0b089', hair: 'short', hairColor: '#2a221c', body: 'suit', suit: '#5d6470', shirt: '#f2f2f2', tie: '#1b3fa0', face: 'oval', brows: 'normal', seed: 40 };
-  const FIS_SIZE = 44, FIS_TELL = 0.6, MALHA_DX = 18;
+  const FIS_SIZE = 44, MALHA_DX = 18; // (desenho; MALHA_DX é o vão da rede: justiça, igual nos dois modos)
+  // TELL = aviso antes do tiro; IVL / IVL_MIN = ciclo (ivl) e piso depois do aviso; FIRST = 1ª espera; HOLD = s parado
+  // na tela; MALHA_N(_L2) = DARFs da rede (1 furo) e MALHA_SPD; FAN_* = o leque mirado de DARFs
+  const FIS = tune('enemies.FIS', {
+    TELL: 0.6, IVL: 2.8, IVL_MIN: 0.4, FIRST: [1.2, 2.0], HOLD: 7,
+    MALHA_N: 7, MALHA_N_L2: 9, MALHA_SPD: 75, FAN_N: 3, FAN_SPREAD: 0.4, FAN_SPD: 120,
+  });
   const DARF_O = { style: 'en_darf', color: COL.red };
   // Redes vivas na tela (de todos os fiscais): uma rede nova nunca nasce na mesma altura de outra
   // que cubra a mesma faixa de x (duas redes coladas fechariam o furo uma da outra).
@@ -14690,7 +14939,7 @@ body.in-play #toasts { opacity: 0; }
     return false;
   }
   function fireMalha(e, g) {
-    const n = loop2() ? 9 : 7, hw = ((n - 1) * MALHA_DX) / 2;
+    const n = loop2() ? FIS.MALHA_N_L2 : FIS.MALHA_N, hw = ((n - 1) * MALHA_DX) / 2;
     const x0 = e.x, y = e.y + 20;
     if (netsBusy(g, x0, y, hw)) return false;
     // o furo: um encaixe de dentro da rede (nunca a ponta), que esteja dentro da tela
@@ -14700,10 +14949,10 @@ body.in-play #toasts { opacity: 0; }
     let vy = 0;
     for (let i = 0; i < n; i++) {
       if (i === gap) continue;
-      const b = G.fire(x0 - hw + i * MALHA_DX, y, DOWN, spd(75), DARF_O);
+      const b = G.fire(x0 - hw + i * MALHA_DX, y, DOWN, spd(FIS.MALHA_SPD), DARF_O);
       if (b && !vy) vy = b.vy;
     }
-    g._nets.push({ x: x0, y0: y, t0: g.t, vy: vy || spd(75), hw });
+    g._nets.push({ x: x0, y0: y, t0: g.t, vy: vy || spd(FIS.MALHA_SPD), hw });
     return true;
   }
   function drawClipboard(ctx, x, y, fl) {
@@ -14736,9 +14985,9 @@ body.in-play #toasts { opacity: 0; }
   define('fiscal', {
     hp: 18, r: 15, score: 700, pix: 6,
     init(e, o) {
-      initMove(e, o, { path: 'stop', ty: M.rand(110, 160), hold: 7, inT: 1.4, exit: 'side', sway: 12 });
+      initMove(e, o, { path: 'stop', ty: M.rand(110, 160), hold: FIS.HOLD, inT: 1.4, exit: 'side', sway: 12 });
       const d = e.data;
-      d.cyc = 'wait'; d.ct = first(1.2, 2.0); d.tell = 0; d.malha = M.chance(0.5);
+      d.cyc = 'wait'; d.ct = first(FIS.FIRST[0], FIS.FIRST[1]); d.tell = 0; d.malha = M.chance(0.5);
     },
     update(e, dt, g) {
       move(e, dt);
@@ -14746,15 +14995,15 @@ body.in-play #toasts { opacity: 0; }
       if (d.mv !== 'hold') { if (d.cyc === 'tell') d.cyc = 'wait'; return; }
       if (d.cyc === 'wait') {
         d.ct -= dt;
-        if (d.ct <= 0) { d.cyc = 'tell'; d.tell = FIS_TELL; talk(e, 'CPF NA NOTA?', 0.3); }
+        if (d.ct <= 0) { d.cyc = 'tell'; d.tell = FIS.TELL; talk(e, 'CPF NA NOTA?', 0.3); }
       } else if (d.cyc === 'tell') {
         d.tell -= dt;
         if (d.tell <= 0) {
-          d.cyc = 'wait'; d.ct = Math.max(0.4, ivl(2.8) - FIS_TELL);
+          d.cyc = 'wait'; d.ct = Math.max(FIS.IVL_MIN, ivl(FIS.IVL) - FIS.TELL);
           if (okShot(e, 95)) {
             let net = false;
             if (d.malha) net = fireMalha(e, g);
-            if (!net) pFan(e.x, e.y + 14, 3, 0.4, spd(120), DARF_O);
+            if (!net) pFan(e.x, e.y + 14, FIS.FAN_N, FIS.FAN_SPREAD, spd(FIS.FAN_SPD), DARF_O);
             else talk(e, 'CAIU NA MALHA FINA!', 0.1);
             d.malha = !net; // depois da rede, o leque; depois do leque (ou rede adiada), tenta a rede
             sfx(net ? 'stamp' : 'enemy_shot2');
@@ -14768,7 +15017,7 @@ body.in-play #toasts { opacity: 0; }
       person(ctx, e, FIS_SIZE, FISCAL, { pose, mood: tell ? 'angry' : 'smug' });
       const hl = hand(FIS_SIZE, pose, e.t, FISCAL.seed, false), hr = hand(FIS_SIZE, pose, e.t, FISCAL.seed, true);
       drawClipboard(ctx, e.x + hl.x - 1, e.y + hl.y - 2, fl);
-      drawStamp(ctx, e.x + hr.x + 1, e.y + hr.y + (tell ? -2 : 1), tell, fl, tell ? 1 - d.tell / FIS_TELL : 0);
+      drawStamp(ctx, e.x + hr.x + 1, e.y + hr.y + (tell ? -2 : 1), tell, fl, tell ? 1 - d.tell / FIS.TELL : 0);
       // distintivo da Receita no peito
       ctx.beginPath(); ctx.arc(e.x + 5.5, e.y + 9, 2.8, 0, TAU); inked(ctx, fcol('#ffd23f', fl), 0.9);
       if (!fl) { ctx.fillStyle = INK; ctx.font = '4px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('R', e.x + 5.5, e.y + 9.3); }
@@ -14779,7 +15028,9 @@ body.in-play #toasts { opacity: 0; }
   // MAQUININHA DA TAXA (fase 4) — voa em formação (fly/swarm/side, como bot e ministro);
   // a tela pisca "+R$" (0,5 s) e solta um anel de "IOF"
   // ======================================================================
-  const MQ_BOX = [-12, -22, 24, 38], MQ_TELL = 0.5;
+  const MQ_BOX = [-12, -22, 24, 38];
+  // TELL = a tela piscando "+R$" antes do anel; FIRST = 1ª espera; IVL = ciclo (ivl, ÷ o.fire); RING(_L2) = tiros do anel
+  const MQ = tune('enemies.MQ', { TELL: 0.5, FIRST: 1.0, IVL: 2.2, RING: 6, RING_L2: 8, SPD: 85 });
   function paintMaq(c, st) {
     // st: 'n' normal · 't' aviso (+R$) · 'f' flash de dano
     const fl = st === 'f';
@@ -14811,7 +15062,7 @@ body.in-play #toasts { opacity: 0; }
       initMove(e, o, { vy: 80 });
       const d = e.data;
       d.fire = o.fire != null ? o.fire : 1;
-      d.ft = 1.0; d.tell = 0;
+      d.ft = MQ.FIRST; d.tell = 0;
       d.wob = Math.random() * TAU;
     },
     update(e, dt) {
@@ -14821,16 +15072,16 @@ body.in-play #toasts { opacity: 0; }
       if (d.tell > 0) {
         d.tell -= dt;
         if (d.tell <= 0 && okShot(e, 90)) {
-          const n = nRing(loop2() ? 8 : 6);
-          G.pat.ring(e.x, e.y, n, spd(85), { style: 'en_pixtax', color: COL.orange }, Math.random() * TAU);
+          const n = nRing(loop2() ? MQ.RING_L2 : MQ.RING);
+          G.pat.ring(e.x, e.y, n, spd(MQ.SPD), { style: 'en_pixtax', color: COL.orange }, Math.random() * TAU);
           sfx('enemy_shot');
         }
         return;
       }
       d.ft -= dt;
       if (d.ft <= 0) {
-        d.ft = ivl(2.2) / d.fire;
-        if (okShot(e, 90)) d.tell = MQ_TELL;
+        d.ft = ivl(MQ.IVL) / d.fire;
+        if (okShot(e, 90)) d.tell = MQ.TELL;
       }
     },
     draw(ctx, e, g) {
@@ -14879,12 +15130,14 @@ body.in-play #toasts { opacity: 0; }
   }
   // Cansaço: a partir de 55% do tempo de luta o chefe intermediário vai cansando e passa a levar
   // até 2,2× de dano no fim (quem chega fraco ainda consegue derrubar; quem chega forte nem percebe).
-  const MB_TIRED_AT = 0.55, MB_TIRED_MAX = 1.2;
+  // TIRED_AT / TIRED_MAX = começa a cansar em TIRED_AT do tempo e chega a ×(1 + TIRED_MAX); DUR = s de luta antes de
+  // fugir, por tipo (o Impostômetro usa o IMP.DUR; o o.dur dos roteiros continua mandando quando vem)
+  const MB = tune('enemies.MB', { TIRED_AT: 0.55, TIRED_MAX: 1.2, DUR: { trio: 50, lobista_mor: 50, servidor: 52, comitiva: 54 } });
   function mbTiredK(e) {
     const d = e.data;
     if (d.st !== 'fight' || !d.dur) return 1;
-    const a = d.dur * MB_TIRED_AT;
-    return d.fightT <= a ? 1 : 1 + MB_TIRED_MAX * Math.min(1, (d.fightT - a) / (d.dur - a));
+    const a = d.dur * MB.TIRED_AT;
+    return d.fightT <= a ? 1 : 1 + MB.TIRED_MAX * Math.min(1, (d.fightT - a) / (d.dur - a));
   }
   // onHit comum: aplica o cansaço (o core já tirou o dano normal antes de chamar o onHit)
   function mbOnHit(e, dmg) {
@@ -14952,7 +15205,7 @@ body.in-play #toasts { opacity: 0; }
   // ----------------------------------------------------------------------
   const TRIO_C = { skin: '#e8b48a', hair: 'pompadour', hairColor: '#3a2a20', body: 'suit', suit: '#f4f1e8', shirt: '#ffd23f', tie: '#e63946', sash: ['#e63946', '#ffd23f'], grin: true, seed: 30 };
   const TRIO_LINES = ['Tira o pé do chão!', 'Vem pro trio, eleitor!', 'Mão pro alto quem é 171!', 'Aí, galera do Plano!', 'Promessa é dívida... né?'];
-  const TRIO_DUR = { rings: 5.2, santinhos: 3.8, notas: 3.6 };
+  const TRIO_DUR = tune('enemies.TRIO_DUR', { rings: 5.2, santinhos: 3.8, notas: 3.6 }); // s de cada padrão
   function drawTrio(ctx, e, g) {
     const d = e.data, fl = G.isFlash(e), C = (c) => fcol(c, fl), t = e.t;
     ctx.save(); ctx.translate(e.x, e.y);
@@ -15005,7 +15258,7 @@ body.in-play #toasts { opacity: 0; }
   define('trio', {
     hp: 900, r: 42, score: 15000, pix: 40, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 50, 172);
+      mbStart(e, o, MB.DUR.trio, 172);
       const d = e.data;
       d.kids = [];
       for (const side of [-1, 1]) { const k = G.spawnEnemy('trio_caixa', e.x + side * 92, e.y - 4, { parent: e, side }); if (k) d.kids.push(k); }
@@ -15100,11 +15353,11 @@ body.in-play #toasts { opacity: 0; }
   // ----------------------------------------------------------------------
   const LOBMOR = { skin: '#e0a882', hair: 'slick', hairColor: '#111111', body: 'suit', suit: '#141a28', shirt: '#f4f1e8', tie: '#ffd23f', glasses: 'dark', face: 'jowl', templeColor: '#9aa0a6', seed: 31 };
   const LOBMOR_LINES = ['Todo mundo tem seu preço!', 'Aceita uma malinha?', 'Pode contar, tá tudo aí!', 'É só um agrado, campeão!', 'Isso aqui é consultoria!'];
-  const LOBMOR_DUR = { mala: 3.4, maletas: 2.8, propina: 2.8 };
+  const LOBMOR_DUR = tune('enemies.LOBMOR_DUR', { mala: 3.4, maletas: 2.8, propina: 2.8 }); // s de cada padrão
   define('lobista_mor', {
     hp: 1050, r: 40, score: 20000, pix: 50, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 50, 165);
+      mbStart(e, o, MB.DUR.lobista_mor, 165);
       const d = e.data;
       d.open = 0; d.dir = 1; d.ang = 0;
       if (!o.drop) e.drop = ['power', 'shield'];
@@ -15203,7 +15456,7 @@ body.in-play #toasts { opacity: 0; }
   // MINISTÉRIO DA VERDADE (fase 3) — rack voador: solta bots, varre com lasers
   // (com aviso) e levanta muralhas de "censura" com brecha
   // ----------------------------------------------------------------------
-  const SERV_DUR = { bots: 4.4, laser: 4.8, muro: 5.4 };
+  const SERV_DUR = tune('enemies.SERV_DUR', { bots: 4.4, laser: 4.8, muro: 5.4 }); // s de cada padrão
   const SERV_LINES = ['Isso é desinformação!', 'Conteúdo removido!', 'Só vale a versão oficial!', 'Denunciado com sucesso!'];
   function drawServer(ctx, e, g) {
     const d = e.data, fl = G.isFlash(e), C = (c) => fcol(c, fl), t = e.t;
@@ -15274,7 +15527,7 @@ body.in-play #toasts { opacity: 0; }
   define('servidor', {
     hp: 1400, r: 44, score: 25000, pix: 55, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 52, 168);
+      mbStart(e, o, MB.DUR.servidor, 168);
       e.data.gapI = 9;
       G.banner('MINISTÉRIO DA VERDADE', 'CHECAGEM OFICIAL 24H', { small: true, color: G.C.orange, dur: 2.2 });
       sfx('charge');
@@ -15348,11 +15601,15 @@ body.in-play #toasts { opacity: 0; }
   const SEG7 = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
   // segmentos a..g de uma caixa ±hw × ±hh: [x0, y0, x1, y1] em unidades de hw/hh
   const SEGS = [[-1, -1, 1, -1], [1, -1, 1, 0], [1, 0, 1, 1], [-1, 1, 1, 1], [-1, 0, -1, 1], [-1, -1, -1, 0], [-1, 0, 1, 0]];
-  const IMP = {
+  // Registrados para o modo: BLINK (aviso das casas), MAX_DIG (dígitos na tela), A/A_L2 (O NÚMERO CAI, via ivl), B (leque
+  // de DARFs: B_N tiros, B_SPREAD, B_SPD), C (anel com vão abaixo de 50%: C_SPD), FALL/FALL_L2 (queda dos dígitos), DUR,
+  // A0/B0/C0 (1ª espera de cada ataque). Fora: o desenho do painel (CW…PH, DIG_W/H) e o DIG_MIN_DX (espaço entre dígitos).
+  const IMP = tune('enemies.IMP', {
     CW: 11, CH: 19, CG: 1, DOT: 4, RS: 18, PAD: 6, PH: 52,
     BLINK: 0.7, DIG_W: 30, DIG_H: 50, DIG_MIN_DX: 74, MAX_DIG: 3,
     A: 2.4, A_L2: 2.0, B: 1.5, C: 4.0, FALL: 80, FALL_L2: 92, DUR: 55,
-  };
+    A0: 1.4, B0: 0.9, C0: 2.0, B_N: 3, B_SPREAD: 0.42, B_SPD: 130, C_SPD: 88,
+  }, ['BLINK', 'MAX_DIG', 'A', 'A_L2', 'B', 'C', 'FALL', 'FALL_L2', 'DUR', 'A0', 'B0', 'C0', 'B_N', 'B_SPREAD', 'B_SPD', 'C_SPD']);
   // posição x (relativa ao centro) de cada casa; grupos de 3 contados da direita
   function impLayout(N) {
     const xs = [];
@@ -15464,7 +15721,7 @@ body.in-play #toasts { opacity: 0; }
       if (!o.drop) e.drop = ['power'];
       const d = e.data;
       d.N = 10; d.cells = [1, 1, 7, 1, 1, 7, 1, 1, 7, 1]; d.cnt = 171; d.refill = []; // entra lendo R$ 1.171.171.171
-      d.tA = 1.4; d.tB = 0.9; d.tC = 2.0; d.blink = 0; d.blinkT = 0; d.pick = []; d.digs = []; d.late = false;
+      d.tA = IMP.A0; d.tB = IMP.B0; d.tC = IMP.C0; d.blink = 0; d.blinkT = 0; d.pick = []; d.digs = []; d.late = false;
       mbHitZone(e, -58, 4, 24); mbHitZone(e, 58, 4, 24); // painel largo
       G.banner('IMPOSTÔMETRO', 'NÃO PARA DE SUBIR', { small: true, color: G.C.orange, dur: 2.2 });
       sfx('charge');
@@ -15542,7 +15799,7 @@ body.in-play #toasts { opacity: 0; }
       d.tB -= dt;
       if (d.tB <= 0) {
         d.tB = ivl(IMP.B);
-        if (okShot(e, 100)) { pFan(e.x, e.y + IMP.PH / 2 + 4, 3, 0.42, spd(130), DARF_O); sfx('enemy_shot'); }
+        if (okShot(e, 100)) { pFan(e.x, e.y + IMP.PH / 2 + 4, IMP.B_N, IMP.B_SPREAD, spd(IMP.B_SPD), DARF_O); sfx('enemy_shot'); }
       }
       // C) anel de DARFs com vão de 3 (o vão é medido no anel base de 14)
       if (d.late) {
@@ -15551,7 +15808,7 @@ body.in-play #toasts { opacity: 0; }
           d.tC = IMP.C;
           if (okShot(e, 100)) {
             const n0 = 14, n = nRing(n0), gapA = aim(e) + M.rand(-0.5, 0.5), gapHalf = (1.5 * TAU) / n0, off = Math.random() * TAU;
-            for (let i = 0; i < n; i++) { const a = off + (i * TAU) / n; if (Math.abs(M.wrapAngle(a - gapA)) >= gapHalf) G.fire(e.x, e.y + IMP.PH / 2 + 4, a, spd(88), DARF_O); }
+            for (let i = 0; i < n; i++) { const a = off + (i * TAU) / n; if (Math.abs(M.wrapAngle(a - gapA)) >= gapHalf) G.fire(e.x, e.y + IMP.PH / 2 + 4, a, spd(IMP.C_SPD), DARF_O); }
             sfx('enemy_shot2');
           }
         }
@@ -15618,7 +15875,7 @@ body.in-play #toasts { opacity: 0; }
     hp: 460, r: 19, score: 20000, pix: 40, big: true, keepOffscreen: true,
     init(e, o) {
       const d = e.data;
-      d.st = 'enter'; d.fightT = 0; d.dur = o.dur || 54; d.tau = 0; d.ripCd = 0;
+      d.st = 'enter'; d.fightT = 0; d.dur = o.dur || MB.DUR.comitiva; d.tau = 0; d.ripCd = 0;
       d.hx = new Float32Array(HIST); d.hy = new Float32Array(HIST); d.hi = 0;
       for (let i = 0; i < HIST; i++) { d.hx[i] = e.x; d.hy[i] = e.y; }
       d.ft = 1.5; d.rt = 4.5; d.facing = 1; d.photoT = 6; d.pause = 0;
@@ -15831,6 +16088,8 @@ body.in-play #toasts { opacity: 0; }
   }
   // lion / taxBite: consumidos pelo lule.js (o Leão da Receita no Planalto), com fallback local
   G.EnemyArt = { prewarm, pending: () => PWQ.length + BWQ.length, lion: drawLion, taxBite };
+  // vida de cada tipo (todos os define acima já passaram por aqui): G.TUNE_NORMAL['enemies.HP'] = { fiscal: 16, ... }
+  tune('enemies.HP', HP);
 })();
 
 </script>
@@ -15853,13 +16112,17 @@ body.in-play #toasts { opacity: 0; }
   const now = () => (G.game ? G.game.t : 0);
   const sp = (kind, x, y, o) => G.spawnEnemy(kind, x, y, o || {});
   const opt = (o, i) => (typeof o === 'function' ? o(i) : Object.assign({}, o || {}));
-  // PRESSÃO (sem o core novo vale 0): +1 inimigo por formação em lv ≥ 4, com teto por tipo
-  // (nunca nas fileiras row(), que têm espaçamento fixo)
+  // MODO CPI / NORMAL (core: G.tune): os números do bloco 'stages.T' são os do MODO CPI; o NORMAL só muda o que estiver
+  // em G.TUNE_NORMAL['stages.T'] (lido na hora, a cada formação / chuvisco).
+  const tune = G.tune || ((id, o) => o);
+  // PRESSÃO (sem o core novo vale 0): +EX inimigo por formação em lv ≥ EX_LV, com teto CAP por tipo
+  // (nunca nas fileiras row(), que têm espaçamento fixo); DRIZZLE = o chuvisco ×(1 − DRIZZLE·R);
+  // AMB_L2 = intervalo da pipoca de fundo no 2º Mandato (×)
+  const ST = tune('stages.T', { EX_LV: 4, EX: 1, CAP: { swarm: 10, vee: 9, bots: 11 }, DRIZZLE: 0.25, AMB_L2: 0.75 });
   const PRESS0 = { R: 0, lv: 0 };
   const press = () => G.press || PRESS0;
   const pR = () => { const R = +press().R; return R > 0 ? Math.min(1, R) : 0; };
-  const ex = (n, cap) => ((press().lv | 0) >= 4 ? Math.max(n, Math.min(cap, n + 1)) : n);
-  const CAP = { swarm: 10, vee: 9, bots: 11 };
+  const ex = (n, cap) => ((press().lv | 0) >= ST.EX_LV ? Math.max(n, Math.min(cap, n + ST.EX)) : n);
 
   // ======================================================================
   // Tempo e trilhas paralelas
@@ -15925,7 +16188,7 @@ body.in-play #toasts { opacity: 0; }
   // um inimigo seguindo uma curva
   function fly(kind, pts, dur, o) { return sp(kind, pts[0][0], pts[0][1], Object.assign({ pts, dur }, o || {})); }
   // vários na mesma curva, um atrás do outro (cobrinha)
-  function* swarm(kind, n, gap, pts, dur, o) { n = ex(n, CAP.swarm); for (let i = 0; i < n; i++) { fly(kind, pts, dur, opt(o, i)); if (i < n - 1) yield gap; } }
+  function* swarm(kind, n, gap, pts, dur, o) { n = ex(n, ST.CAP.swarm); for (let i = 0; i < n; i++) { fly(kind, pts, dur, opt(o, i)); if (i < n - 1) yield gap; } }
   // fileira horizontal simultânea
   function row(kind, n, y, o, margin) {
     const m = margin != null ? margin : 40;
@@ -15934,7 +16197,7 @@ body.in-play #toasts { opacity: 0; }
   // formação em V (ponta embaixo)
   function vee(kind, n, cx, o, dx, dy) {
     dx = dx || 34; dy = dy || 26;
-    n = ex(n, CAP.vee);
+    n = ex(n, ST.CAP.vee);
     for (let i = 0; i < n; i++) {
       const k = Math.ceil(i / 2), s = i % 2 ? -1 : 1;
       sp(kind, M.clamp(cx + s * k * dx, 16, W() - 16), -24 - k * dy, opt(o, i));
@@ -15951,7 +16214,7 @@ body.in-play #toasts { opacity: 0; }
   function* drizzle(kind, dur, every, o) {
     const end = now() + dur;
     let i = 0;
-    while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every * (1 - 0.25 * pR()); }
+    while (now() < end) { sp(kind, M.rand(30, W() - 30), -22, opt(o, i++)); yield every * (1 - ST.DRIZZLE * pR()); }
   }
   // bando de motoboys da picanha passando pela lateral (alturas escalonadas)
   function* moto(n, fromLeft, y0, dy, gap, o) {
@@ -15963,7 +16226,7 @@ body.in-play #toasts { opacity: 0; }
   // enxame de bots fazendo curva
   function* bots(n, fromLeft, y, o) {
     const x = fromLeft ? -16 : W() + 16;
-    n = ex(n, CAP.bots);
+    n = ex(n, ST.CAP.bots);
     for (let i = 0; i < n; i++) {
       sp('bot', x, y, Object.assign({ path: 'curve', ang: fromLeft ? 0.35 : Math.PI - 0.35, spd: 150, turn: fromLeft ? 0.75 : -0.75, turnStop: 2.6 }, opt(o, i)));
       if (i < n - 1) yield 0.16;
@@ -15971,7 +16234,7 @@ body.in-play #toasts { opacity: 0; }
   }
   // enxame de bots descendo do alto em S
   function* botRain(n, x, o) {
-    n = ex(n, CAP.bots);
+    n = ex(n, ST.CAP.bots);
     for (let i = 0; i < n; i++) {
       sp('bot', x, -16, Object.assign({ path: 'curve', ang: Math.PI / 2, spd: 135, turn: 1.4, flip: 1.1, phase: 0 }, opt(o, i)));
       if (i < n - 1) yield 0.17;
@@ -15984,7 +16247,7 @@ body.in-play #toasts { opacity: 0; }
   function* ambient(kinds, every, flag) {
     let i = 0;
     while (!flag.done) {
-      yield every * M.rand(0.8, 1.25) * (G.game.loop > 1 ? 0.75 : 1);
+      yield every * M.rand(0.8, 1.25) * (G.game.loop > 1 ? ST.AMB_L2 : 1);
       if (flag.done) return;
       const g = G.game;
       let alive = 0, busy = false;
@@ -16775,15 +17038,31 @@ body.in-play #toasts { opacity: 0; }
   }
   function say(b, s, dur) { G.say(b, s, dur || 2); }
 
+  // ---------- Modos (NORMAL / MODO CPI, SPEC-CPI §1): blocos de números registrados em G.tune ----------
+  // Os valores escritos neste arquivo são os do MODO CPI; o NORMAL só muda pelo G.TUNE_NORMAL (data.js), por id:
+  // 'bosses.KIT', 'bosses.P5', 'bosses.EM' (Centrão), 'bosses.MT' (Dilmãe), 'bosses.centrao' e 'bosses.dilmae'
+  // (hp, fatStart, spdK do def). Tudo é lido na hora: nada de copiar um número registrado numa constante solta.
+  const tune = G.tune || ((id, o) => o);
+  // KIT = números comuns aos chefões do BossKit. FAT_* = cansaço (começa em def.fatStart, ou FAT_START s, e chega a
+  // ×(1 + FAT_MAX) de dano FAT_FULL s depois); MUL_CAP = teto do multiplicador de dano; STUN_L2 = tonto ×0,85 no
+  // 2º mandato; STUN_CD = s sem manha nova depois do tonto; PRESSÃO: +PN3 / +PN5 tiros nos níveis 3 / 5, esperas
+  // ×PW3 / ×PW5, anéis ×(1 + RING_K × R); CPI_* = o leque do nível 5 (a cada pW(CPI_WAIT) s, CPI_N tiros abertos
+  // CPI_SPREAD rad a CPI_SPD px/s).
+  const KIT = tune('bosses.KIT', {
+    FAT_START: 95, FAT_FULL: 90, FAT_MAX: 0.75, MUL_CAP: 4, STUN_L2: 0.85, STUN_CD: 2.0,
+    PN3: 1, PN5: 1, PW3: 0.9, PW5: 0.82, RING_K: 0.25,
+    CPI_WAIT: 3.2, CPI_N: 3, CPI_SPREAD: 0.4, CPI_SPD: 130,
+  });
+
   // ---------- PRESSÃO (SPEC5 §3; o core calcula G.press, aqui só lemos com padrão) ----------
   // Variantes por nível (travadas por turno em b.data.pl / b.data.pR por pLatch): lv ≥ 3 +1 tiro por leque mirado /
-  // jorro / braço de espiral e esperas ×0,9; lv 5 +1 de novo, esperas ×0,82 e o cpiCo. Nunca em telegrafia, aviso,
-  // delay, aviso de laser, fresta de parede nem tempo de manha.
+  // jorro / braço de espiral e esperas ×0,9; lv 5 +1 de novo, esperas ×0,82 e o cpiCo (números no KIT). Nunca em
+  // telegrafia, aviso, delay, aviso de laser, fresta de parede nem tempo de manha.
   const PRESS0 = { R: 0, lv: 0 };
   function press() { return G.press || PRESS0; }
-  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0); }
-  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + 0.25 * (R || 0))); }
-  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? 0.82 : lv >= 3 ? 0.9 : 1); }
+  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? KIT.PN3 : 0) + (lv >= 5 ? KIT.PN5 : 0); }
+  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + KIT.RING_K * (R || 0))); }
+  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? KIT.PW5 : lv >= 3 ? KIT.PW3 : 1); }
   function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; }
   // velocidade de um tiro reapontado à mão (o G.fire já aplica isto no disparo): × (1 + SPD × R), teto SPD_CAP
   function pSpd(v) {
@@ -16799,27 +17078,34 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data;
     for (;;) {
       yield () => d.pl === 5;
-      yield pW(3.2, 5);
+      yield pW(KIT.CPI_WAIT, 5);
       if (d.pl !== 5 || d.stunT > 0 || flagOn(d.demo) || flagOn(d.hold)) continue;
       const x = b.x, y = b.y + 40;
-      fan(x, y, aimFrom(x, y), 3, 0.4, 130, { style: 'small', color: '#ff2a4a' });
+      fan(x, y, aimFrom(x, y), KIT.CPI_N, KIT.CPI_SPREAD, KIT.CPI_SPD, { style: 'small', color: '#ff2a4a' });
     }
   }
-  // ÚLTIMO RECURSO (5º turno, last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×1,5) contra o empate
-  const P5 = {
+  // ÚLTIMO RECURSO (5º turno, last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×P5.MUL) contra o empate.
+  // Registrados: LIMIT e MUL (as etiquetas não; o '×1,5' do TAG2 acompanha o MUL em p5Update).
+  const P5 = tune('bosses.P5', {
     LIMIT: 30, MUL: 1.5, TAG: { text: 'ÚLTIMO RECURSO', color: '#ff2a4a' },
     TAG2: { text: 'SEM SAÍDA ×1,5', color: '#ff2a4a' },
-  };
+  }, ['LIMIT', 'MUL']);
   function lastStand(b) { const d = b.data; d.p5 = true; d.p5T0 = b.ft; d.p5Mul = 1; d.mechCd = 0; }
-  function p5Update(b) { const d = b.data; if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) d.p5Mul = P5.MUL; }
+  function p5Update(b) {
+    const d = b.data;
+    if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) {
+      d.p5Mul = P5.MUL;
+      const T2 = P5.TAG2;
+      if (T2.mul !== P5.MUL) { T2.mul = P5.MUL; T2.text = 'SEM SAÍDA ×' + fmtMul(P5.MUL); }
+    }
+  }
 
   // Cansaço (anti-empate): luta normal termina antes; passou de def.fatStart o político cansa e passa a levar mais
-  // dano (até ×1,75, FAT_FULL s depois). Usa b.ft (tempo de luta de relógio, corre até no tonto).
-  // Multiplicador de dano (todo quadro, teto 4): base × (1 + cansaço) × SEM SAÍDA, base = tonto (d.stunMul) →
-  // armadura da manha (d.armor) → armadura antiga da fase (d.dmgBase) → 1. Escreve também b.hudTag.
-  const FAT_START = 95, FAT_FULL = 90, FAT_MAX = 0.75, MUL_CAP = 4;
+  // dano (até ×1,75, KIT.FAT_FULL s depois). Usa b.ft (tempo de luta de relógio, corre até no tonto).
+  // Multiplicador de dano (todo quadro, teto KIT.MUL_CAP): base × (1 + cansaço) × SEM SAÍDA, base = tonto
+  // (d.stunMul) → armadura da manha (d.armor) → armadura antiga da fase (d.dmgBase) → 1. Escreve também b.hudTag.
   function fatigue(b, line) {
-    const d = b.data, f = FAT_MAX * clamp((b.ft - (b.def.fatStart || FAT_START)) / FAT_FULL, 0, 1);
+    const d = b.data, f = KIT.FAT_MAX * clamp((b.ft - (b.def.fatStart || KIT.FAT_START)) / KIT.FAT_FULL, 0, 1);
     if (f > 0 && !d.fatSaid) { d.fatSaid = 1; say(b, line || 'CANSEI...', 2); G.text(b.x, b.y + 60, 'CANSOU!', { color: G.C.yellow, size: 14, life: 1.4 }); }
     d.fat = f;
     p5Update(b);
@@ -16828,7 +17114,7 @@ body.in-play #toasts { opacity: 0; }
   function applyMul(b) {
     const d = b.data, st = d.stunT > 0;
     const base = st ? d.stunMul : (d.armor != null ? d.armor : (d.dmgBase != null ? d.dmgBase : 1));
-    b.dmgMul = Math.min(MUL_CAP, base * (1 + (d.fat || 0)) * (d.p5Mul || 1));
+    b.dmgMul = Math.min(KIT.MUL_CAP, base * (1 + (d.fat || 0)) * (d.p5Mul || 1));
     b.hudTag = st ? d.stunTag : (d.armorTag || (d.p5 ? (d.p5Mul > 1 ? P5.TAG2 : P5.TAG) : null));
   }
 
@@ -16884,8 +17170,8 @@ body.in-play #toasts { opacity: 0; }
   function stunStart(b, dur, mul, o) {
     o = o || {};
     const d = b.data;
-    if (L2()) dur *= 0.85;
-    mul = Math.min(MUL_CAP, mul + pressStun() * (press().R || 0));
+    if (L2()) dur *= KIT.STUN_L2;
+    mul = Math.min(KIT.MUL_CAP, mul + pressStun() * (press().R || 0));
     d.stunT = d.stunT0 = dur; d.stunMul = mul;
     d.stunTag = { text: (o.tagWord || 'BRECHA') + ' ×' + fmtMul(mul), color: o.color || '#ffd23f' };
     d.stunOnEnd = o.onEnd || null;
@@ -16907,7 +17193,7 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data, f = d.stunOnEnd;
     d.stunT = 0; d.stunOnEnd = null;
     if (f) f(b);
-    d.mechCd = 2.0; // o chefão desconta isso fora do tonto: 2 s até a próxima manha
+    d.mechCd = KIT.STUN_CD; // o chefão desconta isso fora do tonto: 2 s até a próxima manha
     applyMul(b);
   }
   // true enquanto tonto (chama stunEnd quando acaba)
@@ -17202,14 +17488,15 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // Manha PEGAR A EMENDA (afinação: HP → tempo de tonto → cadência → armadura). Velocidades em px/s, tempos em s.
   // APEX_Y = altura do paraquedas (× H); STUN = tonto por turno; HEAL = cura de emenda perdida (× HP máx).
-  const EM = {
+  // Registrado inteiro em G.tune como 'bosses.EM' (valores do MODO CPI).
+  const EM = tune('bosses.EM', {
     APEX_Y: 0.28, FALL: 50, FALL_L2: 62, FALL_TUT: 40, CATCH_R: 13, SWAY: 18, SWAY_HZ: 0.45,
     STUN: [3.5, 4.0, 4.0, 3.5, 3.5], MUL: 2.2, HEAL: 0.02, CD: 2.0, TRAITOR_DMG: 25,
     FALL_P4: 60, FALL_P4_L2: 70, TUT_MAX: 9, RACE_DY: 100,
     // 5º turno FUNDÃO ELEITORAL: giro das cabeças ×1,15, espiral de moedas (braços, passo, px/s, rad por passo),
     // leque mirado de cédulas (a cada P5_FAN s antes do pW), 2 emendas a cada P5_EM s (a 1ª P5_EM0 s depois do banner)
     P5_ORBIT: 1.15, P5_ARMS: 4, P5_STEP: 0.13, P5_SPD: 95, P5_TURN: 0.11, P5_FAN: 3.2, P5_FAN_SPD: 130, P5_EM: 6, P5_EM0: 1.0,
-  };
+  });
   const SIDE = [
     { main: '#e63946', dark: '#9e1b28', acc: '#ffffff', name: 'vermelho' },
     { main: '#c9b48a', dark: '#8f7a52', acc: '#f2e6c4', name: 'em cima do muro' },
@@ -18399,7 +18686,8 @@ body.in-play #toasts { opacity: 0; }
   G.Bosses.define('centrao', {
     // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
     // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140,
+    // spdK 1 = tiros na velocidade escrita (como antes, sem o campo); registrado com hp e fatStart ('bosses.centrao')
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140, spdK: 1,
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -18581,6 +18869,8 @@ body.in-play #toasts { opacity: 0; }
       }
     },
   });
+  // MODO CPI: os números do def lidos no spawn (vida, cansaço, velocidade dos tiros) entram no registro
+  tune('bosses.centrao', G.Bosses.defs.centrao, ['hp', 'fatStart', 'spdK']);
   // animação (cabeças, braços, squash, maleta, reflexo)
   function cenAnim(b, dt) {
     const d = b.data;
@@ -18624,7 +18914,8 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // Manha FICAR NA META (afinação: HP → tempo de tonto → cadência → armadura). R = raio (px), NEED = segundos
   // dentro para encher, LIFE = prazo (s), OPEN = armadura da META ABERTA, GAP_* = espera até a próxima meta.
-  const MT = {
+  // Registrado inteiro em G.tune como 'bosses.MT' (valores do MODO CPI; LVL é trocado no lugar, lido a cada meta).
+  const MT = tune('bosses.MT', {
     R0: 38, R_MIN: 28, R_K: 0.9, NEED: 2.2, NEED_L2: 2.5, LIFE: 10, STUN: 3.0, MUL: 2.2, OPEN: 0.8, GAP_OK: 3.0, GAP_FAIL: 2.5,
     FIRST: 3.0, P4_SPD: 55, P4_JUMP: 120, P4_EVERY: 3.0,
     R0_L2: 35, DEMO: 2, P2_R: 36, P2_NEED: 2.4, STUN_L3: 4.0, MUL_L3: 2.3, P4_R: 40, P4_LIFE: 9,
@@ -18635,7 +18926,7 @@ body.in-play #toasts { opacity: 0; }
     // a cada P5_FAN s (antes do pW) e anel de P5_RING sementes a cada P5_RING_T s
     P5_STUN: 3.5, P5_MUL: 2.2, P5_GAP: 2.0, P5_FLIP: 4.0, P5_WARN: 1.0, P5_FAN: 1.6, P5_FAN_SPD: 140, P5_FAN_SPR: 0.5,
     P5_RING: 12, P5_RING_T: 3.0, P5_RING_SPD: 100,
-  };
+  });
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
     glowOn(x, c, 8);
@@ -19668,6 +19959,8 @@ body.in-play #toasts { opacity: 0; }
     // por cima dos tiros: o contorno das metas (55%) e a carga
     drawOver(ctx, b) { if (b.state === 'fight') dilMetaDraw(ctx, b, true); },
   });
+  // MODO CPI: os números do def lidos no spawn (vida, cansaço, velocidade dos tiros) entram no registro
+  tune('bosses.dilmae', G.Bosses.defs.dilmae, ['hp', 'fatStart', 'spdK']);
   // seta de aviso do vento (1 s antes da rajada)
   function windArrow(c, dir, t) {
     const a = 0.45 + 0.4 * Math.abs(Math.sin(t * 12));
@@ -19738,7 +20031,11 @@ body.in-play #toasts { opacity: 0; }
     MECH, clk, carNear, carSwept, trackCar, setGoal, clearGoal, mechInit, mechOk, mechMiss,
     stunStart, stunExtend, stunUpdate, stunning, stunEnd, mechHint, mechRing, tealHalo, heartPath, fmtMul,
     // Rodada 5 (SPEC5 §2.2): PRESSÃO e o 5º turno
-    press, pN, pRing, pW, pLatch, cpiCo, P5, lastStand, p5Update, applyMul, FAT_FULL, FAT_MAX,
+    press, pN, pRing, pW, pLatch, cpiCo, P5, lastStand, p5Update, applyMul,
+    // MODO CPI: o bloco registrado ('bosses.KIT'); FAT_FULL / FAT_MAX lidos na hora (seguem o modo)
+    KIT,
+    get FAT_FULL() { return KIT.FAT_FULL; },
+    get FAT_MAX() { return KIT.FAT_MAX; },
   };
 })();
 
@@ -19793,13 +20090,17 @@ body.in-play #toasts { opacity: 0; }
   // mais perto do Zé (HOP_PULL do caminho na horizontal, metade do caminho até HOP_Y·H na vertical).
   // Os arrays por turno têm 5 entradas (o 5º é o ÚLTIMO RECURSO, Live de 24 Horas: rig de drones como no 4º;
   // CONNECT_P4 e STUN_P4 valem do 4º turno em diante).
-  const FI = {
+  // MODO CPI (SPEC-CPI §1): os valores escritos aqui são os do MODO CPI. Blocos registrados em G.tune: 'erika.T'
+  // (vida, cansaço, velocidade), 'erika.FI' (a manha), 'erika.PAT' (os padrões) e 'erika.PV' (a cena do Pavanatto).
+  // O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada de copiar um desses números no carregamento).
+  const tune = G.tune || ((id, o) => o);
+  const FI = tune('erika.FI', {
     CUT_R: 10, PHONE_R: 12, REGROW: [11, 10, 6, 9, 9], CONNECT: 1.4, CONNECT_P4: 1.2, LOAD: 2.0, STUN: 4.0, STUN_P4: 4.5, MUL: 2.4,
     ARMOR: [1, 0.9, 0.8, 0.75, 0.7], ENG_MAX: 20, VIRAL_N: 28,
     REGROW_L1: 2.5, REGROW_L2: 0.8, PHONES_L1: [2, 2, 3, 3, 3], STUN_L1K: 1.25, LOAD_L1: 1.4,
     HOP_T: 4.5, HOP_DUR: 0.7, HOP_PULL: 0.55, HOP_Y: 0.76, STUN_GAP_L1: 3, PHONE_DY_L1: 0.05,
     REPLUG: 0.4, DEMO: 2.5, RIG_GAP: 1.0, JIT: 18, VIRAL_WARN: 1.2, GOAL_KEEP: 0.64,
-  };
+  });
   // Padrões (SPEC §5.4; afinados com o humanbot para a escada de mortes Centrão < Dilmãe < Erika < Lule).
   // THREAD_* = fileiras de textão (DX = espaço entre tiras, GAP = fresta, WALK = quanto a fresta anda por fileira),
   // RAIN_* = chuva de carteiras da 6x1 (EVERY = s entre tiros de cada faixa, DBL = velocidade da 4x3; *_L2 = 2º mandato),
@@ -19808,7 +20109,7 @@ body.in-play #toasts { opacity: 0; }
   // PRESSÃO (SPEC5 §2.3, travada por turno em d.pl / d.pR): +tiros nos leques mirados e braços da espiral (mesma
   // fresta entre tiros), anéis ×(1 + 0,25 R), esperas entre ataques ×0,9 / ×0,82; as fileiras de textão e as faixas
   // da 6x1 são paredes (noPress: nem velocidade nem contagem mudam).
-  const PAT = {
+  const PAT = tune('erika.PAT', {
     LIKE_N: 5, LIKE_N_L2: 7, LIKE_SPD: 108, LIKE_SPREAD: 0.62, NOTIF_P1: 2.2, NOTIF_P3: 2.4, NOTIF_SPD: 112, ADI_SPD: 100,
     THREAD_ROWS: 7, THREAD_DX: 32, THREAD_GAP: 80, THREAD_WALK: 24, THREAD_SPD: 92, THREAD_SPD_L2: 106, THREAD_EVERY: 0.66,
     RAIN_SPD: 150, RAIN_EVERY: 0.32, RAIN_EVERY_L2: 0.26, RAIN_DUR: 1.5, RAIN_WARN: 1.3, RAIN_GAP: 1.2, RAIN_DBL: 1.05, RAIN_DBL_L2: 1.15,
@@ -19816,11 +20117,12 @@ body.in-play #toasts { opacity: 0; }
     SWAY: [45, 20, 60, 50, 55], // balanço lateral por turno (px)
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
     P5_SPD_K: 1.2, P5_STEP: 0.12, P5_HEARTS: 5.0,
-  };
+  });
   // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,07 na chegada). Rodada 4 era 4700 / 3400 (a arma no
   // máximo resolvia a luta em ~73 s); agora a luta boa no nv.5 fica em ~100–130 s com a cena do Pavanatto.
   // HP_L2 = base do 2º mandato (o core ainda põe ×1,25). FAT_START = cansaço (s de luta; já inclui os ~6,5 s da cena).
-  const HP = 8400, HP_L2 = 6100, FAT_START = 175;
+  // SPD_K = multiplicador dos tiros (def.spdK). O def lê estes valores na hora (getters hp / fatStart / spdK).
+  const T = tune('erika.T', { HP: 8400, HP_L2: 6100, FAT_START: 175, SPD_K: 1.15 });
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -20346,8 +20648,15 @@ body.in-play #toasts { opacity: 0; }
   }
   const loadT = () => (L2() ? FI.LOAD : FI.LOAD_L1);
   function liveCount(Lv) { let n = 0; for (const ph of Lv.phones) if (!ph.cut) n++; return n; }
-  // texto exato (×0,75 não vira ×0,8): 'EM ALTA ×0,9' / '×0,8' / '×0,75' / '×0,7'
-  const ARMOR_TAG = FI.ARMOR.map((a) => ({ text: 'EM ALTA ×' + String(a).replace('.', ','), color: PINK }));
+  // texto exato (×0,75 não vira ×0,8): 'EM ALTA ×0,9' / '×0,8' / '×0,75' / '×0,7'. Feito na hora a partir de
+  // FI.ARMOR (segue o modo) e guardado por índice: o mesmo objeto enquanto o valor não muda.
+  const ARMOR_TAG = [];
+  function armorTag(i) {
+    const a = FI.ARMOR[i];
+    let t = ARMOR_TAG[i];
+    if (!t || t.a !== a) t = ARMOR_TAG[i] = { text: 'EM ALTA ×' + String(a).replace('.', ','), color: PINK, a };
+    return t;
+  }
   // o rig liga (fio cortável). 1ª live da partida (1º mandato) = demonstração: 2,5 s sem tiro
   function rigOn(b) {
     const d = b.data;
@@ -20433,7 +20742,7 @@ body.in-play #toasts { opacity: 0; }
     }
     if (st) return;
     const n = Lv.st === 'loading' || Lv.st === 'on' ? liveCount(Lv) : 0;
-    if (n > 0) { d.armor = FI.ARMOR[Math.min(4, n)]; d.armorTag = ARMOR_TAG[Math.min(4, n)]; d.eng += dt * n; d.engTot += dt * n; }
+    if (n > 0) { d.armor = FI.ARMOR[Math.min(4, n)]; d.armorTag = armorTag(Math.min(4, n)); d.eng += dt * n; d.engTot += dt * n; }
     else { d.armor = 1; d.armorTag = null; }
   }
   // 2º turno: este ponto do fio está num dia de TRAMPO com a chuva de carteiras chegando (aviso ou carteira caindo acima)?
@@ -20684,7 +20993,7 @@ body.in-play #toasts { opacity: 0; }
   }
   // ---------- 2º turno: FIM DA ESCALA 6x1 (a semana do calendário) ----------
   const P2_DY = 28; // ela desce um pouco: a faixa da semana fica livre lá em cima
-  const SAY_RAIN = PAT.SAY_PRE + PAT.RAIN_WARN - 0.05; // fala da semana: some logo antes da 1ª carteira cair
+  const sayRain = () => PAT.SAY_PRE + PAT.RAIN_WARN - 0.05; // fala da semana: some logo antes da 1ª carteira cair
   function lanesFolga(list) { const w = [1, 1, 1, 1, 1, 1, 1]; for (const i of list) w[i] = 0; return w; }
   function folga3() {
     // 3 folgas, pelo menos duas lado a lado
@@ -20728,7 +21037,7 @@ body.in-play #toasts { opacity: 0; }
   // balão); a semana já conta como chuva (nada de VIRALIZOU começando na fresta)
   function* weekSay(b, line) {
     b.data.rainOn = true;
-    say(b, line, SAY_RAIN);
+    say(b, line, sayRain());
     yield PAT.SAY_PRE;
   }
   function* erkP2(b) {
@@ -20915,12 +21224,14 @@ body.in-play #toasts { opacity: 0; }
   // (TURN rad/s de mira), na volta BACK_SPD/BACK_TURN; DMG = dano total (fração da vida, antes do multiplicador);
   // FLINCH = susto (s); POST = respiro da Erika depois da cena (sem VIRALIZOU) para a última fala;
   // FORCE_DELAY = s entre a troca de turno e a cena; LOWER = s da faixa de TV.
-  const PV = {
+  // Registrado em 'erika.PV' sem X / Y (lugar do palanque na tela: desenho, não jogo).
+  const PV = tune('erika.PV', {
     X: 0.16, Y: 0.30, IN: 0.7, OUT: 0.85, FLEE: 1.1,
     E1: 0.45, E2: 1.65, FIRE: 1.7, P1: 2.5, P2: 3.6, LEAVE: 4.9, RESUME: 5.2,
     N: 7, SPD: 170, TURN: 7, BACK_SPD: 220, BACK_TURN: 9, DMG: 0.025, FLINCH: 0.8, POST: 1.3,
     FORCE_DELAY: 1.2, LOWER: 3.0,
-  };
+  }, ['IN', 'OUT', 'FLEE', 'E1', 'E2', 'FIRE', 'P1', 'P2', 'LEAVE', 'RESUME', 'N', 'SPD', 'TURN', 'BACK_SPD', 'BACK_TURN',
+    'DMG', 'FLINCH', 'POST', 'FORCE_DELAY', 'LOWER']);
   const PV_TAG = { text: 'AO VIVO', color: '#8fc1ff' }; // etiqueta da barra durante a cena
   const PAV_TXT = {
     IN: 'CHEGOU O PAVANATTO!', E1: '1,6 MILHÃO É POUCO?!', E2: 'TEXTÃO NELE!', BACK: 'DEVOLVEU O TEXTÃO!',
@@ -20982,16 +21293,16 @@ body.in-play #toasts { opacity: 0; }
     if (b.state === 'fight') { b.invuln = inv; b.invulnT = it; }
   }
   function pavSay(P, s, dur) { P.sayText = s; P.sayT = dur; }
-  // roteiro: [instante, ação]
+  // roteiro: [instante, ação]; o instante é uma função (lê o PV na hora: segue o modo)
   const PAV_EV = [
-    [PV.E1, (b, d) => { say(b, PAV_TXT.E1, PV.E2 - PV.E1); d.pose = 'point'; }],
-    [PV.E2, (b) => say(b, PAV_TXT.E2, 0.8)],
-    [PV.FIRE, (b, d, P) => { pavFire(b, P); P.boardTo = 1; }],
-    [PV.FIRE + 0.35, (b, d) => { d.pose = 'hold'; }],
-    [PV.P1, (b, d, P) => { P.boardTo = 0; pavSay(P, PAV_TXT.P1, PV.P2 - PV.P1); }],
-    [PV.P2, (b, d, P) => { P.pose = 'wave'; P.bye = true; pavSay(P, PAV_TXT.P2, PV.LEAVE - PV.P2); }], // some antes de ele cruzar com ela
-    [PV.LEAVE, (b, d, P) => pavLeave(P, PV.OUT)],
-    [PV.RESUME, (b, d, P) => pavResume(b, d, P)],
+    [() => PV.E1, (b, d) => { say(b, PAV_TXT.E1, PV.E2 - PV.E1); d.pose = 'point'; }],
+    [() => PV.E2, (b) => say(b, PAV_TXT.E2, 0.8)],
+    [() => PV.FIRE, (b, d, P) => { pavFire(b, P); P.boardTo = 1; }],
+    [() => PV.FIRE + 0.35, (b, d) => { d.pose = 'hold'; }],
+    [() => PV.P1, (b, d, P) => { P.boardTo = 0; pavSay(P, PAV_TXT.P1, PV.P2 - PV.P1); }],
+    [() => PV.P2, (b, d, P) => { P.pose = 'wave'; P.bye = true; pavSay(P, PAV_TXT.P2, PV.LEAVE - PV.P2); }], // some antes de ele cruzar com ela
+    [() => PV.LEAVE, (b, d, P) => pavLeave(P, PV.OUT)],
+    [() => PV.RESUME, (b, d, P) => pavResume(b, d, P)],
   ];
   // TEXTÃO NELE!: leque de 7 textões saindo do celular dela para cima e para a esquerda; eles fazem a curva e
   // caem na placa levantada (bem longe do Zé, lá em cima)
@@ -21096,7 +21407,7 @@ body.in-play #toasts { opacity: 0; }
       const u = Math.min(1, P.ot / P.outDur);
       P.x = M.lerp(P.x0, P.ex, u * u); P.y = P.y0 - u * 30;
     }
-    while (P.ev < PAV_EV.length && P.t >= PAV_EV[P.ev][0]) PAV_EV[P.ev++][1](b, d, P);
+    while (P.ev < PAV_EV.length && P.t >= PAV_EV[P.ev][0]()) PAV_EV[P.ev++][1](b, d, P);
     pavProj(b, P, dt);
     if (d.pav !== P) return false;
     if (P.st === 'out' && P.ot >= P.outDur && !P.proj.length) {
@@ -21238,7 +21549,12 @@ body.in-play #toasts { opacity: 0; }
   // A chefona
   // ======================================================================
   G.Bosses.define('erika', {
-    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, hp: HP, r: 40, homeY: 168, spdK: 1.15, fatStart: FAT_START,
+    // hp / fatStart / spdK lidos na hora do bloco 'erika.T' (o core lê def.hp no spawn; o BossKit, fatStart e spdK).
+    // Quem escrever no def escreve no T (uma fonte só).
+    name: 'ERIKA VIRALTON', title: 'A Deputada do Engajamento', fem: true, r: 40, homeY: 168,
+    get hp() { return T.HP; }, set hp(v) { T.HP = v; },
+    get fatStart() { return T.FAT_START; }, set fatStart(v) { T.FAT_START = v; },
+    get spdK() { return T.SPD_K; }, set spdK(v) { T.SPD_K = v; },
     score: 220000, pix: 180, music: 'boss', defeatText: 'CANCELADA!',
     phases: [
       { at: 1, name: 'Segue o Fio' },
@@ -21264,7 +21580,7 @@ body.in-play #toasts { opacity: 0; }
       d.pl = 0; d.pR = 0; d.p5 = false;
       K.mechInit(b, 'fio');
       b.mech.pav = 0; // 1 quando a cena do Pavanatto termina
-      if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
+      if (L2() && T.HP_L2 !== T.HP) b.hp = b.maxHp = b.maxHp * (T.HP_L2 / T.HP);
       b.hitboxes = HB_A;
       K.warmPeople(b, 'p1', K.poses(ERIKA, ERK_SIZE, ['idle', 'hold', 'point', 'up', 'shrug', 'wave']).concat(K.poses(ERIKA, ERK_SIZE, ['fist'])));
       K.warmShots(b, ERK_SHOTS.concat([['erk_textao', COL.gold]]));
@@ -21540,8 +21856,13 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // Afinação (SPEC5 §17, passe de balanço: HP → fatStart → tonto → cadência)
   // ======================================================================
+  // MODO CPI (SPEC-CPI §1): os valores escritos aqui são os do MODO CPI. Blocos registrados em G.tune: 'taxad.T'
+  // (vida, cansaço, velocidade), 'taxad.TX' (padrões), 'taxad.CF' (a manha dos cofres) e 'taxad.ROUND' (tiros
+  // durante a rodada). O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada copiado no carregamento).
+  const tune = G.tune || ((id, o) => o);
   // HP a R = 0,75 (o core trava ×0,80…×1,07 pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
-  const HP = 9000, HP_L2 = 7200;
+  // FAT_START = cansaço (s de luta); SPD_K = multiplicador dos tiros. O def lê estes valores na hora (getters).
+  const T = tune('taxad.T', { HP: 9000, HP_L2: 7200, FAT_START: 190, SPD_K: 1.15 });
   // Padrões (velocidades antes do spdK 1,15; esperas por pW, contagens por pN / pRing).
   // SWAY/OMEGA = balanço por turno; TELL = gaveta abrindo antes do tiro da gaveta; BOX_* = caixas da blusinha
   // (BOX_STEP rad entre caixas; ALF_Y·H = alfândega, onde cada caixa vira 3 blusinhas ±SPLIT_A rad a ×SPLIT_K:
@@ -21551,7 +21872,7 @@ body.in-play #toasts { opacity: 0; }
   // (moldura W×H, régua a cada STEP px andando para dentro, FURO px de saída); ZERO_* = o "00" (elipses RX×RY a
   // ±DX do meio, DY abaixo dele, bala a cada STEP px de contorno, ROMBO px sem bala a ±ROMBO_DX do centro de cada
   // zero); PIX_* = trens da maquininha (N balas a GAP px, DOWN rad para baixo); IOF_* = laser no x do carro.
-  const TX = {
+  const TX = tune('taxad.TX', {
     SWAY: [50, 25, 60, 30, 70], OMEGA: [0.5, 0.45, 0.5, 0.45, 0.8], BOB: 6, GLIDE: 2.4,
     TELL: 0.45, BOX_N: 3, BOX_N_L2: 4, BOX_STEP: 0.45, BOX_SPD: 115, ALF_Y: 0.50, SPLIT_A: 0.24, SPLIT_K: 1.15,
     IMP_N: 16, IMP_SPD: 90, IMP_DELAY: 0.5, P1_WAIT: 2.6,
@@ -21564,12 +21885,14 @@ body.in-play #toasts { opacity: 0; }
     PIX_Y0: 0.40, PIX_Y1: 0.62, PIX_ROW_MIN: 34, PIX_GLIDE: 0.4, MQ_X: 14,
     IOF_EVERY: 5, IOF_WARN: 1.0, IOF_LIFE: 0.5, IOF_W: 22,
     P5_SPD: 1.12, P5_REST: 0.6, P5_TRAINS: 3, P5_ZERO_WAIT: 2.5, CHAT: [7, 10],
-  };
+  });
   // A manha ACHAR (SPEC5 §6.5). Por turno (índice 0..4): SW s por troca, SWAPS trocas, GAP s entre trocas, FEINT trocas
   // que voltam a 40%, RELABEL plaquinhas voando no meio, ROT uma troca vira rodízio dos 3, DRIFT ±px no "escolha",
   // PICK s para escolher, STUN/MUL o tonto, NEXT s (relógio, fora do tonto) até a próxima rodada.
   // ALIQ = armadura por ALÍQUOTA 0..3; REFUND = Pix do saco; SW_MIN / PICK_MIN = pisos com 2º mandato e PRESSÃO.
-  const CF = {
+  // 2º mandato e PRESSÃO (nível lv travado no turno): PICK − PICK_L2 − PICK_LV·lv; SW × SW_L2 × (1 − SW_LV·lv);
+  // SWAPS + SWAPS_L2 (+1 a partir do nível SWAPS_LV); NEXT × NEXT_L2.
+  const CF = tune('taxad.CF', {
     ROW_Y: 0.46, PICK_Y: 0.64, X: [0.25, 0.5, 0.75], W: 40, H: 36, TOUCH_R: 18, ARC: 28, FIRST: 5.0,
     SHOW: 1.2, DROP: 0.5,
     SW: [0.62, 0.56, 0.50, 0.46, 0.42],
@@ -21584,17 +21907,19 @@ body.in-play #toasts { opacity: 0; }
     MUL: [2.3, 2.3, 2.3, 2.3, 2.5],
     NEXT: [10, 9, 9, 8, 6],
     ALIQ: [1, 0.9, 0.8, 0.7], REFUND: 14, SW_MIN: 0.30, PICK_MIN: 2.0,
+    PICK_L2: 0.3, PICK_LV: 0.05, SW_L2: 0.85, SW_LV: 0.04, SWAPS_L2: 1, SWAPS_LV: 4, NEXT_L2: 0.9,
     DEMO_SW: 0.9, DEMO_SWAPS: 2,
     REL_DUR: 0.5, REL_FLY: 0.35, CANCEL_NEXT: 2.5, DEATH_NEXT: 3.0,
-  };
-  // Tiros durante a rodada (d.hold: as corrotinas param; nunca laser, moldura nem "00").
-  const ROUND = {
-    FIRST: 0.9, KEY: 1.6, KEY_N: 3, KEY_SPREAD: 0.18, KEY_SPD: 145,
+  });
+  // Tiros durante a rodada (d.hold: as corrotinas param; nunca laser, moldura nem "00"). FIRST / FIRST + FIRST_B =
+  // primeiro tiro de cada relógio; FAN_N = tiros do leque do 3º e do 5º turno.
+  const ROUND = tune('taxad.ROUND', {
+    FIRST: 0.9, FIRST_B: 0.8, KEY: 1.6, KEY_N: 3, KEY_SPREAD: 0.18, KEY_SPD: 145,
     RING_P2: 2.4, RING_P2_N: 8, RING_SPD: 90,
-    FAN_P3: 1.5, FAN_SPREAD: 0.3,
+    FAN_P3: 1.5, FAN_N: 3, FAN_SPREAD: 0.3,
     SPIRAL: 0.25, SPIRAL_ARMS: 2, SPIRAL_SPD: 90, SPIRAL_W: 0.42,
     P5: 1.6, RING_P5_N: 10,
-  };
+  });
 
   // ======================================================================
   // Visual (SPEC5 §6.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -21973,8 +22298,9 @@ body.in-play #toasts { opacity: 0; }
   const BLUSA_P = { style: 'tx_blusa', color: COL.pink }, BLUSA_M = { style: 'tx_blusa', color: COL.magenta };
   const KEY = { style: 'tx_tecla', color: COL.red }, DARF = { style: 'tx_darf', color: COL.orange };
   const PIXB = { style: 'tx_pix', color: COL.orange };
-  const REGUA = { style: 'tx_regua', color: '#ffb02e', life: TX.ARC_LIFE, noPress: true };
-  const ZERO = { style: 'small', color: COL.red, delay: TX.ZERO_DELAY, noPress: true };
+  // life / delay lidos na hora do TX (o G.fire lê o.life / o.delay a cada tiro): seguem o modo
+  const REGUA = { style: 'tx_regua', color: '#ffb02e', get life() { return TX.ARC_LIFE; }, noPress: true };
+  const ZERO = { style: 'small', color: COL.red, get delay() { return TX.ZERO_DELAY; }, noPress: true };
 
   // todo tiro do Taxad passa por aqui (o 5º turno acelera tudo: d.spdMul)
   function txShoot(x, y, a, spd, o) {
@@ -22122,10 +22448,13 @@ body.in-play #toasts { opacity: 0; }
     }
   }
   // ---------- 3º turno: DÉFICIT ZERO (o "00" rígido caindo, com rombos embaixo e em cima) ----------
-  // pontos do contorno de uma elipse RX×RY a cada ~STEP px (calculado uma vez): [cos, sen, arco] × N, P = perímetro
-  let ZPTS = null;
+  // pontos do contorno de uma elipse RX×RY a cada ~STEP px: [cos, sen, arco] × N, P = perímetro. Calculado uma vez
+  // por (RX, RY, STEP): refeito se o modo trocar esses números.
+  let ZPTS = null, zKey = '';
   function zeroPts() {
-    if (ZPTS) return ZPTS;
+    const key = TX.ZERO_RX + '|' + TX.ZERO_RY + '|' + TX.ZERO_STEP;
+    if (ZPTS && zKey === key) return ZPTS;
+    zKey = key;
     const a = TX.ZERO_RX, bb = TX.ZERO_RY, S = 720, cum = new Float32Array(S + 1);
     let px = a, py = 0;
     for (let i = 1; i <= S; i++) { const th = (i / S) * TAU, x = a * Math.cos(th), y = bb * Math.sin(th); cum[i] = cum[i - 1] + Math.hypot(x - px, y - py); px = x; py = y; }
@@ -22284,9 +22613,9 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data, run = G.run || {}, ph = cfPh(b), l2 = L2(), lv = d.pl | 0;
     const demo = !l2 && !run._txSeen;
     run._txSeen = 1;
-    let sw, n, pick = CF.PICK[ph] - (l2 ? 0.3 : 0) - 0.05 * lv;
+    let sw, n, pick = CF.PICK[ph] - (l2 ? CF.PICK_L2 : 0) - CF.PICK_LV * lv;
     if (demo) { sw = CF.DEMO_SW; n = CF.DEMO_SWAPS; }
-    else { sw = Math.max(CF.SW_MIN, CF.SW[ph] * (l2 ? 0.85 : 1) * (1 - 0.04 * lv)); n = CF.SWAPS[ph] + (l2 ? 1 : 0) + (lv >= 4 ? 1 : 0); }
+    else { sw = Math.max(CF.SW_MIN, CF.SW[ph] * (l2 ? CF.SW_L2 : 1) * (1 - CF.SW_LV * lv)); n = CF.SWAPS[ph] + (l2 ? CF.SWAPS_L2 : 0) + (lv >= CF.SWAPS_LV ? 1 : 0); }
     pick = Math.max(CF.PICK_MIN, pick);
     const plates = [0, 1, 2];
     for (let i = 2; i > 0; i--) { const j = M.randi(0, i), t = plates[i]; plates[i] = plates[j]; plates[j] = t; }
@@ -22304,7 +22633,7 @@ body.in-play #toasts { opacity: 0; }
     say(b, ph === 4 ? 'TUDO OU NADA, ZÉ!' : 'CADÊ O SEU DINHEIRO?', 1.8);
     sfx('cofre');
     if (demo) K.mechHint('tx_cofre', G.W / 2, G.H * 0.56, 'SIGA O COFRE DO SEU DINHEIRO!');
-    d.rp.a = ROUND.FIRST; d.rp.b = ROUND.FIRST + 0.8; d.rp.ang = Math.random() * TAU;
+    d.rp.a = ROUND.FIRST; d.rp.b = ROUND.FIRST + ROUND.FIRST_B; d.rp.ang = Math.random() * TAU;
     return C;
   }
   // começo de uma troca: de onde / para onde vai cada cofre (por cima = indo para a direita)
@@ -22423,7 +22752,7 @@ body.in-play #toasts { opacity: 0; }
       K.mechMiss(b); d.cfMiss++;
       d.aliq = Math.min(3, d.aliq + 1);
     }
-    d.cfT = CF.NEXT[ph] * (L2() ? 0.9 : 1);
+    d.cfT = CF.NEXT[ph] * (L2() ? CF.NEXT_L2 : 1);
   }
   function cfReveal(b, C) {
     const d = b.data, R = C.list[C.right], bag = C.bag;
@@ -22512,12 +22841,12 @@ body.in-play #toasts { opacity: 0; }
       if (rp.a <= 0) { rp.a = ROUND.KEY; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), ROUND.KEY_N, ROUND.KEY_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
       if (ph === 1 && rp.b <= 0) { rp.b = ROUND.RING_P2; txRing(b.x, b.y + 50, ROUND.RING_P2_N, ROUND.RING_SPD, DARF, Math.random() * TAU); }
     } else if (ph === 2) {
-      if (rp.a <= 0) { rp.a = ROUND.FAN_P3; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), 3, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
+      if (rp.a <= 0) { rp.a = ROUND.FAN_P3; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), ROUND.FAN_N, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
     } else if (ph === 3) {
       if (rp.a <= 0) { rp.a = ROUND.SPIRAL; txRing(b.x, b.y + 30, ROUND.SPIRAL_ARMS, ROUND.SPIRAL_SPD, PIXB, rp.ang); rp.ang += ROUND.SPIRAL_W; }
     } else {
       if (rp.a <= 0) { rp.a = ROUND.P5; txRing(b.x, b.y + 50, ROUND.RING_P5_N, ROUND.RING_SPD, DARF, Math.random() * TAU); }
-      if (rp.b <= 0) { rp.b = ROUND.P5; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), 3, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
+      if (rp.b <= 0) { rp.b = ROUND.P5; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), ROUND.FAN_N, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
     }
   }
   // alvo do piloto automático / humanbot (uma rodada = um id: o humanbot guarda a decisão)
@@ -22746,7 +23075,12 @@ body.in-play #toasts { opacity: 0; }
   // O chefão
   // ======================================================================
   G.Bosses.define('taxad', {
-    name: 'FERNANDO TAXAD', title: 'O Taxador-Geral', hp: HP, r: 42, homeY: 165, spdK: 1.15, fatStart: 190,
+    // hp / fatStart / spdK lidos na hora do bloco 'taxad.T' (o core lê def.hp no spawn; o BossKit, fatStart e spdK).
+    // Quem escrever no def escreve no T (uma fonte só).
+    name: 'FERNANDO TAXAD', title: 'O Taxador-Geral', r: 42, homeY: 165,
+    get hp() { return T.HP; }, set hp(v) { T.HP = v; },
+    get fatStart() { return T.FAT_START; }, set fatStart(v) { T.FAT_START = v; },
+    get spdK() { return T.SPD_K; }, set spdK(v) { T.SPD_K = v; },
     score: 300000, pix: 260, music: 'boss', defeatText: 'TAXA ZERO!',
     phases: [
       { at: 1, name: 'Taxa das Blusinhas' },
@@ -22757,7 +23091,7 @@ body.in-play #toasts { opacity: 0; }
     ],
     init(b) {
       const d = b.data;
-      if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
+      if (L2() && T.HP_L2 !== T.HP) b.hp = b.maxHp = b.maxHp * (T.HP_L2 / T.HP);
       K.mechInit(b, 'cofre'); b.mech.aliq = 0;
       d.fx = []; d.clk = 0; d.stunT = 0; d.mechCd = 0; d.spdMul = 1; d.aliq = 0; d.armor = 1; d.armorTag = null;
       d.cf = null; d.cfT = CF.FIRST; d.cfN = 0; d.cfOk = 0; d.cfMiss = 0; d.hold = false;
@@ -23015,14 +23349,24 @@ body.in-play #toasts { opacity: 0; }
   // qualidade (ENGINE §10): partículas puramente decorativas contínuas e brilhos extras
   // 'high' tudo, 'mid' metade das partículas (sem o brilho dourado), 'low' nenhuma partícula decorativa
   const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
+  // MODO CPI / NORMAL (core: G.tune): os números escritos aqui são os do MODO CPI; o NORMAL só muda o que estiver
+  // em G.TUNE_NORMAL['lule.T'] etc. Tudo é lido na hora (nada de copiar um destes números no carregamento).
+  const tune = G.tune || ((id, o) => o);
 
   // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,07 e o ×1,25 do 2º mandato;
-  // d.hpMul = b.maxHp / HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
+  // d.hpMul = b.maxHp / T.HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
   // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
-  const HP1 = 7200, HP2 = 5200, HP3 = 3200, HOME_Y = 178;
   // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
-  const FAT1 = 140, FAT2 = 170, FAT3 = 60, FAT_RAMP = 90, FAT_MAX = 0.75;
-  const fatStartOf = (life) => (life === 1 ? FAT1 : life === 2 ? FAT2 : FAT3);
+  // CPI_* = o leque mirado extra do nível CPI! (cpiCo); QUINTO_LV = níveis a mais nas variantes do LULE 5.0;
+  // QUINTO_SEG = duração de cada bloco do medley do QUINTO MANDATO; PHASE_STUN = teto do tonto numa troca de turno.
+  const T = tune('lule.T', {
+    HP1: 7200, HP2: 5200, HP3: 3200,
+    FAT1: 140, FAT2: 170, FAT3: 60, FAT_RAMP: 90, FAT_MAX: 0.75,
+    CPI_EVERY: 3.2, CPI_N: 3, CPI_SPREAD: 0.4, CPI_SPD: 130,
+    QUINTO_LV: 1, QUINTO_SEG: 12, PHASE_STUN: 2.0,
+  });
+  const HOME_Y = 178;
+  const fatStartOf = (life) => (life === 1 ? T.FAT1 : life === 2 ? T.FAT2 : T.FAT3);
   // Lule (G.Art.person) é desenhado com este tamanho, centrado em (0, PY) relativo ao chefão
   const PS = 136, PY = -30, GY = 6; // GY: churrasqueira um pouco mais baixa
 
@@ -23070,20 +23414,29 @@ body.in-play #toasts { opacity: 0; }
   // lv 5 +1 de novo, esperas ×0,82 e o cpiCo. Nunca em aviso, telegrafia, delay, aviso de laser, parede nem no Leão.
   const PRESS0 = { R: 0, lv: 0 };
   const press = () => G.press || PRESS0;
-  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0); }
-  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + 0.25 * (R || 0))); }
-  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? 0.82 : lv >= 3 ? 0.9 : 1); }
+  // PV: N3/N5 = tiros a mais em lv ≥ 3 / lv 5; W3/W5 = fator das esperas; RING = anel ×(1 + RING·R)
+  const PV = tune('lule.PV', { N3: 1, N5: 1, W3: 0.9, W5: 0.82, RING: 0.25 });
+  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? PV.N3 : 0) + (lv >= 5 ? PV.N5 : 0); }
+  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + PV.RING * (R || 0))); }
+  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? PV.W5 : lv >= 3 ? PV.W3 : 1); }
   // o LULE 5.0 usa as variantes um nível acima (teto 5)
-  function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; if (d.life === 3) d.pl = Math.min(5, d.pl + 1); }
+  function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; if (d.life === 3) d.pl = Math.min(5, d.pl + T.QUINTO_LV); }
   const N = (d, n) => pN(n, d.pl), W = (d, s) => pW(s, d.pl), RG = (d, n) => pRing(n, d.pR);
   const pressStun = () => { const P = G.PRESS; return P && P.STUN != null ? P.STUN : 0.3; };
-  // ÚLTIMO RECURSO (turno last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×1,5) contra o empate
-  const P5 = {
+  // ÚLTIMO RECURSO (turno last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×P5.MUL) contra o empate
+  const P5 = tune('lule.P5', {
     LIMIT: 30, MUL: 1.5, TAG: { text: 'ÚLTIMO RECURSO', color: '#ff2a4a' },
     TAG2: { text: 'SEM SAÍDA ×1,5', color: '#ff2a4a' },
-  };
+  }, ['LIMIT', 'MUL']);
   function lastStand(b) { const d = b.data; d.p5 = true; d.p5T0 = b.ft; d.p5Mul = 1; d.mechCd = 0; }
-  function p5Update(b) { const d = b.data; if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) d.p5Mul = P5.MUL; }
+  function p5Update(b) {
+    const d = b.data;
+    if (!(d.p5 && b.ft - d.p5T0 > P5.LIMIT)) return;
+    d.p5Mul = P5.MUL;
+    // a etiqueta acompanha o multiplicador do modo (no MODO CPI continua 'SEM SAÍDA ×1,5')
+    const t2 = P5.TAG2;
+    if (t2.mul !== P5.MUL) { t2.mul = P5.MUL; t2.text = 'SEM SAÍDA ×' + fmtMul(P5.MUL); }
+  }
 
   // ---------- JANJINHA (janjinha.js, carrega DEPOIS do lule.js; SPEC5 §2.4) ----------
   // Lido na hora e sempre com guarda: sem o módulo (mods=lule) o Lule luta como antes. Um erro lá dentro é
@@ -23176,11 +23529,15 @@ body.in-play #toasts { opacity: 0; }
   // AIM 1,45 (trava 1,0 s; a spec começava em 1,0 = trava 0,55): com 0,55 s o humanbot casual levava a mordida em 60%
   // dos leões que ele via (reação 0,45 s + o movimento); com 0,75 s (AIM 1,2) o olé dava certo em ~40% dos leões do casual e
   // ~70–80% do good. Rodada 4: AIM 1,45 e o tonto mais curto (STUN 4,0/3,2 → 3,4/2,8) para o tempo de luta não cair.
-  const LEAO = {
+  // *_L2 = 2º mandato (STALK_L2 e SPD_L2 trocam o valor; AIM_L2 sai do AIM; GAP_L2 e STUN_L2 multiplicam).
+  // Registrados para o modo: tudo menos as distâncias de acerto (ZE_R, COMP_R, PIC_R), o XR (botão) e o PIX.
+  const LEAO = tune('lule.LEAO', {
     FIRST: 7, GAP: [11, 10, 0, 9, 8, 10, 9, 8, 7, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.45, TRACK: 0.45, SPD: 600,
     CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [3.4, 2.8, 2.8], MUL: 2.3, PIX: 30, XR: 110, RISE: 256,
     LAST_T: 1.5, // no ÚLTIMO RECURSO o próximo leão sai em ≤ 1,5 s (SPEC5 §2.3)
-  };
+    STALK_L2: 140, AIM_L2: 0.15, SPD_L2: 660, GAP_L2: 0.9, STUN_L2: 0.85,
+  }, ['FIRST', 'GAP', 'ENTER', 'STALK', 'STALK_MAX', 'AIM', 'TRACK', 'SPD', 'CLAMP', 'STUN', 'MUL', 'RISE', 'LAST_T',
+    'STALK_L2', 'AIM_L2', 'SPD_L2', 'GAP_L2', 'STUN_L2']);
   // XR: o leão nunca passa de x = W − XR (no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas;
   // com 110 nem a juba nem o rabo entram no botão, de 360×640 a 412×915). O Lule anda em x ≤ W − 95, então o bote
   // ainda pega o Lule em qualquer lugar (o piloto mira na reta leão → Lule). Do lado direito ele não entra andando
@@ -23202,7 +23559,7 @@ body.in-play #toasts { opacity: 0; }
   function luleStun(b, dur, mul) {
     const d = b.data, g = G.game;
     mul = Math.min(4, mul + pressStun() * (press().R || 0));
-    d.stunT = d.stunT0 = dur * (L2() ? 0.85 : 1); d.stunMul = mul;
+    d.stunT = d.stunT0 = dur * (L2() ? LEAO.STUN_L2 : 1); d.stunMul = mul;
     d.stunTag = { text: 'BRECHA ×' + fmtMul(mul), color: '#ffd23f' };
     d.stunId = 'stun' + (d.lionN || 0);
     d.lanes.length = 0; d.stamps.length = 0; d.lsign = null;
@@ -23256,7 +23613,7 @@ body.in-play #toasts { opacity: 0; }
   // st: enter → stalk (segue o x do Zé embaixo) → aim (mira; trava) → lunge (bote) → hold (pendurado no Lule) | flee
   function lionGap(b) {
     const d = b.data, i = (d.life === 1 ? 0 : d.life === 2 ? 5 : 9) + (b.phase || 0);
-    return (LEAO.GAP[M.clamp(i, 0, LEAO.GAP.length - 1)] || 0) * (L2() ? 0.9 : 1);
+    return (LEAO.GAP[M.clamp(i, 0, LEAO.GAP.length - 1)] || 0) * (L2() ? LEAO.GAP_L2 : 1);
   }
   function spawnLion(b) {
     const d = b.data, p = pl();
@@ -23418,7 +23775,7 @@ body.in-play #toasts { opacity: 0; }
       case 'stalk': {
         if (!p.alive) { lionFlee(b); break; }
         L.y = yF;
-        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
+        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? LEAO.STALK_L2 : LEAO.STALK) * dt), 22, xMax);
         L.bristle = Math.min(1, L.bristle + dt / LEAO.STALK_MAX);
         if (Math.abs(p.x - L.x) < 16 || L.t >= LEAO.STALK_MAX) { L.st = 'aim'; L.t = 0; }
         break;
@@ -23428,7 +23785,7 @@ body.in-play #toasts { opacity: 0; }
         L.y = yF;
         if (!L.locked) {
           // enquanto mira, ainda se ajeita embaixo do Zé (o raio sai quase reto: quem está embaixo do Lule acerta o Lule)
-          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
+          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? LEAO.STALK_L2 : LEAO.STALK) * dt), 22, xMax);
           L.a = clampAim(Math.atan2(p.y - L.y, p.x - L.x));
           if (L.t >= LEAO.TRACK) {
             // TRAVOU: olhos vermelhos, agacha e o "SAI!" aponta para o lado com mais espaço
@@ -23441,11 +23798,11 @@ body.in-play #toasts { opacity: 0; }
         L.sy = L.locked ? 0.85 : 1;
         L.bristle = 1;
         lionRay(b, L); // (também acerta L.gold / L.hitJ)
-        if (L.t >= LEAO.AIM - (l2 ? 0.15 : 0)) { L.st = 'lunge'; L.t = 0; L.sy = 1; sfx('whoosh'); }
+        if (L.t >= LEAO.AIM - (l2 ? LEAO.AIM_L2 : 0)) { L.st = 'lunge'; L.t = 0; L.sy = 1; sfx('whoosh'); }
         break;
       }
       case 'lunge': {
-        const dist = (l2 ? 660 : LEAO.SPD) * dt, n = Math.max(1, Math.ceil(dist / 8));
+        const dist = (l2 ? LEAO.SPD_L2 : LEAO.SPD) * dt, n = Math.max(1, Math.ceil(dist / 8));
         const sx = (Math.cos(L.a) * dist) / n, sy = (Math.sin(L.a) * dist) / n;
         L.rot = (L.a + DOWN) * 0.8;
         for (let i = 0; i < n; i++) {
@@ -23680,8 +24037,11 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // Sub-inimigo: COMPANHEIRO (estrelinha vermelha que dança a ciranda em volta do Lule)
   // ======================================================================
+  // HP = vida de cada um; GIVE = HP que o Lule perde quando um cai; BACK = s até voltar; FIRE = intervalo dos tiros
+  // (×FIRE_L2 no 2º mandato) e SPD = velocidade da estrelinha
+  const COMP = tune('lule.COMP', { HP: 18, GIVE: 11, BACK: 5.2, FIRE: [2.8, 3.8], FIRE_L2: 0.8, SPD: 118 });
   G.Enemies.define('lule_companheiro', {
-    hp: 18, r: 13, score: 2000, pix: 1, keepOffscreen: true, ignoreClear: true, noPress: true, // (parte do chefão: a PRESSÃO não engrossa)
+    get hp() { return COMP.HP; }, r: 13, score: 2000, pix: 1, keepOffscreen: true, ignoreClear: true, noPress: true, // (parte do chefão: a PRESSÃO não engrossa)
     init(e, o) { e.data.i = o.i || 0; e.data.R = 0; e.data.fireT = 2 + (o.i || 0) * 0.45; },
     update(e, dt, g) {
       const b = g.boss, d = e.data;
@@ -23698,8 +24058,8 @@ body.in-play #toasts { opacity: 0; }
       if (bd.stunT > 0) return; // Lule tonto: a roda para e ninguém atira
       d.fireT -= dt;
       if (d.fireT <= 0) {
-        d.fireT = M.rand(2.8, 3.8) * (L2() ? 0.8 : 1);
-        if (e.y > b.y + 20 && d.R > bd.compR * 0.8) shoot(e.x, e.y, G.aim(e.x, e.y), 118, { style: 'lule_estrela', color: COL.red });
+        d.fireT = M.rand(COMP.FIRE[0], COMP.FIRE[1]) * (L2() ? COMP.FIRE_L2 : 1);
+        if (e.y > b.y + 20 && d.R > bd.compR * 0.8) shoot(e.x, e.y, G.aim(e.x, e.y), COMP.SPD, { style: 'lule_estrela', color: COL.red });
       }
     },
     // com o Lule em cena, ele mesmo desenha os companheiros POR CIMA dele (veja drawLule)
@@ -23709,10 +24069,10 @@ body.in-play #toasts { opacity: 0; }
       if (opts && opts.silent) return;
       G.text(e.x, e.y - 12, M.pick(['VOLTA AQUI!', 'COMPANHEIRO!', 'FUI!']), { color: '#ffd23f', size: 10, life: 0.8 });
       if (b && b.id === 'lule' && fighting(b) && b.data.wantComps) {
-        b.data.respawn.push(5.2);
+        b.data.respawn.push(COMP.BACK);
         // derrubar um companheiro tira apoio do Lule: ~60% da vida dele passa para o chefão (as panelas
         // teleguiadas miram no alvo mais perto; sem isso a Companheirada virava um moedor com a arma fraca)
-        G.hitBoss(b, 11);
+        G.hitBoss(b, COMP.GIVE);
       }
     },
   });
@@ -23979,7 +24339,7 @@ body.in-play #toasts { opacity: 0; }
     d.compR = 92;
     for (let i = 0; i < n; i++) {
       if (!fighting(b)) return;
-      G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i, hp: 18 });
+      G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i, hp: COMP.HP });
       sfx('spawn');
       yield 0.18;
     }
@@ -24057,10 +24417,10 @@ body.in-play #toasts { opacity: 0; }
   function* cpiCo(b, d) {
     for (;;) {
       yield () => d.pl === 5;
-      yield pW(3.2, 5);
+      yield pW(T.CPI_EVERY, 5);
       if (d.pl !== 5 || d.stunT > 0 || !canShoot()) continue;
       const x = b.x, y = b.y + 40;
-      fan(x, y, G.aim(x, y), 3, 0.4, 130, { style: 'small', color: '#ff2a4a' });
+      fan(x, y, G.aim(x, y), T.CPI_N, T.CPI_SPREAD, T.CPI_SPD, { style: 'small', color: '#ff2a4a' });
     }
   }
   function* wander(b, d, amp, every) {
@@ -24315,7 +24675,7 @@ body.in-play #toasts { opacity: 0; }
     d.lionThruL = true;
     co(b, wander(b, d, 60, 2.2));
     yield 1.0;
-    const SEG = 12;
+    const SEG = T.QUINTO_SEG; // (lido no começo do turno: o modo já está aplicado)
     let k = 0, s = pl().x > G.W / 2 ? 1 : -1;
     for (let seg = 0; ; seg = (seg + 1) % 4) {
       const t0 = clk(b), left = () => SEG - (clk(b) - t0);
@@ -24416,13 +24776,13 @@ body.in-play #toasts { opacity: 0; }
         G.banner('ELE VOLTOU DE NOVO!', 'LULE 5.0 — QUINTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
         b.name = 'LULE 5.0';
         d.life = 3; d.slumpTo = 0;
-        b.maxHp = HP3 * d.hpMul; b.hp = 0;
+        b.maxHp = T.HP3 * d.hpMul; b.hp = 0;
         say(b, 'QUINTO MANDATO!', 2.6);
       } else {
         G.banner('ELE VOLTOU!', 'LULE 4.0 — QUARTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
         b.name = 'LULE 4.0';
         d.life = 2; d.slumpTo = 0;
-        b.maxHp = HP2 * d.hpMul; b.hp = 0;
+        b.maxHp = T.HP2 * d.hpMul; b.hp = 0;
         say(b, 'QUARTO MANDATO!', 2.6);
       }
       d.refill0 = t;
@@ -25053,7 +25413,7 @@ body.in-play #toasts { opacity: 0; }
   const HB = [[-46, 42, 25], [46, 42, 25], [0, 46, 26], [0, -4, 28], [0, -49, 36]]; // grelha primeiro (o jato para nela)
 
   G.Bosses.define('lule', {
-    name: 'LULE', title: 'O Picanheiro', hp: HP1, r: 44, homeY: HOME_Y,
+    name: 'LULE', title: 'O Picanheiro', get hp() { return T.HP1; }, r: 44, homeY: HOME_Y, // hp lido no spawnBoss (modo)
     score: 500000, pix: 400, music: 'boss_final', defeatText: 'A CONTA CHEGOU!',
     phases: PH1,
     init(b) {
@@ -25062,7 +25422,7 @@ body.in-play #toasts { opacity: 0; }
       d.smokeT = 0; d.life = 1; d.pose = 'idle'; d.poseT = 0; d.moodT = 0; d.moodOv = 'hurt';
       d.compA = 0; d.compR = 92; d.wantComps = false; d.dim = 0; d.slump = 0; d.slumpTo = 0; d.dmg = 0;
       d.tx = b.homeX; d.ty = HOME_Y; d.hitAcc = 0;
-      d.hpMul = b.maxHp / HP1; // 2º mandato: o core já multiplicou o HP
+      d.hpMul = b.maxHp / T.HP1; // 2º mandato: o core já multiplicou o HP
       b.hitboxes = HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       b.phases = PH1.slice();
       // manha (OLÉ): relógio do chefão, tonto, o Leão e os contadores
@@ -25088,7 +25448,7 @@ body.in-play #toasts { opacity: 0; }
       updSmoke(d, b, dt, heat);
       if (d.reviving) { updLion(b, dt, g); updateRevive(b, dt, g); return; } // o Leão termina de fugir na cena
       // cansaço por vida: a luta de quem chega fraco não vira um moedor sem fim (bons jogadores nem percebem)
-      const lf = b.ft - (d.lifeT0 || 0), fat = FAT_MAX * M.clamp((lf - fatStartOf(d.life)) / FAT_RAMP, 0, 1);
+      const lf = b.ft - (d.lifeT0 || 0), fat = T.FAT_MAX * M.clamp((lf - fatStartOf(d.life)) / T.FAT_RAMP, 0, 1);
       d.fat = fat;
       p5Update(b); // ÚLTIMO RECURSO: SEM SAÍDA ×1,5 depois de 30 s no turno
       // TONTO = PAUSA: sem corrotinas, relógio, movimento, ciranda nem companheiros voltando
@@ -25128,7 +25488,7 @@ body.in-play #toasts { opacity: 0; }
           if (d.respawn[i] <= 0) {
             d.respawn.splice(i, 1);
             const slot = freeCompSlot();
-            if (slot >= 0 && compAlive() < 8) { G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i: slot, hp: 18 }); sfx('spawn'); }
+            if (slot >= 0 && compAlive() < 8) { G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i: slot, hp: COMP.HP }); sfx('spawn'); }
           }
         }
       }
@@ -25157,7 +25517,7 @@ body.in-play #toasts { opacity: 0; }
       startPhase(b, idx);
       // troca de fase no meio do tonto: as corrotinas novas começam quando ele acabar; o tonto fica ≤ 2 s
       if (d.stunT > 0) {
-        d.stunT = Math.min(d.stunT, 2.0);
+        d.stunT = Math.min(d.stunT, T.PHASE_STUN);
         pose(b, 'shrug', d.stunT); d.moodT = d.stunT; d.moodOv = 'hurt';
       }
     },
@@ -25281,6 +25641,9 @@ body.in-play #toasts { opacity: 0; }
   const L2 = () => !!(G.game && G.game.loop > 1);
   // partículas puramente decorativas: 'high' tudo, 'mid' metade, 'low' nada (ENGINE §10)
   const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
+  // MODO CPI / NORMAL (core: G.tune): os números do JN e do JX são os do MODO CPI; o NORMAL só muda o que estiver em
+  // G.TUNE_NORMAL['janjinha.JN'] / ['janjinha.JX']. Tudo é lido na hora (nada copiado no carregamento).
+  const tune = G.tune || ((id, o) => o);
 
   // ======================================================================
   // Afinação (SPEC5 §8.1). Os números ficam aqui (passe de balanço: só este bloco e o JX).
@@ -25292,7 +25655,7 @@ body.in-play #toasts { opacity: 0; }
   // SOFA_* = sofazinhos (abaixo de SOFA_AT do HP); GAP = intervalo entre ataques; LION_DMG = mordida no cartão
   // (fração do HP dela); CARD_BACK = s até a segunda via; SCORE/PIX = prêmio do EMBARCOU PRO EXTERIOR!
   // ======================================================================
-  const JN = {
+  const JN = tune('janjinha.JN', {
     HP: 3000, SHIELD: 0.3, Y: 112, STOPS: [0.18, 0.82], DWELL: [4.0, 5.0], OUT: 0.7, OFF: 0.3, IN: 0.7, R: 26, ENTER: 1.6,
     FAT: 40, FAT_FULL: 30, LEAVE_T: 75, STUN_K: 1.5,
     CARD_N: 5, CARD_N_L2: 7, CARD_SPD: 150, CARD_SPREAD: 0.9, CARD_TELL: 0.45,
@@ -25300,18 +25663,27 @@ body.in-play #toasts { opacity: 0; }
     GRAWLIX_N: 9, GRAWLIX_SPD: 130, ROCKET_WARN: 1.1, ROCKET_WARN_L2: 0.9, ROCKET_SPD: 330, ROCKET_SEP: 70,
     SOFA_AT: 0.5, SOFA_N: 3, SOFA_SPD: 110,
     GAP: 1.6, GAP_L2: 1.3, LION_DMG: 0.2, CARD_BACK: 12, SCORE: 150000, PIX: 60,
-  };
+  }, ['HP', 'SHIELD', 'DWELL', 'OUT', 'OFF', 'IN', 'ENTER', 'FAT', 'FAT_FULL', 'LEAVE_T', 'STUN_K',
+    'CARD_N', 'CARD_N_L2', 'CARD_SPD', 'CARD_SPREAD', 'CARD_TELL', 'MALA_N', 'MALA_SPD', 'MALA_Y', 'MALA_RING', 'MALA_RING_SPD',
+    'GRAWLIX_N', 'GRAWLIX_SPD', 'ROCKET_WARN', 'ROCKET_WARN_L2', 'ROCKET_SPD', 'ROCKET_SEP', 'SOFA_N', 'SOFA_SPD',
+    'GAP', 'GAP_L2', 'LION_DMG', 'CARD_BACK']);
+  // (fora do modo: Y/STOPS/R = lugar e caixa de acerto, SOFA_AT = degrau da escada de ataques, SCORE/PIX = prêmio)
   // Afinação de apoio (não está na SPEC; mesma regra do JN): JET_* = o jatinho da entrada (y, s até largar o sofá),
   // DROP = o sofá caindo do jatinho, DLG_AT = s depois de largar até o diálogo, SKIP_WAIT = espera sem diálogo,
   // EXIT = o embarque (KO ou saída), GRAWLIX_SPREAD / SOFA_SPREAD = abertura dos leques (rad), SOFA_GAP = s entre
   // os 3 leques de sofá, MALA_X = faixa (fração de W) para onde as malas descem, ROCKET_Y = y de saída do foguete,
   // ROCKET_SEP2 = folga extra aleatória da 2ª coluna, CHAT = intervalo das falas soltas, FIRST = 1º ataque depois de
   // entrar, ARRIVE = espera mínima ao chegar numa parada, ROPE_IN / ROPE_FALL = cordão subindo / caindo.
-  const JX = {
+  // GAP_LOW = fator do GAP abaixo de SOFA_AT, ROCKET_AT / ROCKET_END = s do grito até o foguete sair / até o fim do
+  // ataque, SOFA_FANS = leques de sofá, PN3 / PN5 = tiros a mais por leque com o Lule travado em lv ≥ 3 / lv 5.
+  const JX = tune('janjinha.JX', {
     JET_Y: 100, JET_IN: 1.4, DROP: 0.4, DLG_AT: 0.6, SKIP_WAIT: 1.6, EXIT: 2.2,
     GRAWLIX_SPREAD: 1.3, SOFA_SPREAD: 0.5, SOFA_GAP: 0.4, MALA_X: [0.2, 0.8], ROCKET_Y: 56, ROCKET_SEP2: 40,
     CHAT: [6, 9], FIRST: 1.0, ARRIVE: 0.5, ROPE_IN: 0.6, ROPE_FALL: 1.0,
-  };
+    GAP_LOW: 0.85, ROCKET_AT: 0.6, ROCKET_END: 0.8, SOFA_FANS: 3, PN3: 1, PN5: 1,
+  }, ['GRAWLIX_SPREAD', 'SOFA_SPREAD', 'SOFA_GAP', 'MALA_X', 'ROCKET_SEP2', 'CHAT', 'FIRST', 'ARRIVE',
+    'GAP_LOW', 'ROCKET_AT', 'ROCKET_END', 'SOFA_FANS', 'PN3', 'PN5']);
+  // (fora do modo: JET_* / DROP / DLG_AT / SKIP_WAIT / EXIT = cena de entrada e saída, ROCKET_Y e ROPE_* = desenho)
   // desenho: tamanho dela (Lule 136 continua a estrela), âncora da pessoa (y relativo a e.y), barra de HP
   const PS = 100, PY = -8, SY = 16, BAR_W = 64, BAR_H = 5, BAR_DY = 66, OFFX = 64; // SY: o sofá abaixo da âncora (o blazer aparece)
   const FLASH = 0.034, FLASH_CD = 0.35; // ≤ 3 flashes brancos por segundo (ela não é 'big')
@@ -25359,7 +25731,7 @@ body.in-play #toasts { opacity: 0; }
   }
   // variantes da PRESSÃO (cópia local da fórmula do BossKit, com o nível travado do Lule, d.pl)
   function lvOf(b) { const d = b && b.data; if (d && d.pl != null) return d.pl; const pr = G.press; return (pr && pr.lv) || 0; }
-  const pN = (n, lv) => n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0);
+  const pN = (n, lv) => n + (lv >= 3 ? JX.PN3 : 0) + (lv >= 5 ? JX.PN5 : 0);
   function say(e, s, dur) { G.say(e, s, dur || 2); }
   function pose(jj, name, dur) { jj.pose = name; jj.poseT = dur || 0.8; }
   function mood(jj, name, dur) { jj.mood = name; jj.moodT = dur || 0.8; }
@@ -25670,7 +26042,7 @@ body.in-play #toasts { opacity: 0; }
   // ======================================================================
   // Ataques
   // ======================================================================
-  function gapOf(e) { return (L2() ? JN.GAP_L2 : JN.GAP) * (e.hp / e.maxHp < JN.SOFA_AT ? 0.85 : 1); }
+  function gapOf(e) { return (L2() ? JN.GAP_L2 : JN.GAP) * (e.hp / e.maxHp < JN.SOFA_AT ? JX.GAP_LOW : 1); }
   function nextKind(e, jj) {
     const cyc = e.hp / e.maxHp < JN.SOFA_AT ? CYCLE_LOW : CYCLE;
     let k = cyc[jj.atkI % cyc.length];
@@ -25773,10 +26145,10 @@ body.in-play #toasts { opacity: 0; }
             shoot(b, h.x, h.y, n > 1 ? ang - sp / 2 + (sp * i) / (n - 1) : ang, JN.GRAWLIX_SPD, { style: 'jan_grawlix', color: GRAWLIX[i % GRAWLIX.length][0] });
           }
           sfx('enemy_shot2');
-        } else if (a.step === 1 && a.t >= 0.6) {
+        } else if (a.step === 1 && a.t >= JX.ROCKET_AT) {
           a.step = 2;
           rocketReply(b, jj);
-        } else if (a.step === 2 && a.t >= 0.8) endAttack(e, jj);
+        } else if (a.step === 2 && a.t >= JX.ROCKET_END) endAttack(e, jj);
         break;
       }
       case 'sofa': {
@@ -25789,7 +26161,7 @@ body.in-play #toasts { opacity: 0; }
           fan(b, h.x, h.y, G.aim(h.x, h.y), pN(JN.SOFA_N, lv), JX.SOFA_SPREAD, JN.SOFA_SPD, { style: 'jan_sofa', color: COL.violet });
           sfx('enemy_shot');
           a.n++; a.next += JX.SOFA_GAP;
-          if (a.n >= 3) { a.step = 2; a.end = a.t + 0.3; }
+          if (a.n >= JX.SOFA_FANS) { a.step = 2; a.end = a.t + 0.3; }
         } else if (a.step === 2 && a.t >= a.end) endAttack(e, jj);
         break;
       }
@@ -26991,11 +27363,14 @@ body.in-play #toasts { opacity: 0; }
     const ac = achCount();
     const canBuy = (G.UPGRADES || []).some((u) => { const c = G.upgradeCost(u.id); return c != null && S.pix >= c; });
     const sticker = STICKERS[stickerI++ % STICKERS.length];
+    // recorde do modo escolhido na tela FASES (no MODO CPI, com a plaquinha vermelha no canto)
+    const tm = curMode();
     scr.root.innerHTML =
       '<canvas class="t-art" aria-hidden="true"></canvas>' +
       '<div class="t-top">' +
       '<div class="chip chip-pix">' + PIX_ICO + '<span><small>SALDO PIX</small><b>' + money(S.pix) + '</b></span></div>' +
-      '<div class="chip chip-best"><span><small>RECORDE</small><b>' + fmt(S.best) + '</b></span></div>' +
+      '<div class="chip chip-best' + (tm === 'cpi' ? ' is-cpi' : '') + '"><span><small>RECORDE</small><b>' + fmt(bestOf(tm)) + '</b></span>' +
+      (tm === 'cpi' ? '<em class="chip-cpi">MODO CPI</em>' : '') + '</div>' +
       '</div>' +
       '<header class="logo">' +
       '<h1 class="logo-main" aria-label="Fusca a Jato"><span class="l1">FUSCA</span><span class="l2">A JATO</span></h1>' +
@@ -27095,10 +27470,28 @@ body.in-play #toasts { opacity: 0; }
   // ==================================================================
   // SELEÇÃO DE FASES (santinhos)
   // ==================================================================
+  // MODO CPI: o seletor de dificuldade fica no alto da tela FASES (NORMAL | MODO CPI, com a frase embaixo).
+  // As fases liberadas e as conquistas são as mesmas nos dois modos; a nota e o recorde são de cada modo
+  // (NORMAL: save.ui.ranks e save.best; MODO CPI: save.ui.ranksCpi e save.bestCpi).
+  const MODE_LINE = { normal: 'Difícil, mas justo.', cpi: 'Chefão mais forte e mais bala. Pontos ×1,5 e Pix ×1,25.' };
+  const curMode = () => (typeof G.mode === 'function' ? G.mode() : settings().mode) === 'cpi' ? 'cpi' : 'normal';
+  const ranksOf = (m) => (m === 'cpi' ? uiSave().ranksCpi : uiSave().ranks) || {};
+  const bestOf = (m) => (typeof G.bestFor === 'function' ? G.bestFor(m) : m === 'cpi' ? G.save.bestCpi || 0 : G.save.best || 0);
+  function modePickHTML(m) {
+    const b = (v, l) => '<button type="button" class="seg-b mode-b' + (v === m ? ' on' : '') + '" role="radio" aria-checked="' + (v === m) + '" data-mode="' + v + '">' + l + '</button>';
+    return '<div class="mode-pick' + (m === 'cpi' ? ' is-cpi' : '') + '">' +
+      '<div class="mode-seg" role="radiogroup" aria-describedby="modeLine">' + b('normal', 'NORMAL') + b('cpi', 'MODO CPI') + '</div>' +
+      '<p class="mode-line" id="modeLine" aria-live="polite">' + esc(MODE_LINE[m]) + '</p></div>';
+  }
+  // selo da faixa do santinho: nota do modo escolhido, cadeado, ou NOVA! (a fase liberada por último)
+  function santBadge(r, i, open_, unlocked) {
+    return r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '';
+  }
   function showStages() {
     const n = nStages();
     const unlocked = Math.min(G.save.unlocked || 1, n);
-    const ranks = uiSave().ranks || {};
+    let mode = curMode();
+    const ranks = ranksOf(mode);
     let cards = '';
     for (let i = 0; i < n; i++) {
       const s = stageInfo(i);
@@ -27109,7 +27502,7 @@ body.in-play #toasts { opacity: 0; }
       cards +=
         '<button type="button" class="sant' + (last ? ' last' : '') + (wide ? ' final' : '') + (open_ ? '' : ' locked') + '" data-i="' + i + '" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + ';--i:' + i + '"' +
         ' aria-label="' + esc('FASE ' + (i + 1) + ': ' + s.name + ' · ' + castName(s.boss)) + '">' +
-        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + (r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '') + '</span>' +
+        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + santBadge(r, i, open_, unlocked) + '</span>' +
         '<span class="sant-main">' +
         '<span class="sant-photo"><canvas data-boss="' + s.boss + '"></canvas><span class="sant-num"><small>Nº</small>171</span></span>' +
         '<span class="sant-txt">' +
@@ -27122,12 +27515,37 @@ body.in-play #toasts { opacity: 0; }
     }
     const scr = pageShell('stages', {
       kicker: 'SEU VOTO PARA', title: 'FASES',
+      cls: mode === 'cpi' ? 'is-cpi' : '',
       right: '<span class="lcd-chip">' + unlocked + '/' + n + ' LIBERADAS</span>',
-      body: '<div class="sant-grid' + (n > 1 && n % 2 === 1 ? ' has-final" style="--rows:' + ((n - 1) / 2) : '') + '">' + cards + '</div>',
+      body: modePickHTML(mode) + '<div class="sant-grid' + (n > 1 && n % 2 === 1 ? ' has-final" style="--rows:' + ((n - 1) / 2) : '') + '">' + cards + '</div>',
       foot: lcdFoot('', 'VOLTAR') + '<span class="foot-msg">Escolha um santinho. Todos são nº 171.</span>',
       keys: backKey(),
     });
     const msg = q(scr.root, '.foot-msg');
+    // troca de modo: grava na hora (G.setMode), troca a frase, o destaque e as notas dos santinhos
+    const pick = q(scr.root, '.mode-pick'), line = q(scr.root, '.mode-line');
+    const setMode = (m) => {
+      m = m === 'cpi' ? 'cpi' : 'normal';
+      if (typeof G.setMode === 'function') G.setMode(m); else { settings().mode = m; G.saveGame(); }
+      mode = curMode();
+      qa(scr.root, '.mode-b').forEach((o) => { const on = o.getAttribute('data-mode') === mode; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
+      pick.classList.toggle('is-cpi', mode === 'cpi');
+      scr.root.classList.toggle('is-cpi', mode === 'cpi');
+      line.textContent = MODE_LINE[mode];
+      const rk = ranksOf(mode);
+      qa(scr.root, '.sant').forEach((card) => {
+        const i = +card.getAttribute('data-i'), band = q(card, '.sant-band');
+        if (!band) return;
+        const old = q(band, 'i'); // o selo é o único <i> da faixa
+        if (old) old.remove();
+        const h = santBadge(rk[i], i, i < unlocked, unlocked);
+        if (h) band.insertAdjacentHTML('beforeend', h);
+      });
+    };
+    qa(scr.root, '.mode-b').forEach((b) => onTap(b, () => {
+      sfx('ui_click');
+      setMode(b.getAttribute('data-mode'));
+    }, false));
     qa(scr.root, '.sant').forEach((b) => onTap(b, () => {
       const i = +b.getAttribute('data-i');
       if (b.classList.contains('locked')) {
@@ -27346,11 +27764,13 @@ body.in-play #toasts { opacity: 0; }
   // ==================================================================
   // BOLETIM DE URNA (resultado da fase)
   // ==================================================================
+  // nota de cada fase, por modo: NORMAL em save.ui.ranks (como sempre), MODO CPI em save.ui.ranksCpi
+  const rankKey = (stats) => (stats && stats.mode === 'cpi' ? 'ranksCpi' : 'ranks');
   function recordRank(stats) {
-    const u = uiSave();
-    u.ranks = u.ranks || {};
-    const k = String(stats.index | 0), prev = u.ranks[k];
-    if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
+    const u = uiSave(), rk = rankKey(stats);
+    u[rk] = u[rk] || {};
+    const k = String(stats.index | 0), prev = u[rk][k];
+    if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u[rk][k] = stats.rank; G.saveGame(); }
   }
   // multiplicador no padrão do jogo: ×2 / ×1,7 (como o BossKit.fmtMul)
   function fmtMul(m) { const v = Math.round((+m || 0) * 10) / 10; return v % 1 === 0 ? String(v) : v.toFixed(1).replace('.', ','); }
@@ -27397,7 +27817,7 @@ body.in-play #toasts { opacity: 0; }
   function showStageClear(stats, done) {
     stats = stats || {};
     const fin = once(done);
-    const prevRank = ((uiSave().ranks || {})[String(stats.index | 0)]) || null;
+    const prevRank = ((uiSave()[rankKey(stats)] || {})[String(stats.index | 0)]) || null;
     G.safe(recordRank, 'ui.recordRank', stats);
     const b = stats.bonus || {};
     const loopN = stats.loop || 1;
@@ -27443,6 +27863,7 @@ body.in-play #toasts { opacity: 0; }
       '<div class="cl-paper-win scroll"><div class="rc-shadow"><div class="receipt">' +
       '<div class="rc-head"><small>JUSTIÇA ELEITORAL DO POVO</small><h2>BOLETIM DE URNA</h2>' +
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p>' +
+      (stats.mode === 'cpi' ? '<span class="rc-tag rc-cpi">MODO CPI</span>' : '') +
       (stats.continued ? '<span class="rc-tag">COM RECURSO</span>' : '') + '</div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
@@ -27875,6 +28296,7 @@ body.in-play #toasts { opacity: 0; }
   function creditsRoll(info, fin) {
     const scr = open('roll');
     const loopN = info.loop || 1;
+    const cpiEnd = info.mode === 'cpi'; // carimbo CPI ENCERRADA! (primeiro; o SEM RECURSO! bate logo depois)
     scr.root.innerHTML =
       '<canvas class="roll-bg" aria-hidden="true"></canvas>' +
       '<div class="roll-win"><div class="roll">' + creditsHTML(true) + '</div></div>' +
@@ -27884,7 +28306,8 @@ body.in-play #toasts { opacity: 0; }
       '<div class="fin-title">' + (loopN > 1 ? 'REELEITO!' : '2º MANDATO<br>DESBLOQUEADO') + '</div>' +
       '<p class="fin-sub">' + (loopN > 1 ? 'Você venceu o 2º Mandato. Brasília nunca mais será a mesma. (Mentira.)' : 'Mais difícil, mais Pix. Já está no menu, esperando seu voto.') + '</p>' +
       '<div class="fin-score"><span>VOTOS FINAIS</span><b>' + fmt(info.score) + '</b>' +
-      (info.oneCC ? '<i class="fin-stamp">SEM RECURSO!</i>' : '') + // o mandato inteiro sem entrar com recurso
+      (cpiEnd ? '<i class="fin-stamp fin-cpi">CPI ENCERRADA!</i>' : '') + // a partida vencida foi no MODO CPI
+      (info.oneCC ? '<i class="fin-stamp' + (cpiEnd ? ' fin-2nd' : '') + '">SEM RECURSO!</i>' : '') + // o mandato inteiro sem entrar com recurso
       '<small>RECORDE ' + fmt(Math.max(info.best || 0, info.score || 0)) + '</small></div>' +
       keyHTML('confirma', 'VOLTAR AO MENU', 'CONFIRMA', 'key-wide k-menu') +
       '</div>';
@@ -27897,7 +28320,8 @@ body.in-play #toasts { opacity: 0; }
       q(scr.root, '.roll-skip').hidden = true;
       finEl.hidden = false;
       later(scr, 150, () => sfx('urna_fim'));
-      if (info.oneCC) later(scr, 900, () => sfx('stamp'));
+      if (cpiEnd) later(scr, 900, () => sfx('stamp'));
+      if (info.oneCC) later(scr, cpiEnd ? 1300 : 900, () => sfx('stamp'));
       later(scr, 700, () => focusEl(q(scr.root, '.k-menu')));
     };
     const finish = () => { if (ended) return; ended = true; close(); fin(); };

@@ -951,20 +951,69 @@ Core (core.js):
 | `core.PRESS` | the `G.PRESS` block (§9.1) minus `NAMES` and `COLORS`: `W TURBO HEAT_T HEAT_KILL HEAT_BIG HEAT_PHASE HEAT_MAXP HEAT_MAX DEATH_KEEP BOMB UP DOWN L2_BASE L2_FLOOR LV SPD SPD_CAP EHP BIGHP BHP0 BHP1 SCORE PIX BOSSPIX CLEARPIX STUN GOLD_AVG GOLD_PIX` |
 | `core.T` | `POWER_NEED` [0, 2, 3, 4, 4] (G.powerNeed) · `EXTENDS` [1,5M, 4,5M, 9M] · `RESTORE_LIFE` 7 (s the restore P stays) · `GRAZE_BOMB` 1,0 (Delação charge per graze, 100 = one) · `RESPAWN_INV` 3 (s of invulnerability after a death) · `START_LIVES` 3 · `START_BOMBS` 2 (+ upgrades) · `L2_DIFF` 1,15 (2º Mandato bullet speed) · `L2_EHP` 1,3 (2º Mandato enemy HP) · `L2_BHP` 1,25 (2º Mandato boss HP) |
 
-<!-- INTEGRATOR: complete this list with the other modules' ids and fields (bosses.js, erika.js, taxad.js, lule.js,
-     janjinha.js, enemies.js, stages.js). `G.tuneCheck().ids` in the browser lists every registered id. -->
-**TO COMPLETE (integrator):** the ids registered by bosses.js, erika.js, taxad.js, lule.js, janjinha.js, enemies.js and
-stages.js, one row each with their fields:
+33 ids in all (`G.tuneCheck().ids` in the browser lists them; `G.debug.tunes(id)` dumps one). `NAME[n]` is an array of n
+values and `NAME{a, b}` a nested object (both are changed in place; an override replaces the whole array, or only the
+nested keys it names). Every value in the code is the MODO CPI value.
+
+Chefões 1–2 and the shared kit (bosses.js):
 
 | id | fields |
 |---|---|
-| *(bosses.js)* | |
-| *(erika.js)* | |
-| *(taxad.js)* | |
-| *(lule.js)* | |
-| *(janjinha.js)* | |
-| *(enemies.js)* | |
-| *(stages.js)* | |
+| `bosses.KIT` | `FAT_START FAT_FULL FAT_MAX MUL_CAP STUN_L2 STUN_CD PN3 PN5 PW3 PW5 RING_K CPI_WAIT CPI_N CPI_SPREAD CPI_SPD` — fatigue, stun-multiplier cap, the 2º Mandato stun factor and stun cooldown, the PRESSÃO variants `K.pN` / `K.pW` / `K.pRing` and the CPI! extra fan (`K.cpiCo`). Used by Centrão, Dilmãe, Erika and Taxad (exported as `G.BossKit.KIT`; `K.FAT_FULL` / `K.FAT_MAX` are getters over it) |
+| `bosses.P5` | `LIMIT MUL` — the 5th turno 'SEM SAÍDA' timer and multiplier (the tag text follows `MUL`) |
+| `bosses.centrao` | `hp fatStart spdK` — fields of the Centrão def, read at spawn |
+| `bosses.EM` | `APEX_Y FALL FALL_L2 FALL_TUT CATCH_R SWAY SWAY_HZ STUN[5] MUL HEAL CD TRAITOR_DMG FALL_P4 FALL_P4_L2 TUT_MAX RACE_DY P5_ORBIT P5_ARMS P5_STEP P5_SPD P5_TURN P5_FAN P5_FAN_SPD P5_EM P5_EM0` — Centrão's PEGAR A EMENDA |
+| `bosses.dilmae` | `hp fatStart spdK` — fields of the Dilmãe def, read at spawn |
+| `bosses.MT` | `R0 R_MIN R_K NEED NEED_L2 LIFE STUN MUL OPEN GAP_OK GAP_FAIL FIRST P4_SPD P4_JUMP P4_EVERY R0_L2 DEMO P2_R P2_NEED STUN_L3 MUL_L3 P4_R P4_LIFE LVL[3] P5_STUN P5_MUL P5_GAP P5_FLIP P5_WARN P5_FAN P5_FAN_SPD P5_FAN_SPR P5_RING P5_RING_T P5_RING_SPD` — Dilmãe's FICAR NA META (`LVL` = `{ r, need, life, ax, ay, gap? }` per level) |
+
+Erika (erika.js) and Taxad (taxad.js). Their def `hp` / `fatStart` / `spdK` are get/set properties over `<boss>.T`:
+tune `erika.T` / `taxad.T`, never the def.
+
+| id | fields |
+|---|---|
+| `erika.T` | `HP HP_L2 FAT_START SPD_K` |
+| `erika.FI` | `CUT_R PHONE_R REGROW[5] CONNECT CONNECT_P4 LOAD STUN STUN_P4 MUL ARMOR[5] ENG_MAX VIRAL_N REGROW_L1 REGROW_L2 PHONES_L1[5] STUN_L1K LOAD_L1 HOP_T HOP_DUR HOP_PULL HOP_Y STUN_GAP_L1 PHONE_DY_L1 REPLUG DEMO RIG_GAP JIT VIRAL_WARN GOAL_KEEP` — the mechanic (armour tags are rebuilt from `ARMOR`) |
+| `erika.PAT` | `LIKE_N LIKE_N_L2 LIKE_SPD LIKE_SPREAD NOTIF_P1 NOTIF_P3 NOTIF_SPD ADI_SPD THREAD_ROWS THREAD_DX THREAD_GAP THREAD_WALK THREAD_SPD THREAD_SPD_L2 THREAD_EVERY RAIN_SPD RAIN_EVERY RAIN_EVERY_L2 RAIN_DUR RAIN_WARN RAIN_GAP RAIN_DBL RAIN_DBL_L2 RAIN_JIT RAIN_DBL_DX SAY_PRE SWAY[5] SPIRAL_SPD SPIRAL_STEP SPIRAL_W P4_HEARTS P4_HEART_SPD P4_THREAD_EVERY P4_THREAD_ROWS P5_SPD_K P5_STEP P5_HEARTS` — patterns |
+| `erika.PV` | `IN OUT FLEE E1 E2 FIRE P1 P2 LEAVE RESUME N SPD TURN BACK_SPD BACK_TURN DMG FLINCH POST FORCE_DELAY LOWER` — the Pavanatto cameo (`X` / `Y` are screen layout, not registered) |
+| `taxad.T` | `HP HP_L2 FAT_START SPD_K` |
+| `taxad.TX` | `SWAY[5] OMEGA[5] BOB GLIDE TELL BOX_N BOX_N_L2 BOX_STEP BOX_SPD ALF_Y SPLIT_A SPLIT_K IMP_N IMP_SPD IMP_DELAY P1_WAIT KEY_EVERY KEY_N KEY_STEP KEY_SPD KEY_ARC_K ARC_W ARC_H ARC_TELE ARC_STEP ARC_SPD ARC_SPD_L2 ARC_LIFE FURO P2_GAP1 P2_GAP2 P2_BOX_K ZERO_RX ZERO_RY ZERO_DX ZERO_DY ZERO_STEP ROMBO ROMBO_DX ZERO_DELAY ZERO_SPD ZERO_SPD_L2 ZERO_EVERY ZERO_EVERY_L2 PIX_EVERY PIX_EVERY_L2 PIX_N PIX_GAP PIX_DELAY PIX_DOWN PIX_SPD PIX_SPD_L2 PIX_Y0 PIX_Y1 PIX_ROW_MIN PIX_GLIDE MQ_X IOF_EVERY IOF_WARN IOF_LIFE IOF_W P5_SPD P5_REST P5_TRAINS P5_ZERO_WAIT CHAT[2]` — patterns (the '00' contour is rebuilt when `ZERO_RX/RY/STEP` change) |
+| `taxad.CF` | `ROW_Y PICK_Y X[3] W H TOUCH_R ARC FIRST SHOW DROP SW[5] SWAPS[5] GAP[5] FEINT[5] RELABEL[5] ROT[5] DRIFT[5] PICK[5] STUN[5] MUL[5] NEXT[5] ALIQ[4] REFUND SW_MIN PICK_MIN PICK_L2 PICK_LV SW_L2 SW_LV SWAPS_L2 SWAPS_LV NEXT_L2 DEMO_SW DEMO_SWAPS REL_DUR REL_FLY CANCEL_NEXT DEATH_NEXT` — the cofre (CADÊ O SEU DINHEIRO?) |
+| `taxad.ROUND` | `FIRST FIRST_B KEY KEY_N KEY_SPREAD KEY_SPD RING_P2 RING_P2_N RING_SPD FAN_P3 FAN_N FAN_SPREAD SPIRAL SPIRAL_ARMS SPIRAL_SPD SPIRAL_W P5 RING_P5_N` — what each cofre round fires |
+
+The finale (lule.js, janjinha.js). Lule keeps his own PRESSÃO variants and 5th turno (`lule.PV`, `lule.P5`): a
+`bosses.KIT` / `bosses.P5` override does not reach him. The Lule def `hp` and the companion's `hp` are getters
+(`lule.T.HP1`, `lule.COMP.HP`).
+
+| id | fields |
+|---|---|
+| `lule.T` | `HP1 HP2 HP3 FAT1 FAT2 FAT3 FAT_RAMP FAT_MAX CPI_EVERY CPI_N CPI_SPREAD CPI_SPD QUINTO_LV QUINTO_SEG PHASE_STUN` — the three lives' HP and fatigue, the CPI! fan, the Quinto Mandato, the stun cap across a turn change |
+| `lule.PV` | `N3 N5 W3 W5 RING` — PRESSÃO variants (counts, waits, ring factor) |
+| `lule.P5` | `LIMIT MUL` |
+| `lule.LEAO` | `FIRST GAP[10] ENTER STALK STALK_MAX AIM TRACK SPD CLAMP STUN[3] MUL RISE LAST_T STALK_L2 AIM_L2 SPD_L2 GAP_L2 STUN_L2` — the OLÉ lion (`STALK_L2` / `SPD_L2` are values, `AIM_L2` is subtracted, `GAP_L2` / `STUN_L2` multiply) |
+| `lule.COMP` | `HP GIVE BACK FIRE[2] FIRE_L2 SPD` — the companions |
+| `janjinha.JN` | `HP SHIELD DWELL[2] OUT OFF IN ENTER FAT FAT_FULL LEAVE_T STUN_K CARD_N CARD_N_L2 CARD_SPD CARD_SPREAD CARD_TELL MALA_N MALA_SPD MALA_Y MALA_RING MALA_RING_SPD GRAWLIX_N GRAWLIX_SPD ROCKET_WARN ROCKET_WARN_L2 ROCKET_SPD ROCKET_SEP SOFA_N SOFA_SPD GAP GAP_L2 LION_DMG CARD_BACK` (`HP` × Lule's `d.hpMul`) |
+| `janjinha.JX` | `GRAWLIX_SPREAD SOFA_SPREAD SOFA_GAP MALA_X[2] ROCKET_SEP2 CHAT[2] FIRST ARRIVE GAP_LOW ROCKET_AT ROCKET_END SOFA_FANS PN3 PN5` — gameplay timings |
+
+The world (enemies.js, stages.js):
+
+| id | fields |
+|---|---|
+| `enemies.T` | `LVL[5] LVL_L2 LVL_HP LVL_SPD LVL_IVL LVL_FIRST IVL_MIN FIRST_MIN P_IVL P_FIRST P_FAN3 P_FAN5 P_RING REV_SPD1 REV_SPD REV_SPREAD PREV_LV PREV_CHANCE PREV_N5 PREV_SPREAD PREV_SPD` — the stage-level table and scalers, the PRESSÃO density knobs, both revenge sets (2º Mandato and PRESSÃO) |
+| `enemies.HP` | one field per kind: `cabo fantasma deputado assessor assessor_meio lobista marqueteiro bot carro_som sindicalista leao ministro motoqueiro drone fiscal maquininha trio trio_caixa lobista_mor maleta servidor impostometro comitiva comitiva_seg` (each def's `hp` is a getter, read at spawn; a stage script's `o.hp` still wins) |
+| `enemies.FIS` | `TELL IVL IVL_MIN FIRST[2] HOLD MALHA_N MALHA_N_L2 MALHA_SPD FAN_N FAN_SPREAD FAN_SPD` — the fiscal |
+| `enemies.MQ` | `TELL FIRST IVL RING RING_L2 SPD` — the maquininha |
+| `enemies.MB` | `TIRED_AT TIRED_MAX DUR{trio, lobista_mor, servidor, comitiva}` — mid-boss fatigue and fight lengths |
+| `enemies.TRIO_DUR` | `rings santinhos notas` (s per pattern) |
+| `enemies.LOBMOR_DUR` | `mala maletas propina` (s per pattern) |
+| `enemies.SERV_DUR` | `bots laser muro` (s per pattern) |
+| `enemies.IMP` | `BLINK MAX_DIG A A_L2 B C FALL FALL_L2 DUR A0 B0 C0 B_N B_SPREAD B_SPD C_SPD` — the Impostômetro (its fight length is `DUR`) |
+| `stages.T` | `EX_LV EX CAP{swarm, vee, bots} DRIZZLE AMB_L2` — PRESSÃO extra enemies per formation and their caps, the drizzle factor, the 2º Mandato ambient interval |
+
+Not registered on purpose (the same in both modes; `G.tuneCheck().bad` reports an override on them): colours, text and
+tags, drawing geometry and layout (`erika.PV` X/Y, Janjinha `Y STOPS JET_* ROCKET_Y ROPE_*`, the Impostômetro panel, Lule's
+`XR`), hitboxes and radii, phase thresholds and attack ladders (`SOFA_AT`), fairness spacing (`MALHA_DX`, `DIG_MIN_DX`),
+rewards (`SCORE` / `PIX` fields, `RANK_B`), `scrollSpeed`, the wave-script literals in stages.js and the per-attack
+literals inside the boss phase functions (they go through the registered PRESSÃO variants and `spdK`).
 
 ### 12.3 Selection, signs and rewards
 - `G.save.settings.mode`: `'normal'` (default) | `'cpi'` (saveV stays 5). URL `cpi=1` / `cpi=0` forces a mode for the
