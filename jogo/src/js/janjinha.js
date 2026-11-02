@@ -98,7 +98,7 @@
   const CHAT = ['O CERIMONIAL É COMIGO!', 'SORRI PRA SELFIE!', 'TEM MÓVEL NOVO NO ALVORADA!', 'É AGENDA DE TRABALHO!',
     'VOU REPRESENTAR O BRASIL!', 'MINISTRA SEM PASTA? EU?'];
   const CHAT_LOW = 'REMARCA O MEU VOO!';
-  const CARD_SAY = ['PASSA O CARTÃO!', 'SEM LIMITE!'];
+  const CARD_SAY = ['CARTÃO CORPORATIVO!', 'SEM LIMITE!'];
   const MALA_SAY = ['BAGAGEM OFICIAL!', 'MISSÃO OFICIAL!'];
   const CYCLE = ['cartao', 'malas', 'cartao', 'elon'];
   const CYCLE_LOW = ['cartao', 'sofa', 'malas', 'elon']; // abaixo de SOFA_AT
@@ -250,6 +250,8 @@
     c.beginPath(); c.arc(-34, 14.5, 2.4, PI, TAU); c.moveTo(36.4, 14.5); c.arc(34, 14.5, 2.4, PI, TAU); c.stroke();
     c.strokeStyle = '#4a0616'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(0, 18); c.lineTo(0, 27); c.stroke();
+    // rótulo na saia da frente (as costas ficam atrás dela), logo acima da etiqueta MÓVEL NOVO
+    txt(c, 'SOFÁ DO ALVORADA', 0, 33.2, 4, '#ffd23f', { font: G.FONT_DISPLAY, weight: '400', max: 60 });
   }
   // etiqueta pendurada "MÓVEL NOVO" (sem preço). Origem = o furo do barbante.
   function paintTag(c, fl) {
@@ -306,7 +308,7 @@
   const sPhone = (fl) => sprite('phone' + (fl ? 'F' : ''), B_PHONE, (x) => paintPhone(x, fl));
   const sMala = (k, fl) => sprite('mala' + k + (fl ? 'F' : '') + fontKey(), B_MALA, (x) => paintMala(x, k, fl));
   const sBack = (fl) => sprite('back' + (fl ? 'F' : ''), B_BACK, (x) => paintSofaBack(x, fl));
-  const sFront = (fl) => sprite('front' + (fl ? 'F' : ''), B_FRONT, (x) => paintSofaFront(x, fl));
+  const sFront = (fl) => sprite('front' + (fl ? 'F' : '') + fontKey(), B_FRONT, (x) => paintSofaFront(x, fl));
   const sTag = (fl) => sprite('tag' + (fl ? 'F' : '') + fontKey(), B_TAG, (x) => paintTag(x, fl));
   const sJet = () => sprite('jet' + fontKey(), B_JET, paintJet);
   const sPost = () => sprite('post', B_POST, paintPost);
@@ -732,8 +734,9 @@
       G.confetti(e.x, e.y, 14);
       sfx('stamp'); sfx('boss_hit');
       if (b) {
-        G.say(b, 'VOLTA, JANJINHA!', 2.2);
+        G.say(b, 'E O MEU CERIMONIAL?!', 2.2);
         G.text(b.x, b.y + 90, 'CERIMONIAL DESFEITO!', { size: 13, color: '#ffd23f', stroke: true });
+        if (b.data) b.data.jKoSaid = true; // já falou e escreveu: o lule.js não repete a reclamação
       }
     } else {
       jj.left = true;
