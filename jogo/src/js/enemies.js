@@ -328,7 +328,7 @@
     motoqueiro: ['MOTOBOY DA PICANHA', 'passa atirando e nunca entrega'],
     drone: ['DRONE DA LIVE', 'o REC piscou? Saia da mira'],
     fiscal: ['FISCAL DA RECEITA', 'CPF na nota? A malha fina tem furo'],
-    maquininha: ['MAQUININHA DA TAXA', 'cada Pix, uma taxinha'],
+    maquininha: ['MAQUININHA DA TAXA', 'cada Pix, uma taxinha... um dia!'],
   };
   // Uma etiqueta por vez: várias espécies novas entrando juntas (fases 3 e 4 pelo menu) se
   // cobriam umas às outras. A espécie que ficou na fila se apresenta num inimigo dela que ainda
@@ -1374,8 +1374,8 @@
     onDeath(e) {
       const d = e.data;
       if (d.stolen > 0) {
-        const back = Math.round(d.stolen * 1.5);
-        G.dropPix(e.x, e.y, back);
+        // sem a PRESSÃO (o MODO CPI ainda soma ×1,25): o texto mostra o que cai de fato
+        const back = G.dropPix(e.x, e.y, Math.round(d.stolen * 1.5), { noPress: true });
         G.text(e.x, e.y - 24, 'RESTITUIÇÃO! +R$ ' + back, { color: G.C.greenL, size: 13, life: 1.6, vy: -24 });
         sfx('pix_big');
       }
