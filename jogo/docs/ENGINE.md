@@ -46,11 +46,12 @@ G.TAU, G.C     // G.C = palette { green, greenL, yellow, blue, blueL, red, white
 G.FONT_DISPLAY // '"Bungee", ...'  (loud headings, numbers)
 G.FONT_BODY    // '"Barlow Semi Condensed", ...' (dialogue, labels; use weight 700/800 on canvas)
 G.game         // current stage state (see §6) or null
-G.run          // current run: { loop, score, lives, bombs, weapon, level, pix, grazes, continues, maxContinues, startStage,
-               //   heat (PRESSÃO heat, §9.1), gold (Carimbos de Ouro this run), secret (null | 'on' | 'won' | 'lost': the
-               //   LULE 5.0 fight, set by lule.js), ... }   maxContinues = 2 + G.upg('recurso')
-G.save         // persisted: { saveV (5), pix, upgrades, unlocked (stages 1..5), best, cleared, cleared2, seenIntro, qualityTier,
-               //              achievements, counters, settings{music,sfx,sens,vibrate,shake,hitbox,quality,skin ('azul'|'ouro')} }
+G.run          // current run: { mode ('normal' | 'cpi', §12), loop, score, lives, bombs, weapon, level, pix, grazes, continues,
+               //   maxContinues, startStage, heat (PRESSÃO heat, §9.1), gold (Carimbos de Ouro this run), secret (null | 'on' |
+               //   'won' | 'lost': the LULE 5.0 fight, set by lule.js), ... }   maxContinues = 2 + G.upg('recurso')
+G.save         // persisted: { saveV (5), pix, upgrades, unlocked (stages 1..5), best (NORMAL), bestCpi (MODO CPI), cleared,
+               //              cleared2, seenIntro, qualityTier, achievements, counters, ui { ranks (NORMAL), ranksCpi, met },
+               //              settings{music,sfx,sens,vibrate,shake,hitbox,quality,skin ('azul'|'ouro'),mode ('normal'|'cpi')} }
                // loadSave migrates a 4-stage save (saveV < 5): the Fazenda is inserted before the Planalto, nobody loses a stage
 G.saveGame()   // persist G.save (localStorage, wrapped in try/catch)
 G.state        // 'menu'|'intro'|'play'|'dialogue'|'pause'|'clear'|'over'|'ending'
@@ -61,7 +62,12 @@ G.quality      // 'high' | 'mid' | 'low' — current graphics tier (read it whil
 G.setQuality(q)// 'auto' | 'high' | 'mid' | 'low' (UI setting "Qualidade"). Persists in G.save.settings.quality.
 G.bossBoxes(b) // b.hitboxes, or a reused default [{dx:0,dy:0,r:b.r}] (never allocate one per bullet)
 G.rankFor(hits, bombs, stageIdx)  // stage rank 'S'|'A'|'B'|'C' (see §9); ui.js builds its boletim tips from it
-G.powerNeed(lv)                   // how many P items to go from level lv to lv+1 (2, 3, 4, 4: 13 P to reach L5)
+G.powerNeed(lv)                   // how many P items to go from level lv to lv+1 (2, 3, 4, 4: 13 P to reach L5; core.T.POWER_NEED)
+G.tune(id, obj[, keys]) / G.applyMode(mode) / G.tuneMode() / G.tuneCheck() / G.TUNE_NORMAL   // difficulty registry (§12)
+G.mode()       // 'normal' | 'cpi': run.mode during a run (G.startRun → G.toMenu), else the selected mode (§12)
+G.setMode(m)   // stage-select toggle: writes G.save.settings.mode, saves, applies the mode to menus (clears the ?cpi= force)
+G.bestFor(m)   // the best score of a mode (save.best / save.bestCpi)
+G.debug.mode() // the run mode (URL cpi=1 / cpi=0 forces a mode for the session without touching the save)
 G.fontsReady() // main.js calls it if the web fonts arrive after boot; core then calls the OPTIONAL hooks
                // G.BG.fontsReady(), G.Art.fontsReady(), G.UI.fontsReady() so text baked into caches can be redrawn
                // (all three are implemented: bg rebuilds its billboards, ui re-runs the fit-to-width of the open screen)
@@ -71,7 +77,9 @@ G.coreHooks    // { autoGoal, hudTag, drawOver, mech, postLines, press, lastPhas
 G.debug.noMech // true with the URL param mech=0: the autopilot ignores b.autoGoal (A/B the "ignore the mechanic" path)
 G.debug.mech() // g.boss ? { id, state, phase, goal: b.autoGoal, mech: b.mech, hudTag: b.hudTag, stunT } : null
                // (G.debug.stats() also carries `mech` and `press`)
-G.PRESS        // PRESSÃO constants (§9.1; the balance block of core.js). Replace it whole to tune: missing keys fall back
+G.PRESS        // PRESSÃO constants (§9.1; registered as 'core.PRESS', §12: the literals are the MODO CPI values, NORMAL is
+               //   G.TUNE_NORMAL['core.PRESS'] applied on the same object). Tests may replace it whole: missing keys fall
+               //   back to the registered block in the applied mode (core re-merges when G.PRESS or the mode changes)
 G.press        // { R 0..1, lv 0..5, name, color, tgt }: ONE reused object, updated every play frame. Modules read it
                //   with a default: `G.press || { R: 0, lv: 0 }` (BossKit `press()` does that)
 G.pressK(k)    // 1 + k × G.press.R
@@ -426,8 +434,8 @@ and their outline is repeated in `drawOver` as a thin white stroke during the sh
 **Counters and achievements** (data.js): `G.count('emenda')` (Centrão catches), `'meta_ok'` (Dilmãe metas filled),
 `'fio'` (Erika cables cut), `'cofre'` (Taxad: right cofres; `'restituicao'` at 10), `'cartao'` (the Leão bit Janjinha's
 card); lule.js unlocks `'ole'` after 3 lion bites in one fight. The core unlocks the boss id on death (so `'taxad'` is
-automatic). Round 5 achievements (26 in total): `taxad`, `restituicao`, `isento`, `embarcou`, `cartao`, `carimbo_ouro`,
-`cpi`, `transito` (unlocks the FUSCA DOURADO skin), `quinto`.
+automatic). Round 5 achievements (27 in total): `taxad`, `restituicao`, `isento`, `embarcou`, `cartao`, `carimbo_ouro`,
+`cpi`, `transito` (unlocks the FUSCA DOURADO skin), `cpi_mandato` (the 1º Mandato in MODO CPI, §12), `quinto`.
 
 ## 6. Stages
 
@@ -850,7 +858,8 @@ erika.js needs `G.BossKit`, so isolate it with `mods=bosses,erika`; lule.js has 
 `quality` (`high|mid|low`: force a tier and disable auto), `mech=0` (`G.debug.noMech`: the autopilot ignores the boss mechanic,
 to measure the "ignore it" path; the fight must still end through fatigue), `press=R` (PRESSÃO pinned at R 0..1: lv/name
 follow it, heat is still tracked), `heat=H` (initial `run.heat`), `quinto=1` (`G.debug.forceQuinto`: LULE 5.0 plays after
-Lule's 2nd life even without the one-credit condition). Flags accept `0`/`false` to stay off (`god=0`).
+Lule's 2nd life even without the one-credit condition), `cpi=1` / `cpi=0` (force MODO CPI / NORMAL for the session, §12;
+the save is not touched). Flags accept `0`/`false` to stay off (`god=0`).
 taxad.js needs `G.BossKit` (`mods=bosses,taxad`); janjinha.js never does (`mods=lule,janjinha`; without it Lule's 2nd life
 plays alone).
 `tools/play.js`, `tools/fullrun.js` and `tools/humanbot.js` add `quality=high` unless you pass one (this sandbox rasters on the CPU,
@@ -872,6 +881,8 @@ ALÍQUOTA, `janj { ko, left, t }` and Lule's `life1End / reviveT / janjEnd / lif
 `withinLimit` (cleared with continues ≤ 2 + upg 'recurso'), `oneCC`, `quinto { reached, won }` and Pix.
 `tools/fullrun.js` plays all 5 stages on the autopilot (`--god 1` is a one-credit run, so the secret fight plays) and
 reports per-stage times, Lule's lives, Janjinha's outcome and `run.secret`.
+Both take `--cpi 1` (adds `cpi=1` to the URL in every humanbot mode: run, ttk, mid, dps) and print the mode of the run
+(`modo: NORMAL` / `modo: MODO CPI`; `summary.json` / `report.json` carry `mode`). Without it the run is NORMAL.
 ```
 node tools/humanbot.js --mode ttk --bosses centrao,dilmae,erika,taxad,lule --weapons voto,boca,panela,jato --levels 5   # press 0.75
 node tools/humanbot.js --mode ttk --bosses taxad --weapons voto --levels 3 --press 0.4 --mech 0
@@ -880,7 +891,95 @@ node tools/humanbot.js --profile casual,good --stage 0 --through 1 --runs 8 --co
 node tools/fullrun.js --god 1 --ts 8                                                                   # 5 stages + LULE 5.0
 ```
 `--eval "G.debug.hurtBoss(0.4)" --at 10` runs JS at second 10. `G.debug` has `toBoss() killBoss() hurtBoss(frac) spawnBoss(id)
-stage(i, loop) give(type, wtype) weapon(w, lv) stats() mech() qualityMeter()`; `G.debug.mech()` returns
+stage(i, loop) give(type, wtype) weapon(w, lv) stats() mech() qualityMeter() mode() tunes(id)`; `G.debug.mech()` returns
 `{ id, state, phase, goal, mech, hudTag, stunT }` for the current boss (null without one). Read the PNGs you produce to check
 your visuals. Your module must finish with **zero entries in `G.errors`** and no page errors. Other modules may be
 half-written while you work: test with `mods=` to isolate.
+
+## 12. Modos (NORMAL / MODO CPI)
+
+Two difficulties, same game. **MODO CPI** (the bonus, selectable from the first launch) plays the round-5 numbers exactly
+as written in the modules. **NORMAL** (the default) is the same game after the balance pass: hard, but fair. Same stages,
+patterns, content, continues, upgrades and prices in both; only registered numbers differ, plus the CPI rewards below.
+Unlocked stages and achievements are shared; ranks and the best score are per mode.
+
+### 12.1 The registry (core.js, "Modos de dificuldade")
+```js
+G.tune(id, obj[, keys])  // register a block of numbers (only `keys`, default all non-function keys). The values in the
+                         //   code are the MODO CPI values. Returns obj. Registered after an applyMode: applied at once.
+G.applyMode(mode)        // 'cpi' → every block back to its CPI values; 'normal' → CPI values, then G.TUNE_NORMAL[id] on top.
+                         //   Arrays and nested plain objects are changed IN PLACE (references stay valid).
+G.tuneMode()             // the mode last applied ('normal' before any apply)
+G.tuneCheck()            // { ids: [...registered], bad: [...G.TUNE_NORMAL keys that match nothing] }  (tests: bad must be [])
+G.TUNE_NORMAL            // data.js: { '<id>': { FIELD: value, ... } }; {} until the balance pass
+G.debug.tunes([id])      // tests: { id: { FIELD: current value } } for every registered block (or one): dump it after
+                         //   G.applyMode('cpi') and after G.applyMode('normal') and diff against the old literals
+```
+Equivalence test (each module): with `G.TUNE_NORMAL = {}`, `G.debug.tunes()` after `applyMode('cpi')` and after
+`applyMode('normal')` equals the literals at commit a405648. Override test: set `G.TUNE_NORMAL` before the run (e.g. a
+`page.addInitScript` that defines a `TUNE_NORMAL` property on `window.G` whose setter ignores data.js's `{}`), or assign it
+and call `G.applyMode('normal')` before the boss spawns; the change shows in a NORMAL run and not with `cpi=1`.
+Who applies: `G.boot` (after every module registered: menus and the Como Jogar demos), `G.startRun` (**before anything of
+the run is created**: lives, the PRESSÃO snap, the first stage, any boss HP latch), `G.toMenu` and `G.setMode` (the
+stage-select toggle). Continues and the next stages keep `run.mode`; a 2º Mandato run starts with the selected mode.
+
+Rules for every module that registers numbers:
+1. Ids are `'<module>.<BLOCK>'` (`'taxad.TX'`, `'erika.FI'`, `'bosses.P5'`, `'core.PRESS'`). Loose scalar consts become one
+   object per module: `const T = G.tune('erika.T', { HP: 8400, HP_L2: 6100, FAT_START: 175 })`, every reader uses `T.HP`.
+2. **Only runtime reads.** No top-level `const X = TX.A * 2`, no `def.hp = HP` copied at load and then read at spawn:
+   register the def's fields (`G.tune('erika.def', def, ['hp', 'fatStart'])`) or compute from `T` at spawn. A value copied
+   at load time silently ignores the mode: that is the one bug to avoid.
+3. Register everything the balance pass may tune: boss HP (both loops), fatStart/fatigue, phase timing knobs, stun
+   durations and multipliers, cadences, bullet speeds and counts, mechanic windows, armour values, P5 values, PRESSÃO,
+   POWER_NEED, EXTENDS, the enemy LVL table, regular and mid-boss HP/durations/cadences, Janjinha JN (and JX gameplay
+   timings), stage drizzle/ex caps. **Not**: colours, drawing geometry, text, hitbox shapes, phase thresholds (the ladder
+   stays the same), prices (`G.UPGRADES` is shared economy; the balance pass edits it directly), rewards.
+4. Fallback for isolated `mods=` runs: `const tune = G.tune || ((id, o) => o);`.
+5. Behaviour is **identical** to the round-5 game in MODO CPI and in NORMAL while `G.TUNE_NORMAL` is empty.
+6. Hand edits of a registered block in a test are reset by the next `G.applyMode` (every `G.startRun`): tune through
+   `G.TUNE_NORMAL` + `G.applyMode('normal')`, or replace `G.PRESS` whole (it stays in force; missing keys follow the mode).
+
+**The balance rule:** every *easing* change goes into `G.TUNE_NORMAL` (data.js) and never touches the CPI values; a change
+that makes the game *harder* or *fairer* for everybody (e.g. widening the gap of a bullet wall) goes into the base value,
+so both modes get it.
+
+### 12.2 Registered ids
+Core (core.js):
+
+| id | fields |
+|---|---|
+| `core.PRESS` | the `G.PRESS` block (§9.1) minus `NAMES` and `COLORS`: `W TURBO HEAT_T HEAT_KILL HEAT_BIG HEAT_PHASE HEAT_MAXP HEAT_MAX DEATH_KEEP BOMB UP DOWN L2_BASE L2_FLOOR LV SPD SPD_CAP EHP BIGHP BHP0 BHP1 SCORE PIX BOSSPIX CLEARPIX STUN GOLD_AVG GOLD_PIX` |
+| `core.T` | `POWER_NEED` [0, 2, 3, 4, 4] (G.powerNeed) · `EXTENDS` [1,5M, 4,5M, 9M] · `RESTORE_LIFE` 7 (s the restore P stays) · `GRAZE_BOMB` 1,0 (Delação charge per graze, 100 = one) · `RESPAWN_INV` 3 (s of invulnerability after a death) · `START_LIVES` 3 · `START_BOMBS` 2 (+ upgrades) · `L2_DIFF` 1,15 (2º Mandato bullet speed) · `L2_EHP` 1,3 (2º Mandato enemy HP) · `L2_BHP` 1,25 (2º Mandato boss HP) |
+
+<!-- INTEGRATOR: complete this list with the other modules' ids and fields (bosses.js, erika.js, taxad.js, lule.js,
+     janjinha.js, enemies.js, stages.js). `G.tuneCheck().ids` in the browser lists every registered id. -->
+**TO COMPLETE (integrator):** the ids registered by bosses.js, erika.js, taxad.js, lule.js, janjinha.js, enemies.js and
+stages.js, one row each with their fields:
+
+| id | fields |
+|---|---|
+| *(bosses.js)* | |
+| *(erika.js)* | |
+| *(taxad.js)* | |
+| *(lule.js)* | |
+| *(janjinha.js)* | |
+| *(enemies.js)* | |
+| *(stages.js)* | |
+
+### 12.3 Selection, signs and rewards
+- `G.save.settings.mode`: `'normal'` (default) | `'cpi'` (saveV stays 5). URL `cpi=1` / `cpi=0` forces a mode for the
+  session without touching the save (a tap on the toggle wins and clears the force). `G.mode()`, `G.debug.mode()`.
+- Stage select (FASES): a two-option toggle at the top, `NORMAL` / `MODO CPI`, with one line under it (`'Difícil, mas justo.'`
+  / `'Chefão mais forte e mais bala. Pontos ×1,5 e Pix ×1,25.'`); CPI active = red/magenta `#ff3d7f`. A tap plays
+  `ui_click` and saves. The cards show the rank of the selected mode (`save.ui.ranks` / `save.ui.ranksCpi`); the title
+  chip shows its best (`save.best` / `save.bestCpi`), game over and ending show the run mode's best.
+- In a CPI run: `'MODO CPI: SEM MOLEZA!'` (red, stroked, centred, 2 s) on the first play frame (once per run, never on a
+  continue); a red `'MODO CPI'` chip at the top centre of the cached HUD band (mode in the band cache key).
+- CPI rewards (not registered: they are the same code in both modes, gated on `run.mode`): score ×1,5 inside
+  `G.addScore` (stacking with PRESSÃO; the HUD multiplier shows it), Pix ×1,25 inside `G.dropPix` (also with `noPress`:
+  it is a mode reward) and on the stage-clear grade and Carimbo de Ouro Pix.
+- Boletim: `stats.mode`; a red `'MODO CPI'` tag in the header (next to `'COM RECURSO'`; both may show).
+- Ending: `info.mode`; a `'CPI ENCERRADA!'` stamp on its own line under VOTOS FINAIS, same slam as `'SEM RECURSO!'`
+  (both may show, CPI first).
+- Achievement 27, `cpi_mandato` 'CPI Encerrada' ('Vença o 1º Mandato no MODO CPI.'): `G.finishGame` unlocks it when
+  `run.mode === 'cpi'`, `run.loop === 1` and the run started at stage 1 (continues allowed).

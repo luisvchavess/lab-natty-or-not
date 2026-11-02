@@ -111,11 +111,13 @@
     return {
       // saveV: versão do save (5 = jogo de 5 fases; os saves antigos não têm o campo e são migrados no loadSave)
       saveV: 5,
-      pix: 0, upgrades: {}, unlocked: 1, best: 0, cleared: false, cleared2: false, seenIntro: false,
+      // best / bestCpi: recorde de cada modo (NORMAL / MODO CPI)
+      pix: 0, upgrades: {}, unlocked: 1, best: 0, bestCpi: 0, cleared: false, cleared2: false, seenIntro: false,
       achievements: {}, counters: {},
       // quality: 'auto' (o jogo escolhe pelo desempenho) | 'high' | 'mid' | 'low'
       // skin: 'azul' | 'ouro' (FUSCA DOURADO: só vale com a conquista 'transito')
-      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto', skin: 'azul' },
+      // mode: 'normal' | 'cpi' (MODO CPI, a dificuldade bônus; escolhido na tela FASES)
+      settings: { music: true, sfx: true, sens: 1.25, vibrate: true, shake: true, hitbox: true, quality: 'auto', skin: 'azul', mode: 'normal' },
       qualityTier: 'high', // nível escolhido pelo modo automático (lembrado entre sessões)
     };
   }
@@ -152,7 +154,8 @@
   G.saveGame = function () { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.save)); } catch (e) { /* nada */ } };
   if (migrated) G.saveGame(); // grava a migração na hora (saveV 5)
   // APAGAR PROGRESSO: a qualidade volta para 'auto' (começando do 'high') e o medidor recomeça
-  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); };
+  // (o modo volta para o NORMAL: os números dos menus acompanham)
+  G.resetSave = function () { G.save = defaultSave(); G.saveGame(); resetQualityMeter(); applyQuality(); if (!runLive) G.applyMode(selMode()); };
   G.upg = (id) => G.save.upgrades[id] || 0;
   G.upgradeCost = function (id) {
     const u = G.UPGRADES.find((x) => x.id === id);
@@ -242,7 +245,8 @@
   //  drawOver: def.drawOver(ctx, b, g) desenha por cima dos tiros e lasers; mech: b.mech + G.debug.mech().
   //  Rodada 5: postLines (G.game.postLines troca as falas do fim da fase), press (PRESSÃO: G.press / G.PRESS),
   //  lastPhase (fase com last: true mostra 'ÚLTIMO RECURSO'), defeatText (b.defeatText no carimbo).
-  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true, postLines: true, press: true, lastPhase: true, defeatText: true };
+  //  mode: NORMAL / MODO CPI (G.tune, G.applyMode, G.mode(); ENGINE.md "Modos").
+  G.coreHooks = { autoGoal: true, hudTag: true, drawOver: true, mech: true, postLines: true, press: true, lastPhase: true, defeatText: true, mode: true };
 
   // ===================== Estilos de tiro inimigo (sprites em cache) =====================
   // def: { r: raio de colisão, size: tamanho do sprite em px lógicos, rotate: gira na direção do tiro,
@@ -704,6 +708,7 @@
   // número registrado para uma constante solta no carregamento do módulo.
   const TUNES = {};
   let tuneMode = null;
+  let tuneGen = 0; // sobe a cada applyMode (quem guarda uma cópia mesclada sabe que precisa refazer: PC())
   function tSnap(v) {
     if (Array.isArray(v)) return v.map(tSnap);
     if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) { const o = {}; for (const k in v) o[k] = tSnap(v[k]); return o; }
@@ -731,6 +736,7 @@
   };
   G.applyMode = function (mode) {
     tuneMode = mode === 'cpi' ? 'cpi' : 'normal';
+    tuneGen++;
     for (const id in TUNES) tApply(id);
     return tuneMode;
   };
@@ -744,12 +750,50 @@
     }
     return { ids: Object.keys(TUNES), bad };
   };
+  // testes: os valores registrados como estão agora ({ id: { campo: valor } }; G.debug.tunes())
+  function tuneDump(only) {
+    const out = {};
+    for (const id in TUNES) {
+      if (only && id !== only) continue;
+      const t = TUNES[id], o = {};
+      for (const k in t.base) o[k] = tSnap(t.obj[k]);
+      out[id] = o;
+    }
+    return out;
+  }
+
+  // ---------- O modo da partida ----------
+  // G.save.settings.mode guarda a escolha da tela FASES ('normal' é o padrão; o MODO CPI vale desde o começo).
+  // URL ?cpi=1 / ?cpi=0 força um modo só nesta sessão (o save não muda; tocar no seletor da tela vale mais).
+  // G.startRun trava run.mode e chama G.applyMode ANTES de montar a partida; recursos e as fases seguintes
+  // continuam no mesmo modo. G.mode(): run.mode durante a partida (de G.startRun a G.toMenu), senão a escolha.
+  // Recompensas do MODO CPI (não são números de dificuldade: ficam fora do registro): pontos ×1,5 (G.addScore,
+  // junto com a PRESSÃO) e Pix ×1,25 (G.dropPix, mesmo com noPress, e o Pix da nota no fim da fase).
+  const MODE_SCORE = 1.5, MODE_PIX = 1.25;
+  let modeForce = null; // ?cpi=1 -> 'cpi', ?cpi=0 -> 'normal'
+  let runLive = false;  // entre G.startRun e G.toMenu
+  const normMode = (m) => (m === 'cpi' ? 'cpi' : 'normal');
+  function selMode() { return modeForce || normMode(G.save && G.save.settings && G.save.settings.mode); }
+  G.mode = () => (runLive && G.run && G.run.mode) || selMode();
+  // seletor da tela FASES: grava a escolha e já põe os números do modo nos menus (demos do Como Jogar)
+  G.setMode = function (m) {
+    m = normMode(m);
+    modeForce = null;
+    G.save.settings.mode = m;
+    G.saveGame();
+    if (!runLive) G.applyMode(m);
+    return m;
+  };
+  const cpiRun = () => !!(G.run && G.run.mode === 'cpi');
+  // recorde de cada modo: save.best (NORMAL) e save.bestCpi (MODO CPI)
+  G.bestFor = (m) => (normMode(m) === 'cpi' ? G.save.bestCpi : G.save.best) || 0;
 
   // ===================== PRESSÃO (dificuldade dinâmica) =====================
   // Um "rank" visível de 0 a 1 (G.press.R). Sobe com o nível da arma (forte no 4-5) e com o tempo vivo
   // (run.heat); cai na morte e na Delação. Acelera e adensa os tiros, engrossa os inimigos e PAGA de volta:
   // pontos ×(1+R), mais Pix, tonto do chefão mais forte. (g.rank continua sendo a nota S/A/B/C da fase.)
-  // Bloco de ajuste do balanço: G.PRESS pode ser trocado inteiro; o que faltar volta para estes padrões.
+  // Bloco de ajuste do balanço ('core.PRESS'; estes são os valores do MODO CPI, o NORMAL vem de G.TUNE_NORMAL).
+  // G.PRESS pode ser trocado inteiro (testes); o que faltar na troca vem deste bloco, no modo aplicado.
   const PRESS = {
     W: [0, 0.04, 0.10, 0.20, 0.35],       // peso por run.level 1..5 (concentrado no 4-5)
     TURBO: 0.02,                          // por nível de G.upg('turbo')
@@ -767,17 +811,33 @@
     STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
     GOLD_AVG: 0.5, GOLD_PIX: 400,
   };
-  const PRESS_DEF = JSON.parse(JSON.stringify(PRESS));
+  // Registro dos modos (bloco 'core.PRESS'): os números acima são os do MODO CPI; o NORMAL aplica
+  // G.TUNE_NORMAL['core.PRESS'] por cima, no próprio objeto. NAMES e COLORS são texto e desenho: ficam fora.
+  G.tune('core.PRESS', PRESS, Object.keys(PRESS).filter((k) => k !== 'NAMES' && k !== 'COLORS'));
   G.PRESS = PRESS;
-  // constantes em uso: o próprio PRESS (ajustes nele valem na hora) ou a troca completada com os padrões
-  let pcRef = null, pcObj = PRESS_DEF;
+  // constantes em uso: o próprio PRESS (no modo aplicado), ou a troca de G.PRESS (testes) completada com ele.
+  // A cópia mesclada é refeita quando G.PRESS muda de objeto ou quando o modo é aplicado de novo (tuneGen):
+  // o que a troca não traz segue o modo; o que ela traz vale como está.
+  let pcRef = null, pcObj = PRESS, pcGen = -1;
   function PC() {
     const p = G.PRESS;
     if (p === PRESS) return PRESS;
-    if (!p || typeof p !== 'object') return PRESS_DEF;
-    if (p !== pcRef) { pcRef = p; pcObj = Object.assign({}, PRESS_DEF, p); }
+    if (!p || typeof p !== 'object') return PRESS;
+    if (p !== pcRef || pcGen !== tuneGen) { pcRef = p; pcGen = tuneGen; pcObj = Object.assign({}, PRESS, p); }
     return pcObj;
   }
+  // Números soltos do core que o balanço pode mexer (bloco 'core.T'; os valores aqui são os do MODO CPI).
+  // Todos lidos na hora do jogo (nada copiado no carregamento). Recompensas (SEM ARRANHÃO!, nota, Pix da
+  // nota, bônus do fim da fase) não entram: são iguais nos dois modos.
+  const T = G.tune('core.T', {
+    POWER_NEED: [0, 2, 3, 4, 4],          // P para subir do nível lv para lv+1 (G.powerNeed; 13 P do nível 1 ao 5)
+    EXTENDS: [1500000, 4500000, 9000000], // vidas extras pelos pontos da partida inteira (run.total)
+    RESTORE_LIFE: 7,                      // s que o P "de volta" (o nível perdido na morte) fica na tela
+    GRAZE_BOMB: 1.0,                      // carga da Delação de graça por raspão (100 = uma Delação)
+    RESPAWN_INV: 3,                       // s de invencibilidade quando o Fusca volta depois de uma morte
+    START_LIVES: 3, START_BOMBS: 2,       // vidas e Delações no começo da partida (+ as melhorias da Lojinha)
+    L2_DIFF: 1.15, L2_EHP: 1.3, L2_BHP: 1.25, // 2º Mandato: velocidade dos tiros, vida dos inimigos, vida do chefão
+  });
   // um objeto só, atualizado a cada quadro de jogo (os módulos leem G.press.R / G.press.lv)
   G.press = { R: 0, lv: 0, name: PRESS.NAMES[0], color: PRESS.COLORS[0], tgt: 0 };
   G.pressK = (k) => 1 + k * G.press.R;
@@ -863,7 +923,7 @@
     const st = G.Stages.list[stageIdx];
     const g = {
       t: 0, frame: 0, stageIdx, stage: st, loop: G.run.loop,
-      diff: G.run.loop > 1 ? 1.15 : 1, // multiplicador de velocidade dos tiros inimigos
+      diff: G.run.loop > 1 ? T.L2_DIFF : 1, // multiplicador de velocidade dos tiros inimigos
       player: null, enemies: [], eb: [], pb: [], pickups: [], parts: [], texts: [], lasers: [], fx: [],
       boss: null, banner: null, stamp: null, shake: 0, hitstop: 0, flashA: 0, flashC: '#fff',
       scrollY: 0, scrollSpeed: st && st.scrollSpeed ? st.scrollSpeed : 42,
@@ -898,7 +958,7 @@
     const def = G.Enemies.defs[kind];
     if (!def) { G.reportError('Inimigo inexistente: ' + kind, 'spawnEnemy'); return null; }
     o = o || {};
-    const hpMul = g.loop > 1 ? 1.3 : 1;
+    const hpMul = g.loop > 1 ? T.L2_EHP : 1;
     const e = {
       kind, def, x, y, vx: o.vx || 0, vy: o.vy || 0, r: o.r || def.r || 14,
       hp: (o.hp || def.hp || 5) * hpMul, t: 0, flash: 0, dead: false,
@@ -982,10 +1042,12 @@
     g.pickups.push(it);
     return it;
   };
-  // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: valor exato), arredondado na sorte
+  // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: sem a PRESSÃO), arredondado na sorte.
+  // MODO CPI: ×1,25 sempre (é prêmio do modo, não da PRESSÃO: vale também com noPress)
   G.dropPix = function (x, y, amount, o) {
     let a = +amount || 0;
     if (!(o && o.noPress)) a *= 1 + PC().PIX * G.press.R;
+    if (cpiRun()) a *= MODE_PIX;
     const fa = Math.floor(a);
     let left = fa + (Math.random() < a - fa ? 1 : 0);
     while (left > 0) {
@@ -1110,10 +1172,10 @@
 
   // ===================== Placar / aprovação =====================
   G.mult = function () { const g = G.game; return g ? 1 + g.approval / 25 : 1; };
-  // Vidas extras por pontuação. Contam os pontos da partida inteira (run.total), que o recurso
+  // Vidas extras por pontuação (T.EXTENDS). Contam os pontos da partida inteira (run.total), que o recurso
   // NÃO zera: cada marca só dá vida uma vez por partida.
-  const EXTENDS = [1500000, 4500000, 9000000];
   function checkExtends(run) {
+    const EXTENDS = T.EXTENDS;
     while ((run.extGiven || 0) < EXTENDS.length && (run.total || 0) >= EXTENDS[run.extGiven || 0]) {
       run.extGiven = (run.extGiven || 0) + 1;
       run.lives = Math.min(9, run.lives + 1);
@@ -1123,10 +1185,11 @@
   }
   G.addScore = function (base, x, y, showText) {
     const run = G.run; if (!run) return 0;
-    const pts = Math.round(base * G.mult() * (1 + PC().SCORE * G.press.R)); // PRESSÃO paga: pontos ×(1+R)
+    // PRESSÃO paga: pontos ×(1+R); o MODO CPI paga ×1,5 por cima
+    const pts = Math.round(base * G.mult() * (1 + PC().SCORE * G.press.R) * (run.mode === 'cpi' ? MODE_SCORE : 1));
     run.score += pts;
     run.total = (run.total || 0) + pts;
-    if (run.total >= EXTENDS[run.extGiven || 0]) checkExtends(run);
+    if (run.total >= T.EXTENDS[run.extGiven || 0]) checkExtends(run);
     if (showText && x != null) G.text(x, y, G.fmt(pts), { color: '#fff', size: 10, life: 0.7 });
     return pts;
   };
@@ -1207,7 +1270,7 @@
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
     // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,00 (R 0,75) … ×1,07 (R 1)
     const P = PC(), R = G.press.R;
-    const hpMul = (g.loop > 1 ? 1.25 : 1) * (P.BHP0 + P.BHP1 * R);
+    const hpMul = (g.loop > 1 ? T.L2_BHP : 1) * (P.BHP0 + P.BHP1 * R);
     const b = {
       id, def, name: def.name || id.toUpperCase(), title: def.title || '', press0: R,
       x: G.W / 2, y: -160, homeX: G.W / 2, homeY: def.homeY || 150, r: def.r || 40, hitboxes: null,
@@ -1542,7 +1605,7 @@
       if (p.respawnT <= 0) {
         if (run.lives <= 0) { gameOver(); return; }
         // o dedo que ficou na tela continua valendo: reancora quando o carro terminar de entrar
-        p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.tx = G.W / 2; p.ty = G.H * 0.8; p.inv = 3;
+        p.alive = true; p.entering = true; p.x = G.W / 2; p.y = G.H + 30; p.tx = G.W / 2; p.ty = G.H * 0.8; p.inv = T.RESPAWN_INV;
       }
       return;
     }
@@ -1628,8 +1691,8 @@
     run.level = Math.max(1, run.level - 1);
     run.pp = 0; // a barra de força do próximo nível zera
     // o nível perdido cai como um P "de volta" (cor da arma, sem trocar de cor): pegou, recupera o nível na hora.
-    // Dura 7 s (pisca nos 2 últimos) e some.
-    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true, life: 7 });
+    // Dura T.RESTORE_LIFE s (7; pisca nos 2 últimos) e some.
+    if (lostLevel) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon, cycle: false, restore: true, life: T.RESTORE_LIFE });
     else if (M.chance(0.5)) G.drop('power', p.x, Math.min(p.y, G.H * 0.6), { vy: -200, wtype: run.weapon });
     run.bombs = Math.max(run.bombs, run.baseBombs);
     pressOnDeath(p);
@@ -1671,9 +1734,8 @@
     return true;
   };
 
-  // Quantos P para subir do nível lv para lv+1 (13 P do nível 1 ao 5)
-  const POWER_NEED = [0, 2, 3, 4, 4];
-  function powerNeed(lv) { return POWER_NEED[lv] || 4; }
+  // Quantos P para subir do nível lv para lv+1 (T.POWER_NEED: 13 P do nível 1 ao 5)
+  function powerNeed(lv) { return T.POWER_NEED[lv] || 4; }
   G.powerNeed = powerNeed;
   function collectPickup(it) {
     const g = G.game, run = G.run, p = g.player;
@@ -1862,7 +1924,7 @@
         g.grazes++; run.grazes++;
         G.addScore(40);
         G.addApproval(0.3);
-        g.delacao += 1.0; // 100 raspões por Delação de graça
+        g.delacao += T.GRAZE_BOMB; // 1,0: 100 raspões por Delação de graça
         if (g.delacao >= 100) {
           g.delacao = 0;
           G.drop('bomb', p.x, p.y - 60, { vy: -60, magnet: true });
@@ -2326,7 +2388,7 @@
   // A faixa de cima (votos, Pix, vidas, aprovação) vai para um canvas guardado e só é redesenhada
   // quando algum valor muda (no máximo ~15x/s para o placar). A barra do chefão e a arma são diretas.
   const HUD_BAND_H = 48;
-  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1 };
+  const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1, mode: '' };
   function paintHudBand(g, run, k) {
     const W = G.W, hc = hudCache;
     if (!hc.c || hc.k !== k) {
@@ -2365,10 +2427,21 @@
     const ap = Math.round(g.approval) / 100;
     x.fillStyle = ap > 0.66 ? G.C.greenL : ap > 0.33 ? G.C.yellow : G.C.red;
     x.fillRect(ax, ay, aw * ap, 5);
-    // o multiplicador mostrado já inclui a PRESSÃO (pontos ×(1+R))
-    const P = PC(), pr = G.press;
+    // o multiplicador mostrado já inclui a PRESSÃO (pontos ×(1+R)) e o MODO CPI (×1,5)
+    const P = PC(), pr = G.press, cpi = run.mode === 'cpi';
     x.textAlign = 'center'; x.font = '700 10px ' + G.FONT_BODY; x.fillStyle = 'rgba(255,255,255,0.85)';
-    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + (G.mult() * (1 + P.SCORE * pr.R)).toFixed(1).replace('.', ','), W / 2, ay - 3);
+    x.fillText('APROVAÇÃO ' + Math.round(g.approval) + '%  ×' + (G.mult() * (1 + P.SCORE * pr.R) * (cpi ? MODE_SCORE : 1)).toFixed(1).replace('.', ','), W / 2, ay - 3);
+    // MODO CPI: plaquinha vermelha no alto, no meio (entre o placar e o Pix, acima da aprovação)
+    if (cpi) {
+      x.font = '8px ' + G.FONT_DISPLAY;
+      const tw = Math.ceil(x.measureText('MODO CPI').width), cw = tw + 10, cx = Math.round(W / 2 - cw / 2), cy = 3;
+      x.fillStyle = '#ff3d7f';
+      x.beginPath();
+      if (x.roundRect) x.roundRect(cx, cy, cw, 12, 3); else x.rect(cx, cy, cw, 12);
+      x.fill();
+      x.fillStyle = '#ffffff'; x.textAlign = 'center';
+      x.fillText('MODO CPI', W / 2, cy + 9);
+    }
     // PRESSÃO: rótulo + 5 casas entre a barra da aprovação (acaba em W/2 + 50) e o botão de pausa (W - 48).
     // As casas cheias usam a cor do nível; a próxima enche aos poucos (do limiar atual ao próximo).
     // Em CPI! (lv 5) o rótulo sai daqui: o drawHUD pisca 'CPI!' a cada quadro.
@@ -2395,12 +2468,12 @@
     k = k || scale * dpr;
     // faixa de cima (guardada)
     const apr = Math.round(g.approval);
-    const plv = G.press.lv, ppr = Math.round(G.press.R * 50);
+    const plv = G.press.lv, ppr = Math.round(G.press.R * 50), md = run.mode || 'normal';
     const now = performance.now();
-    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives || hc.plv !== plv || hc.pr !== ppr;
-    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || hc.plv !== plv || now - hc.t >= 66))) {
+    const changed = hc.score !== run.score || hc.pix !== run.pix || hc.apr !== apr || hc.lives !== run.lives || hc.plv !== plv || hc.pr !== ppr || hc.mode !== md;
+    if (!hc.c || hc.k !== k || (changed && (hc.lives !== run.lives || hc.plv !== plv || hc.mode !== md || now - hc.t >= 66))) {
       paintHudBand(g, run, k);
-      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.plv = plv; hc.pr = ppr; hc.t = now;
+      hc.score = run.score; hc.pix = run.pix; hc.apr = apr; hc.lives = run.lives; hc.plv = plv; hc.pr = ppr; hc.mode = md; hc.t = now;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(hc.c, 0, 0);
@@ -2498,6 +2571,8 @@
   G.toMenu = function () {
     G.state = 'menu';
     G.game = null;
+    runLive = false;
+    G.applyMode(selMode()); // menus e demos do Como Jogar com os números do modo escolhido
     setPlayButtons(false);
     call(G.Audio, 'music', 'menu');
     call(G.UI, 'title');
@@ -2505,9 +2580,16 @@
   G.startRun = function (stageIdx, loop) {
     stageIdx = stageIdx || 0;
     loop = loop || 1;
-    const lives = 3 + G.upg('vida');
-    const bombs = 2 + G.upg('bomba');
+    // o modo vale para a partida inteira (recursos e fases seguintes): os números entram no lugar ANTES de
+    // qualquer coisa da partida (vidas, PRESSÃO inicial, primeira fase, vida travada do chefão)
+    const mode = selMode();
+    G.applyMode(mode);
+    runLive = true;
+    const lives = T.START_LIVES + G.upg('vida');
+    const bombs = T.START_BOMBS + G.upg('bomba');
     G.run = {
+      mode,                     // 'normal' | 'cpi' (G.mode(), G.debug.mode())
+      cpiSign: mode === 'cpi',  // aviso 'MODO CPI: SEM MOLEZA!' pendente (primeiro quadro de jogo; recurso não repete)
       loop, stageIdx, startStage: stageIdx, score: 0, lives, baseLives: lives, bombs, baseBombs: bombs,
       weapon: 'voto', level: Math.min(G.MAX_LEVEL, 1 + G.upg('arma')), pp: 0, grazes: 0, pix: 0, hits: 0,
       continues: 0, maxContinues: 2 + G.upg('recurso'), // recursos: 2 + Embargos de Declaração
@@ -2545,6 +2627,11 @@
       setPlayButtons(true);
       try { g.script = { gen: st.script(STAGE_API), wait: null, done: false }; }
       catch (err) { G.reportError(err, 'stage.script init'); g.script = { done: true }; }
+      // MODO CPI: o aviso no primeiro quadro de jogo da partida (uma vez só; o recurso não repete)
+      if (G.run.cpiSign) {
+        G.run.cpiSign = false;
+        G.text(G.W / 2, G.H * 0.4, 'MODO CPI: SEM MOLEZA!', { color: '#ff3d7f', size: 17, life: 2, vy: -10, stroke: true });
+      }
     };
     const story = G.STORY.stages[st.id];
     const afterIntro = () => {
@@ -2560,7 +2647,8 @@
     const g = G.game; if (!g) return;
     const d = g.pixStage - g.pixCommitted;
     if (d > 0) { G.save.pix += d; G.count('pixTotal', d); g.pixCommitted = g.pixStage; }
-    if (G.run && G.run.score > G.save.best) G.save.best = G.run.score;
+    // recorde do modo da partida (best = NORMAL, bestCpi = MODO CPI)
+    if (G.run) { const bk = G.run.mode === 'cpi' ? 'bestCpi' : 'best'; if (G.run.score > (G.save[bk] || 0)) G.save[bk] = G.run.score; }
     G.saveGame();
   }
   G.commitPix = commitPix;
@@ -2602,11 +2690,11 @@
     run.total = (run.total || 0) + total;
     checkExtends(run);
     // Pix da nota: cresce com a fase (fases difíceis pagam mais), com a PRESSÃO média da fase (R̄)
-    // e dobra no 2º Mandato. CARIMBO DE OURO: nota S com R̄ >= 0,5 paga um extra.
-    const P = PC(), avg = pressAvg(g), l2k = run.loop > 1 ? 2 : 1;
-    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (1 + P.CLEARPIX * avg) * l2k);
+    // e dobra no 2º Mandato. CARIMBO DE OURO: nota S com R̄ >= 0,5 paga um extra. MODO CPI: os dois ×1,25.
+    const P = PC(), avg = pressAvg(g), l2k = run.loop > 1 ? 2 : 1, mk = run.mode === 'cpi' ? MODE_PIX : 1;
+    const pixBonus = Math.round({ S: 250, A: 160, B: 90, C: 40 }[rank] * (1 + 0.25 * g.stageIdx) * (1 + P.CLEARPIX * avg) * l2k * mk);
     const gold = rank === 'S' && avg >= P.GOLD_AVG;
-    const goldPix = gold ? Math.round(P.GOLD_PIX * (1 + 0.25 * g.stageIdx) * l2k) : 0;
+    const goldPix = gold ? Math.round(P.GOLD_PIX * (1 + 0.25 * g.stageIdx) * l2k * mk) : 0;
     run.pix += pixBonus + goldPix; g.pixStage += pixBonus + goldPix;
     if (gold) { run.gold = (run.gold || 0) + 1; if (run.gold >= 3) G.unlock('carimbo_ouro'); }
     commitPix();
@@ -2620,6 +2708,7 @@
       last: g.stageIdx >= G.Stages.list.length - 1, loop: run.loop,
       press: { avg, lv: pressLevelOf(avg), name: P.NAMES[pressLevelOf(avg)] || '', color: P.COLORS[pressLevelOf(avg)] || '#fff', mul: 1 + avg },
       gold, goldPix, continued: run.continues > 0,
+      mode: run.mode || 'normal', // MODO CPI: etiqueta no boletim, nota guardada em save.ui.ranksCpi
     };
     const next = () => {
       if (stats.last) { G.finishGame(); return; }
@@ -2643,7 +2732,7 @@
     // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
     commitPix();
     call(G.Audio, 'music', 'gameover');
-    const info = { score: run.score, stage: g.stage, index: g.stageIdx, continuesLeft: run.maxContinues - run.continues, pix: G.save.pix, best: G.save.best };
+    const info = { score: run.score, stage: g.stage, index: g.stageIdx, continuesLeft: run.maxContinues - run.continues, pix: G.save.pix, best: G.bestFor(run.mode), mode: run.mode || 'normal' };
     if (G.debug.autoContinue && info.continuesLeft > 0) { G.continueRun(); return; }
     call(G.UI, 'gameOver', info, {
       onContinue: () => G.continueRun(),
@@ -2680,12 +2769,14 @@
     // TRÂNSITO EM JULGADO: o mandato inteiro (da fase 1) sem entrar com recurso — libera o Fusca Dourado
     const oneCC = run.startStage === 0 && run.continues === 0;
     if (oneCC) G.unlock('transito');
+    // CPI ENCERRADA: o 1º Mandato inteiro (da fase 1) no MODO CPI, com ou sem recurso
+    if (run.mode === 'cpi' && run.loop === 1 && run.startStage === 0) G.unlock('cpi_mandato');
     G.save.cleared = true;
     G.saveGame();
     G.state = 'ending';
     setPlayButtons(false);
     call(G.Audio, 'music', 'victory');
-    call(G.UI, 'ending', { loop: run.loop, score: run.score, best: G.save.best, oneCC, secret: run.secret }, () => G.toMenu());
+    call(G.UI, 'ending', { loop: run.loop, score: run.score, best: G.bestFor(run.mode), oneCC, secret: run.secret, mode: run.mode || 'normal' }, () => G.toMenu());
   };
   G.pause = function () {
     if (G.state !== 'play') return;
@@ -2801,6 +2892,10 @@
     pressFix: null, // ?press=R: PRESSÃO fixa em R (0..1); lv/nome seguem, o calor continua contando
     heat0: 0,       // ?heat=H: calor inicial da partida (run.heat)
     forceQuinto: false, // ?quinto=1: libera o LULE 5.0 mesmo sem a partida sem recurso
+    // modo da partida ('normal' | 'cpi'; fora de uma partida, o escolhido). ?cpi=1 / ?cpi=0 força na sessão
+    mode() { return G.mode(); },
+    // valores atuais de todo bloco registrado em G.tune (ou só do id): testes de equivalência entre os modos
+    tunes(id) { return tuneDump(id); },
     press() {
       const pr = G.press, g = G.game, run = G.run;
       return { R: +pr.R.toFixed(4), lv: pr.lv, name: pr.name, heat: run ? +(run.heat || 0).toFixed(4) : 0, tgt: +pr.tgt.toFixed(4),
@@ -2831,7 +2926,7 @@
     weapon(w, lv) { if (G.run) { G.run.weapon = w; G.run.level = lv || G.run.level; } },
     stats() {
       const g = G.game;
-      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length, press: G.debug.press() } : { state: G.state, quality: G.quality, errors: G.errors.length, press: G.debug.press() };
+      return g ? { state: G.state, stage: g.stage && g.stage.id, t: +g.t.toFixed(1), enemies: g.enemies.length, eb: g.eb.length, pb: g.pb.length, parts: g.parts.length, boss: g.boss ? { id: g.boss.id, state: g.boss.state, hp: Math.round(g.boss.hp), phase: g.boss.phase, mech: g.boss.mech || null } : null, mech: (g.boss && g.boss.mech) || null, lives: G.run.lives, score: G.run.score, level: G.run.level, weapon: G.run.weapon, quality: G.quality, errors: G.errors.length, press: G.debug.press(), mode: G.mode() } : { state: G.state, quality: G.quality, errors: G.errors.length, press: G.debug.press(), mode: G.mode() };
     },
     // estado da manha do chefão (testes / humanbot): null sem chefão
     mech() {
@@ -2935,6 +3030,11 @@
     if (P.press != null && P.press !== '' && isFinite(+P.press)) G.debug.pressFix = M.clamp(+P.press, 0, 1);
     if (P.heat != null && P.heat !== '' && isFinite(+P.heat)) G.debug.heat0 = M.clamp(+P.heat, 0, 1);
     if (P.quinto === '1' || P.quinto === 'true') G.debug.forceQuinto = true;
+    // MODO CPI: ?cpi=1 força o CPI nesta sessão, ?cpi=0 força o NORMAL (o save não muda)
+    if (P.cpi === '1' || P.cpi === 'true') modeForce = 'cpi';
+    else if (P.cpi === '0' || P.cpi === 'false') modeForce = 'normal';
+    // todos os módulos já registraram seus números (G.tune): menus e demos já no modo escolhido
+    G.applyMode(selMode());
     G.state = 'menu';
     requestAnimationFrame(frame);
     if (P.stage != null) {

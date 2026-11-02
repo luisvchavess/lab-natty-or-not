@@ -2,10 +2,11 @@
 /* Partida completa automática: joga as 5 fases (piloto automático) e mede tempos.
    Rodoviária (Centrão) → Esplanada (Dilmãe) → Paranoá (Erika) → Fazenda (Taxad) → Planalto (Lule + Janjinha).
    node tools/fullrun.js [--page dev|index] [--god 1] [--ts 6] [--loop 1] [--timeout 1200] [--out DIR] [--shotsEvery 0]
-                         [--quality high] [--press R] [--heat H] [--quinto 0|1] [--stage 0]
+                         [--quality high] [--press R] [--heat H] [--quinto 0|1] [--stage 0] [--cpi 0|1]
    Sem --god (--god 0), usa autocontinue (recontagens) para seguir adiante e conta mortes por fase.
    --quality high|mid|low|auto (padrão high: o sandbox rasteriza na CPU e o modo auto baixaria a resolução).
    --press R / --heat H: PRESSÃO fixa em R / calor inicial (URL press= / heat=).
+   --cpi 1: joga no MODO CPI (URL cpi=1; o save não muda). Sem ele, NORMAL. O relatório diz o modo (G.debug.mode()).
    Luta secreta (LULE 5.0 — QUINTO MANDATO): começa sozinha quando a partida vem da fase 1 sem nenhum recurso
    (com --god 1 é o caso normal); --quinto 1 força (URL quinto=1), --quinto 0 só registra o que acontecer.
    O relatório traz, por fase, o tempo de fase, de chefão e as mortes/recursos; do Lule, as vidas (1, 2 e a 3ª
@@ -14,7 +15,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const a = process.argv.slice(2), o = { page: 'dev', god: 1, ts: 6, loop: 1, timeout: 1200, out: '/tmp/fusca-fullrun', shotsEvery: 0, w: 390, h: 844, quality: 'high',
-  press: '', heat: '', quinto: 0, stage: 0 };
+  press: '', heat: '', quinto: 0, stage: 0, cpi: 0 };
 for (let i = 0; i < a.length; i += 2) o[a[i].replace(/^--/, '')] = isNaN(+a[i + 1]) ? a[i + 1] : +a[i + 1];
 (async () => {
   fs.mkdirSync(o.out, { recursive: true });
@@ -28,6 +29,7 @@ for (let i = 0; i < a.length; i += 2) o[a[i].replace(/^--/, '')] = isNaN(+a[i + 
   if (o.press !== '' && isFinite(+o.press)) q += '&press=' + o.press;
   if (o.heat !== '' && isFinite(+o.heat)) q += '&heat=' + o.heat;
   if (+o.quinto === 1) q += '&quinto=1';
+  if (+o.cpi === 1) q += '&cpi=1'; // MODO CPI
   await page.goto('file://' + path.resolve(__dirname, '..', o.page + '.html') + '?' + q);
   // continues infinitos para medir o jogo inteiro sem god
   if (!o.god) await page.evaluate(() => { const f = () => { if (G.run) G.run.maxContinues = 999; }; setInterval(f, 200); });
@@ -63,20 +65,22 @@ for (let i = 0; i < a.length; i += 2) o[a[i].replace(/^--/, '')] = isNaN(+a[i + 
   }
   if (s && s.state === 'ending') await page.screenshot({ path: path.join(o.out, 'ending.png') });
   const end = await page.evaluate(() => ({ errors: G.errors.slice(0, 30), secret: G.run ? G.run.secret : null, continues: G.run ? G.run.continues : null, startStage: G.run ? G.run.startStage : null,
-    achievements: Object.keys((G.save && G.save.achievements) || {}), nStages: G.Stages.list.length, score: G.run && G.run.score, pix: G.run && G.run.pix }));
+    achievements: Object.keys((G.save && G.save.achievements) || {}), nStages: G.Stages.list.length, score: G.run && G.run.score, pix: G.run && G.run.pix,
+    mode: G.run && G.run.mode ? G.run.mode : G.debug && G.debug.mode ? G.debug.mode() : null }));
   const stageList = Object.keys(stages).sort((x, y) => x - y).map((k) => {
     const S = stages[k]; const Rm = S.R.length ? +(S.R.reduce((p, v) => p + v, 0) / S.R.length).toFixed(2) : null;
     return { idx: S.idx, id: S.id, t: S.t, boss: S.boss, bossFt: S.bossFt, deaths: S.deaths, cont: S.cont, maxEb: S.maxEb, R: Rm, plvMax: S.plvMax, mech: S.mech,
       lives: S.lives.length ? S.lives : undefined, janj: S.janj || undefined };
   });
   const lastRow = timeline.length ? timeline[timeline.length - 1] : null;
-  const report = { q, finished: lastRow && lastRow.state, nStages: end.nStages, stagesPlayed: stageList.length, allStages: stageList.length >= end.nStages,
+  const report = { q, mode: end.mode, finished: lastRow && lastRow.state, nStages: end.nStages, stagesPlayed: stageList.length, allStages: stageList.length >= end.nStages,
     secret: end.secret, quintoReached: end.secret === 'won' || end.secret === 'lost' || end.secret === 'on', oneCC: end.startStage === 0 && end.continues === 0,
     score: end.score, pix: end.pix, maxEnemyBullets: last.maxEb, maxEnemies: last.maxEn, stages: stageList,
     errors: end.errors, pageErrors: pageErrors.slice(0, 10), achievements: end.achievements, timeline };
   fs.writeFileSync(path.join(o.out, 'report.json'), JSON.stringify(report, null, 1));
   const short = Object.assign({}, report); delete short.timeline; delete short.achievements;
   console.log(JSON.stringify(short, null, 1));
+  console.log('modo: ' + (end.mode === 'cpi' ? 'MODO CPI' : end.mode === 'normal' ? 'NORMAL' : String(end.mode)) + (+o.cpi === 1 ? ' (--cpi 1, URL cpi=1)' : ' (sem --cpi)'));
   console.log('fase | chefão | t fase (s) | t chefão (s) | mortes | recursos | R méd | PRESSÃO máx | manha ok/miss/stuns | vidas | Janjinha');
   for (const S of stageList) console.log([S.idx + ' ' + S.id, S.boss || '-', S.t, S.bossFt, S.deaths, S.cont, S.R, S.plvMax, S.mech ? S.mech.ok + '/' + S.mech.miss + '/' + S.mech.stuns + (S.mech.pav != null ? ' pav ' + S.mech.pav : '') : '-',
     S.lives ? S.lives.join(',') : '-', S.janj || '-'].join(' | '));

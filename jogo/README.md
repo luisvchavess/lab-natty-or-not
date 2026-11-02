@@ -34,6 +34,8 @@ No computador: setas/WASD movem, Shift deixa lento, X ou espaço solta a Delaç�
 
 Venceu? Libera o **2º Mandato**, uma volta mais difícil que paga mais Pix.
 
+**MODO CPI:** a dificuldade bônus, escolhida desde a primeira partida no alto da tela FASES (NORMAL ou MODO CPI): chefão mais forte e mais bala, mas pontos ×1,5 e Pix ×1,25, com recorde e notas próprios e a conquista CPI Encerrada.
+
 **Segredo:** vença a segunda vida do Lule sem ter entrado com nenhum recurso desde a fase 1 e ele volta mais uma vez: **LULE 5.0 — QUINTO MANDATO**.
 
 **Mais exclusivo:** ISENTO! (vença o Taxad sem errar nenhum cofre), CARTÃO BLOQUEADO (faça o Leão morder o cartão corporativo), EMBARQUE IMEDIATO (tire a Janjinha da luta antes do voo dela), CARIMBO DE OURO, CPI! (vença um chefão com a PRESSÃO no máximo), SEM ARRANHÃO! (um chefão sem morrer) e o **Fusca Dourado**, para quem vence o mandato inteiro sem entrar com recurso.

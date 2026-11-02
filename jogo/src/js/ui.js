@@ -625,11 +625,14 @@
     const ac = achCount();
     const canBuy = (G.UPGRADES || []).some((u) => { const c = G.upgradeCost(u.id); return c != null && S.pix >= c; });
     const sticker = STICKERS[stickerI++ % STICKERS.length];
+    // recorde do modo escolhido na tela FASES (no MODO CPI, com a plaquinha vermelha no canto)
+    const tm = curMode();
     scr.root.innerHTML =
       '<canvas class="t-art" aria-hidden="true"></canvas>' +
       '<div class="t-top">' +
       '<div class="chip chip-pix">' + PIX_ICO + '<span><small>SALDO PIX</small><b>' + money(S.pix) + '</b></span></div>' +
-      '<div class="chip chip-best"><span><small>RECORDE</small><b>' + fmt(S.best) + '</b></span></div>' +
+      '<div class="chip chip-best' + (tm === 'cpi' ? ' is-cpi' : '') + '"><span><small>RECORDE</small><b>' + fmt(bestOf(tm)) + '</b></span>' +
+      (tm === 'cpi' ? '<em class="chip-cpi">MODO CPI</em>' : '') + '</div>' +
       '</div>' +
       '<header class="logo">' +
       '<h1 class="logo-main" aria-label="Fusca a Jato"><span class="l1">FUSCA</span><span class="l2">A JATO</span></h1>' +
@@ -729,10 +732,28 @@
   // ==================================================================
   // SELEÇÃO DE FASES (santinhos)
   // ==================================================================
+  // MODO CPI: o seletor de dificuldade fica no alto da tela FASES (NORMAL | MODO CPI, com a frase embaixo).
+  // As fases liberadas e as conquistas são as mesmas nos dois modos; a nota e o recorde são de cada modo
+  // (NORMAL: save.ui.ranks e save.best; MODO CPI: save.ui.ranksCpi e save.bestCpi).
+  const MODE_LINE = { normal: 'Difícil, mas justo.', cpi: 'Chefão mais forte e mais bala. Pontos ×1,5 e Pix ×1,25.' };
+  const curMode = () => (typeof G.mode === 'function' ? G.mode() : settings().mode) === 'cpi' ? 'cpi' : 'normal';
+  const ranksOf = (m) => (m === 'cpi' ? uiSave().ranksCpi : uiSave().ranks) || {};
+  const bestOf = (m) => (typeof G.bestFor === 'function' ? G.bestFor(m) : m === 'cpi' ? G.save.bestCpi || 0 : G.save.best || 0);
+  function modePickHTML(m) {
+    const b = (v, l) => '<button type="button" class="seg-b mode-b' + (v === m ? ' on' : '') + '" role="radio" aria-checked="' + (v === m) + '" data-mode="' + v + '">' + l + '</button>';
+    return '<div class="mode-pick' + (m === 'cpi' ? ' is-cpi' : '') + '">' +
+      '<div class="mode-seg" role="radiogroup" aria-describedby="modeLine">' + b('normal', 'NORMAL') + b('cpi', 'MODO CPI') + '</div>' +
+      '<p class="mode-line" id="modeLine" aria-live="polite">' + esc(MODE_LINE[m]) + '</p></div>';
+  }
+  // selo da faixa do santinho: nota do modo escolhido, cadeado, ou NOVA! (a fase liberada por último)
+  function santBadge(r, i, open_, unlocked) {
+    return r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '';
+  }
   function showStages() {
     const n = nStages();
     const unlocked = Math.min(G.save.unlocked || 1, n);
-    const ranks = uiSave().ranks || {};
+    let mode = curMode();
+    const ranks = ranksOf(mode);
     let cards = '';
     for (let i = 0; i < n; i++) {
       const s = stageInfo(i);
@@ -743,7 +764,7 @@
       cards +=
         '<button type="button" class="sant' + (last ? ' last' : '') + (wide ? ' final' : '') + (open_ ? '' : ' locked') + '" data-i="' + i + '" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + ';--i:' + i + '"' +
         ' aria-label="' + esc('FASE ' + (i + 1) + ': ' + s.name + ' · ' + castName(s.boss)) + '">' +
-        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + (r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '') + '</span>' +
+        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + santBadge(r, i, open_, unlocked) + '</span>' +
         '<span class="sant-main">' +
         '<span class="sant-photo"><canvas data-boss="' + s.boss + '"></canvas><span class="sant-num"><small>Nº</small>171</span></span>' +
         '<span class="sant-txt">' +
@@ -756,12 +777,37 @@
     }
     const scr = pageShell('stages', {
       kicker: 'SEU VOTO PARA', title: 'FASES',
+      cls: mode === 'cpi' ? 'is-cpi' : '',
       right: '<span class="lcd-chip">' + unlocked + '/' + n + ' LIBERADAS</span>',
-      body: '<div class="sant-grid' + (n > 1 && n % 2 === 1 ? ' has-final" style="--rows:' + ((n - 1) / 2) : '') + '">' + cards + '</div>',
+      body: modePickHTML(mode) + '<div class="sant-grid' + (n > 1 && n % 2 === 1 ? ' has-final" style="--rows:' + ((n - 1) / 2) : '') + '">' + cards + '</div>',
       foot: lcdFoot('', 'VOLTAR') + '<span class="foot-msg">Escolha um santinho. Todos são nº 171.</span>',
       keys: backKey(),
     });
     const msg = q(scr.root, '.foot-msg');
+    // troca de modo: grava na hora (G.setMode), troca a frase, o destaque e as notas dos santinhos
+    const pick = q(scr.root, '.mode-pick'), line = q(scr.root, '.mode-line');
+    const setMode = (m) => {
+      m = m === 'cpi' ? 'cpi' : 'normal';
+      if (typeof G.setMode === 'function') G.setMode(m); else { settings().mode = m; G.saveGame(); }
+      mode = curMode();
+      qa(scr.root, '.mode-b').forEach((o) => { const on = o.getAttribute('data-mode') === mode; o.classList.toggle('on', on); o.setAttribute('aria-checked', String(on)); });
+      pick.classList.toggle('is-cpi', mode === 'cpi');
+      scr.root.classList.toggle('is-cpi', mode === 'cpi');
+      line.textContent = MODE_LINE[mode];
+      const rk = ranksOf(mode);
+      qa(scr.root, '.sant').forEach((card) => {
+        const i = +card.getAttribute('data-i'), band = q(card, '.sant-band');
+        if (!band) return;
+        const old = q(band, 'i'); // o selo é o único <i> da faixa
+        if (old) old.remove();
+        const h = santBadge(rk[i], i, i < unlocked, unlocked);
+        if (h) band.insertAdjacentHTML('beforeend', h);
+      });
+    };
+    qa(scr.root, '.mode-b').forEach((b) => onTap(b, () => {
+      sfx('ui_click');
+      setMode(b.getAttribute('data-mode'));
+    }, false));
     qa(scr.root, '.sant').forEach((b) => onTap(b, () => {
       const i = +b.getAttribute('data-i');
       if (b.classList.contains('locked')) {
@@ -980,11 +1026,13 @@
   // ==================================================================
   // BOLETIM DE URNA (resultado da fase)
   // ==================================================================
+  // nota de cada fase, por modo: NORMAL em save.ui.ranks (como sempre), MODO CPI em save.ui.ranksCpi
+  const rankKey = (stats) => (stats && stats.mode === 'cpi' ? 'ranksCpi' : 'ranks');
   function recordRank(stats) {
-    const u = uiSave();
-    u.ranks = u.ranks || {};
-    const k = String(stats.index | 0), prev = u.ranks[k];
-    if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u.ranks[k] = stats.rank; G.saveGame(); }
+    const u = uiSave(), rk = rankKey(stats);
+    u[rk] = u[rk] || {};
+    const k = String(stats.index | 0), prev = u[rk][k];
+    if (!prev || (RANK_ORDER[stats.rank] || 0) > (RANK_ORDER[prev] || 0)) { u[rk][k] = stats.rank; G.saveGame(); }
   }
   // multiplicador no padrão do jogo: ×2 / ×1,7 (como o BossKit.fmtMul)
   function fmtMul(m) { const v = Math.round((+m || 0) * 10) / 10; return v % 1 === 0 ? String(v) : v.toFixed(1).replace('.', ','); }
@@ -1031,7 +1079,7 @@
   function showStageClear(stats, done) {
     stats = stats || {};
     const fin = once(done);
-    const prevRank = ((uiSave().ranks || {})[String(stats.index | 0)]) || null;
+    const prevRank = ((uiSave()[rankKey(stats)] || {})[String(stats.index | 0)]) || null;
     G.safe(recordRank, 'ui.recordRank', stats);
     const b = stats.bonus || {};
     const loopN = stats.loop || 1;
@@ -1077,6 +1125,7 @@
       '<div class="cl-paper-win scroll"><div class="rc-shadow"><div class="receipt">' +
       '<div class="rc-head"><small>JUSTIÇA ELEITORAL DO POVO</small><h2>BOLETIM DE URNA</h2>' +
       '<p>FASE ' + ((stats.index | 0) + 1) + ' · ' + esc(s.name.toUpperCase()) + (loopN > 1 ? '<br>2º MANDATO' : '') + '</p>' +
+      (stats.mode === 'cpi' ? '<span class="rc-tag rc-cpi">MODO CPI</span>' : '') +
       (stats.continued ? '<span class="rc-tag">COM RECURSO</span>' : '') + '</div>' +
       html +
       '<div class="rc-stamp-area"><div class="stamp r-' + rank + '"><b>' + rank + '</b><span>' + RANKS[rank].label + '</span></div>' +
@@ -1509,6 +1558,7 @@
   function creditsRoll(info, fin) {
     const scr = open('roll');
     const loopN = info.loop || 1;
+    const cpiEnd = info.mode === 'cpi'; // carimbo CPI ENCERRADA! (primeiro; o SEM RECURSO! bate logo depois)
     scr.root.innerHTML =
       '<canvas class="roll-bg" aria-hidden="true"></canvas>' +
       '<div class="roll-win"><div class="roll">' + creditsHTML(true) + '</div></div>' +
@@ -1518,7 +1568,8 @@
       '<div class="fin-title">' + (loopN > 1 ? 'REELEITO!' : '2º MANDATO<br>DESBLOQUEADO') + '</div>' +
       '<p class="fin-sub">' + (loopN > 1 ? 'Você venceu o 2º Mandato. Brasília nunca mais será a mesma. (Mentira.)' : 'Mais difícil, mais Pix. Já está no menu, esperando seu voto.') + '</p>' +
       '<div class="fin-score"><span>VOTOS FINAIS</span><b>' + fmt(info.score) + '</b>' +
-      (info.oneCC ? '<i class="fin-stamp">SEM RECURSO!</i>' : '') + // o mandato inteiro sem entrar com recurso
+      (cpiEnd ? '<i class="fin-stamp fin-cpi">CPI ENCERRADA!</i>' : '') + // a partida vencida foi no MODO CPI
+      (info.oneCC ? '<i class="fin-stamp' + (cpiEnd ? ' fin-2nd' : '') + '">SEM RECURSO!</i>' : '') + // o mandato inteiro sem entrar com recurso
       '<small>RECORDE ' + fmt(Math.max(info.best || 0, info.score || 0)) + '</small></div>' +
       keyHTML('confirma', 'VOLTAR AO MENU', 'CONFIRMA', 'key-wide k-menu') +
       '</div>';
@@ -1531,7 +1582,8 @@
       q(scr.root, '.roll-skip').hidden = true;
       finEl.hidden = false;
       later(scr, 150, () => sfx('urna_fim'));
-      if (info.oneCC) later(scr, 900, () => sfx('stamp'));
+      if (cpiEnd) later(scr, 900, () => sfx('stamp'));
+      if (info.oneCC) later(scr, cpiEnd ? 1300 : 900, () => sfx('stamp'));
       later(scr, 700, () => focusEl(q(scr.root, '.k-menu')));
     };
     const finish = () => { if (ended) return; ended = true; close(); fin(); };

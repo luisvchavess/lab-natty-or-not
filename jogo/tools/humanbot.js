@@ -38,6 +38,8 @@
      --bossOnly 1 --startLv 4 --startW voto (pula direto ao chefão com essa arma)
      --press R (URL press=R: PRESSÃO fixa em R, 0..1)  --heat H (URL heat=H: calor inicial da partida)
      --quinto 1 (URL quinto=1: libera o LULE 5.0 mesmo sem a partida "sem recurso desde a fase 1")
+     --cpi 1 (URL cpi=1 em todos os modos — run, ttk, mid, dps: joga no MODO CPI, a dificuldade bônus com os números
+       do código; sem ele, NORMAL = os números do código + G.TUNE_NORMAL). Os relatórios dizem o modo ('modo: ...').
      --maxFight S (ttk: desiste do chefão depois de S s de luta; padrão 480, Lule 900)  --maxgt S (modo run, padrão 3600)
      --shots 1 (salva desenho da cena 0,3 s antes de cada morte, em PNG; precisa --fast 0 para o print real)
      --mech 1|0 (padrão 1) faz a "manha" de cada chefão seguindo b.autoGoal (pegar a emenda, ficar na meta,
@@ -64,7 +66,7 @@ const opt = {
   mode: 'run', profile: 'casual', stage: 0, through: 0, runs: 1, seed: 1, ts: 12, page: 'dev', out: '/tmp/humanbot',
   fast: 1, weapon: 'any', upg: '', continues: 99, timeout: 1200, w: 195, h: 422, loop: 1, parallel: 3, shots: 0,
   bosses: 'centrao,dilmae,erika,taxad,lule', weapons: 'voto,boca,panela,jato', levels: '1,3,5', maxgt: 3600, ty: 0.8, mech: 1,
-  press: null, heat: null, quinto: 0, maxFight: 0,
+  press: null, heat: null, quinto: 0, maxFight: 0, cpi: 0,
 };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -129,7 +131,7 @@ function pageMain(cfg) {
   const P = cfg.prof;
   const HB = (window.__hb = {
     cfg: { profile: cfg.profile, seed: cfg.seed, stage: cfg.stage, mode: cfg.mode, weapon: cfg.weapon, upgrades: cfg.upgrades, loop: cfg.loop, mech: cfg.mech,
-      press: cfg.press, heat: cfg.heat, quinto: cfg.quinto },
+      press: cfg.press, heat: cfg.heat, quinto: cfg.quinto, cpi: cfg.cpi },
     stages: [], deaths: [], bombs: [], continues: [], levels: [], cheap: { near: 0, nearList: [], low: 0, lowList: [], offscreen: 0, enemyLow: [] },
     ttk: [], mids: [], dps: null, done: false, err: null, steps: 0, gtTotal: 0, snaps: [],
     secret: null, cpiSeen: false, rMax: 0, // LULE 5.0 (o maior estado visto de G.run.secret), PRESSÃO em CPI! alguma vez
@@ -913,6 +915,9 @@ function pressFor(mode) {
 }
 const HEAT = opt.heat != null && opt.heat !== '' && isFinite(+opt.heat) ? Math.max(0, Math.min(1, +opt.heat)) : null;
 const QUINTO = opt.quinto === 1 || opt.quinto === '1' || opt.quinto === 'true' ? 1 : 0;
+// MODO CPI: --cpi 1 -> URL cpi=1 (todas as partidas, em todos os modos); o core diz o modo de verdade (G.debug.mode())
+const CPI = opt.cpi === 1 || opt.cpi === '1' || opt.cpi === 'true' ? 1 : 0;
+const modeName = (m) => (m === 'cpi' ? 'MODO CPI' : m === 'normal' ? 'NORMAL' : String(m));
 const maxFightFor = (id) => +opt.maxFight || (id === 'lule' ? 900 : 480);
 
 async function runOne(browser, job) {
@@ -923,7 +928,7 @@ async function runOne(browser, job) {
   page.on('pageerror', (e) => pageErrors.push(String(e.stack || e.message).slice(0, 400)));
   const press = pressFor(job.mode);
   const cfg = Object.assign({ prof: PROFILES[job.profile] || PROFILES.casual, fast: opt.fast, shots: opt.shots, continues: opt.continues, ty: opt.ty,
-    maxFight: maxFightFor(job.bossId), mech: MECH, press, heat: HEAT, quinto: QUINTO }, job);
+    maxFight: maxFightFor(job.bossId), mech: MECH, press, heat: HEAT, quinto: QUINTO, cpi: CPI }, job);
   await page.addInitScript({ content: '(' + pageMain.toString() + ')(' + JSON.stringify(cfg) + ');' });
   const q = new URLSearchParams({ stage: String(job.stage), loop: String(job.loop || 1), skipui: '1', autocontinue: '1', ts: String(opt.ts), quality: String(opt.quality || 'high') });
   if (job.mode !== 'run') q.set('god', '1');
@@ -932,6 +937,7 @@ async function runOne(browser, job) {
   if (press != null) q.set('press', String(press)); // PRESSÃO fixa (core: G.debug.pressFix)
   if (HEAT != null) q.set('heat', String(HEAT));    // calor inicial (core: run.heat no startRun)
   if (QUINTO) q.set('quinto', '1');                  // LULE 5.0 liberado (core: G.debug.forceQuinto)
+  if (CPI) q.set('cpi', '1');                        // MODO CPI nesta sessão (core: o save não muda)
   const file = path.resolve(__dirname, '..', (opt.page === 'index' ? 'index' : 'dev') + '.html');
   await page.goto('file://' + file + '?' + q.toString());
   const t0 = Date.now();
@@ -957,9 +963,11 @@ async function runOne(browser, job) {
     return JSON.stringify({ hb: __hb, gErrors: g ? g.errors.slice(0, 10) : [], errorCount: g ? g.errorCount || g.errors.length : 0, state: g && g.state, score: run && run.score, pix: run && run.pix,
       lives: run && run.lives, continues: run && run.continues, level: run && run.level, weapon: run && run.weapon, gt: __hb.gtTotal + (g && g.game ? g.game.t : 0),
       startStage: run && run.startStage, secret: run ? run.secret : null, extGiven: run ? run.extGiven || 0 : 0, gold: run ? run.gold || 0 : 0,
-      recurso: g && g.upg ? g.upg('recurso') : 0, savePix: g && g.save ? g.save.pix : null });
+      recurso: g && g.upg ? g.upg('recurso') : 0, savePix: g && g.save ? g.save.pix : null,
+      mode: run && run.mode ? run.mode : g && g.debug && g.debug.mode ? g.debug.mode() : null });
   });
   const out = JSON.parse(data);
+  out.url = q.toString();
   out.pageErrors = pageErrors;
   out.real = Math.round((Date.now() - t0) / 1000);
   out.job = job;
@@ -1183,7 +1191,8 @@ function printTtkMedians(rows) {
   results = await pool(jobs, opt.parallel, async (job, i) => {
     let r;
     try { r = await runOne(browser, job); } catch (e) { r = { job, err: String(e.stack || e) }; }
-    const tag = job.mode + ' ' + (job.profile || '') + ' s' + job.stage + ' seed' + job.seed + (job.forceWeapon ? ' ' + job.forceWeapon + job.forceLevel : '') + (job.midKind ? ' ' + job.midKind : '') + (job.layout ? ' ' + job.layout : '');
+    const tag = job.mode + ' ' + (job.profile || '') + ' s' + job.stage + ' seed' + job.seed + (job.forceWeapon ? ' ' + job.forceWeapon + job.forceLevel : '') + (job.midKind ? ' ' + job.midKind : '') + (job.layout ? ' ' + job.layout : '') +
+      (r && r.mode ? ' [' + modeName(r.mode) + ']' : '');
     if (job.mode === 'run' && r.hb) {
       r.run = runSummary(r);
       const st = r.hb.stages.map((s) => 'F' + (s.idx + 1) + ':' + s.deaths + 'm' + (s.boss ? '/chefe ' + s.boss.deaths + 'm ' + (s.boss.end != null ? s.boss.end + 's' : 'x') : '') + (s.clear ? ' ' + s.clear.rank + ' R$' + s.clear.pixStage : '') +
@@ -1199,25 +1208,30 @@ function printTtkMedians(rows) {
     return r;
   });
   await browser.close();
-  const summary = { opt, real: Math.round((Date.now() - t0) / 1000), results };
+  // modo de verdade das partidas (o core responde: G.run.mode / G.debug.mode()); o pedido vem do --cpi
+  const modes = [...new Set(results.map((r) => r && r.mode).filter(Boolean))];
+  const modeLine = 'modo: ' + (modes.length ? modes.map(modeName).join(' + ') : '?') + (CPI ? ' (--cpi 1, URL cpi=1)' : ' (sem --cpi)');
+  console.log('\n' + modeLine);
+  const summary = { opt, mode: modes.length === 1 ? modes[0] : modes, cpi: CPI, real: Math.round((Date.now() - t0) / 1000), results };
   if (opt.mode === 'run') {
     const profs = String(opt.profile).split(',');
     summary.byProfile = {};
     summary.byProfileRuns = {};
     for (const pf of profs) {
       const rs = results.filter((r) => r && r.job && r.job.profile === pf);
-      const bs = summarizeRuns(rs); summary.byProfile[pf] = bs; printRunTable(bs, pf);
-      const T = summarizeRunTotals(rs); summary.byProfileRuns[pf] = T; printRunTotals(T, pf);
+      const lab = pf + ' · ' + (modes.length ? modes.map(modeName).join(' + ') : '?');
+      const bs = summarizeRuns(rs); summary.byProfile[pf] = bs; printRunTable(bs, lab);
+      const T = summarizeRunTotals(rs); summary.byProfileRuns[pf] = T; printRunTotals(T, lab);
     }
   } else if (opt.mode === 'ttk') {
     summary.ttk = results.map((r) => {
       const t = r.hb && r.hb.ttk[0], m = t && t.mech;
-      return { boss: r.job.bossId, w: r.job.forceWeapon, lv: r.job.forceLevel, mech: MECH, press: pressFor('ttk'), R: t ? t.R : null, press0: t ? t.press0 : null, hp: t ? Math.round(t.hp) : null,
+      return { boss: r.job.bossId, w: r.job.forceWeapon, lv: r.job.forceLevel, mode: r.mode || null, mech: MECH, press: pressFor('ttk'), R: t ? t.R : null, press0: t ? t.press0 : null, hp: t ? Math.round(t.hp) : null,
         time: t ? t.time : null, hpLeft: t && t.hpLeft, fat: t && t.fat, phases: t && t.phases, ok: m ? m.ok : null, miss: m ? m.miss : null, stuns: m ? m.stuns : null,
         pav: m && m.pav != null ? m.pav : null, aliqMax: m && m.aliqMax != null ? m.aliqMax : null, janj: m && m.janj ? m.janj : null, d: t ? t.d : null,
         errors: r.gErrors ? r.gErrors.length : null, pageErrors: r.pageErrors ? r.pageErrors.length : null, err: r.hb ? r.hb.err : r.err };
     });
-    console.log('\nmanha: ' + (MECH ? 'faz (--mech 1)' : 'ignora (--mech 0, mech=0 na URL)') + ' | PRESSÃO ' + (pressFor('ttk') != null ? 'fixa em ' + pressFor('ttk') : 'livre'));
+    console.log('\nmanha: ' + (MECH ? 'faz (--mech 1)' : 'ignora (--mech 0, mech=0 na URL)') + ' | PRESSÃO ' + (pressFor('ttk') != null ? 'fixa em ' + pressFor('ttk') : 'livre') + ' | ' + modeLine);
     console.log('chefe | arma | nv | tempo (s) | fases (ft) | cansaço | P5 começa | manha ok/miss/stuns | extra');
     for (let i = 0; i < results.length; i++) {
       const r = results[i], t = r.hb && r.hb.ttk[0], m = t && t.mech, s = summary.ttk[i], d = s.d || {};
@@ -1237,5 +1251,5 @@ function printTtkMedians(rows) {
     for (const r of results) { const m = r.hb && r.hb.stages[0] && r.hb.stages[0].mid; console.log([r.job.midKind, r.job.forceWeapon, r.job.forceLevel, m ? m.dur : 'ERR', m ? m.fled : ''].join(' | ')); }
   }
   fs.writeFileSync(path.join(opt.out, 'summary.json'), JSON.stringify(summary, null, 1));
-  console.log('\nsalvo em ' + path.join(opt.out, 'summary.json') + ' (' + summary.real + ' s)');
+  console.log('\n' + modeLine + ' | salvo em ' + path.join(opt.out, 'summary.json') + ' (' + summary.real + ' s)');
 })().catch((e) => { console.error(e); process.exit(1); });

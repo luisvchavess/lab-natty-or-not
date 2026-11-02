@@ -7,7 +7,8 @@
      node tools/play.js --q "stage=3&boss=1&god=1&auto=1&ts=3&skipui=1" --eval "G.debug.hurtBoss(0.5)" --at 8
    Opções:
      --page dev|index      (padrão dev: carrega src/ separado)
-     --q "..."             parâmetros de URL (stage, loop, boss, bossid, god, auto, ts, skipui, hitboxes, autocontinue, mods, quality)
+     --q "..."             parâmetros de URL (stage, loop, boss, bossid, god, auto, ts, skipui, hitboxes, autocontinue, mods, quality,
+                           press, heat, quinto, cpi: cpi=1 joga no MODO CPI, cpi=0 força o NORMAL; o save não muda)
                            quality=high é o padrão aqui (prints nítidos e iguais entre rodadas; o Chromium do sandbox
                            rasteriza na CPU e o modo automático baixaria a resolução). Use --q "...&quality=auto" para
                            testar o modo automático.

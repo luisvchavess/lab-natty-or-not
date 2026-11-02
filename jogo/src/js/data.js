@@ -1,6 +1,7 @@
 /* ============================================================
    FUSCA A JATO — data.js
-   Textos da história, armas, melhorias (lojinha) e conquistas.
+   Textos da história, armas, melhorias (lojinha), conquistas e os
+   ajustes do modo NORMAL sobre o MODO CPI (G.TUNE_NORMAL).
    Carregado ANTES do core.js.
    ============================================================ */
 (function () {
@@ -47,6 +48,18 @@
     { id: 'recurso', name: 'Embargos de Declaração',   desc: '+1 recurso em toda partida',                 costs: [2500, 6000] },
   ];
 
+  // ---------- Modos de dificuldade: o que o NORMAL muda em relação ao MODO CPI ----------
+  // Os números escritos nos módulos (registrados com G.tune('<modulo>.<BLOCO>', obj), veja docs/ENGINE.md
+  // "Modos") são os do MODO CPI, a dificuldade bônus, e nunca são mexidos para facilitar. O modo NORMAL é o
+  // mesmo jogo depois do balanço: TODA mudança que deixa o jogo mais FÁCIL entra só aqui, por bloco e campo:
+  //   G.TUNE_NORMAL = { 'taxad.TX': { ARC_SPD: 26 }, 'erika.T': { HP: 7600 }, 'core.T': { EXTENDS: [1500000, 4000000, 8000000] } };
+  // (array ou objeto entra inteiro no lugar do valor do CPI, no mesmo objeto). Mudança que deixa o jogo mais
+  // DIFÍCIL ou mais JUSTO para os dois (ex.: abrir um vão de uma parede de tiros) vai direto no valor do módulo.
+  // Preços da Lojinha (G.UPGRADES), recursos, fases e padrões são iguais nos dois modos.
+  // Campo que não bate com nada registrado aparece em G.tuneCheck().bad (os testes exigem []).
+  // Vazio = o NORMAL ainda é igual ao MODO CPI (antes do balanço).
+  G.TUNE_NORMAL = {};
+
   // ---------- Conquistas ----------
   // counter/goal: liberada automaticamente quando G.count(counter) chega na meta.
   G.ACHIEVEMENTS = [
@@ -77,6 +90,8 @@
     { id: 'carimbo_ouro', name: 'Nota de Ouro',         desc: 'Ganhe 3 Carimbos de Ouro na mesma partida' },
     { id: 'cpi',          name: 'Instalaram a CPI',     desc: 'Derrote um chefão com a PRESSÃO em CPI!' },
     { id: 'transito',     name: 'Trânsito em Julgado',  desc: 'Vença um mandato inteiro sem entrar com recurso (libera o Fusca Dourado)' },
+    // MODO CPI (a dificuldade bônus): liberada pelo core no fim do 1º Mandato jogado inteiro no MODO CPI
+    { id: 'cpi_mandato',  name: 'CPI Encerrada',        desc: 'Vença o 1º Mandato no MODO CPI.' },
     { id: 'quinto',       name: 'Quinto Mandato? Não!', desc: 'Derrote o Lule 5.0' },
   ];
 

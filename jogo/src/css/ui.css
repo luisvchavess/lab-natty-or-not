@@ -185,6 +185,23 @@ html { font-size: calc(10px * var(--gs, 1)); }
   animation: u-drop .4s cubic-bezier(.2, .9, .3, 1.2) both .1s;
 }
 #ui .chip span { display: flex; flex-direction: column; line-height: 1; }
+/* recorde do MODO CPI: borda vermelho-magenta e a plaquinha no canto (não muda o tamanho do chip) */
+#ui .chip-best { position: relative; }
+#ui .chip-best.is-cpi { border-color: rgba(255, 61, 127, .85); }
+#ui .chip-cpi {
+  position: absolute;
+  top: -.75rem;
+  right: .4rem;
+  padding: .2rem .4rem .15rem;
+  border-radius: .3rem;
+  background: #ff3d7f;
+  color: #fff;
+  font: 900 .78rem/1 var(--font-display);
+  font-style: normal;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  box-shadow: 0 .15rem 0 #b3124f;
+}
 #ui .chip small { font: 800 .88rem/1 var(--font-body); letter-spacing: .14em; color: rgba(255, 255, 255, .62); }
 #ui .chip b { margin-top: .2rem; font: 900 1.5rem/1.1 var(--font-display); color: #fff; }
 #ui .chip-pix b { color: #85f2e4; }
@@ -540,6 +557,37 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .tiny .has-final .sant:not(.final) .sant-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #ui .tiny .has-final .sant.final .sant-photo { min-height: 5rem; }
 
+/* ---------- dificuldade: NORMAL | MODO CPI (no alto da tela FASES) ----------
+   Duas teclas coladas e a frase embaixo. MODO CPI ligado = vermelho-magenta (#ff3d7f), nunca verde-água. */
+#ui .mode-pick { flex: none; margin: 0 0 .8rem; }
+#ui .mode-seg { display: flex; padding: .25rem; border: .2rem solid var(--u-lcd-ink); border-radius: .9rem; background: #c4cab9; gap: .25rem; }
+/* (.mode-seg na frente: as regras gerais do .seg-b vêm depois neste arquivo) */
+#ui .mode-seg .mode-b { min-height: 2.9rem; border-width: 0; border-radius: .6rem; background: transparent; font-size: 1.2rem; letter-spacing: .03em; color: #4a5a4e; }
+#ui .mode-seg .mode-b.on { background: var(--u-lcd-ink); color: #fff; box-shadow: inset 0 -.25rem 0 rgba(0, 0, 0, .3); }
+#ui .mode-seg .mode-b[data-mode="cpi"].on { background: #ff3d7f; color: #fff; box-shadow: inset 0 -.25rem 0 #b3124f; text-shadow: 0 .1rem 0 rgba(90, 0, 30, .45); }
+#ui .mode-pick.is-cpi .mode-seg { border-color: #b3124f; background: #f2c2d2; }
+#ui .mode-line { margin: .4rem 0 0; font: 700 1rem/1.15 var(--font-body); color: var(--u-lcd-dim); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui .mode-pick.is-cpi .mode-line { color: #b3124f; }
+#ui .scr-stages.is-cpi .lcd-head { border-bottom-color: #ff3d7f; }
+#ui .scr-stages .sant-grid.has-final { gap: .8rem; }
+/* telas baixas: o seletor e os santinhos apertam para as 5 fases continuarem sem rolar
+   (as fotos 2×2 só ficam no mínimo quando o texto do santinho já é a parte mais alta) */
+#ui .short .mode-pick { margin-bottom: .5rem; }
+#ui .short .mode-seg { padding: .15rem; }
+#ui .short .mode-seg .mode-b { min-height: 2.3rem; font-size: 1.1rem; }
+#ui .short .mode-line { margin-top: .25rem; font-size: .98rem; }
+#ui .short.scr-stages .lcd-head { padding: .55rem 1.1rem .45rem; }
+#ui .short.scr-stages .lcd-titles small { margin-bottom: .2rem; }
+#ui .short.scr-stages .sant-grid.has-final { gap: .55rem; }
+#ui .short.scr-stages .has-final .sant { padding-bottom: .4rem; }
+#ui .short.scr-stages .has-final .sant.final { padding-bottom: 0; }
+#ui .short.scr-stages .has-final .sant:not(.final) .sant-photo { flex-basis: 3.4rem; min-height: 3.4rem; }
+#ui .short.scr-stages .has-final .sant.final .sant-photo { min-height: 4.8rem; }
+#ui .short.scr-stages .has-final .sant-name { margin-top: .4rem; }
+/* nome do chefão numa linha só: altura de linha maior para o til (O CENTRÃO, DILMÃE) não ser cortado */
+#ui .short.scr-stages .has-final .sant-boss { line-height: 1.3; }
+#ui .tiny .mode-seg .mode-b { min-height: 2.2rem; }
+
 /* ============================================================
    HISTÓRIA (quadrinhos)
    ============================================================ */
@@ -837,6 +885,9 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .rc-row.rc-goldrow .v { color: #a87b00; }
 /* COM RECURSO: etiqueta vermelha no cabeçalho do boletim */
 #ui .rc-tag { display: inline-block; margin-top: .45rem; padding: .25rem .55rem .2rem; border: .2rem solid #c8323e; border-radius: .35rem; color: #c8323e; font: 900 1rem/1 var(--font-display); letter-spacing: .05em; transform: rotate(-2deg); }
+/* MODO CPI: etiqueta cheia (vermelho-magenta) antes da COM RECURSO; as duas podem aparecer juntas */
+#ui .rc-tag.rc-cpi { border-color: #d81b60; background: #ff3d7f; color: #fff; transform: rotate(2deg); }
+#ui .rc-tag + .rc-tag { margin-left: .5rem; }
 /* CARIMBO DE OURO: selo dourado que entra depois da nota */
 #ui .rc-gold {
   display: flex;
@@ -1115,6 +1166,9 @@ html { font-size: calc(10px * var(--gs, 1)); }
   transform: rotate(-5deg);
   animation: u-fin-stamp .34s cubic-bezier(.3, 1.4, .5, 1) both .9s;
 }
+/* CPI ENCERRADA!: o mesmo carimbo, em vermelho-magenta, numa linha só dele (bate primeiro; o SEM RECURSO! logo depois) */
+#ui .fin-stamp.fin-cpi { border-color: #ff3d7f; color: #ff6b9b; }
+#ui .fin-stamp.fin-2nd { animation-delay: 1.3s; }
 #ui .rm .fin-stamp { animation: none; }
 @keyframes u-fin-stamp { 0% { opacity: 0; transform: rotate(-18deg) scale(2.6); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
 #ui .fin .k-menu { max-width: 30rem; }
