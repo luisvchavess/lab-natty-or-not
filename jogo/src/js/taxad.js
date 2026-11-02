@@ -52,8 +52,13 @@
   // ======================================================================
   // Afinação (SPEC5 §17, passe de balanço: HP → fatStart → tonto → cadência)
   // ======================================================================
+  // MODO CPI (SPEC-CPI §1): os valores escritos aqui são os do MODO CPI. Blocos registrados em G.tune: 'taxad.T'
+  // (vida, cansaço, velocidade), 'taxad.TX' (padrões), 'taxad.CF' (a manha dos cofres) e 'taxad.ROUND' (tiros
+  // durante a rodada). O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada copiado no carregamento).
+  const tune = G.tune || ((id, o) => o);
   // HP a R = 0,75 (o core trava ×0,80…×1,07 pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
-  const HP = 9000, HP_L2 = 7200;
+  // FAT_START = cansaço (s de luta); SPD_K = multiplicador dos tiros. O def lê estes valores na hora (getters).
+  const T = tune('taxad.T', { HP: 9000, HP_L2: 7200, FAT_START: 190, SPD_K: 1.15 });
   // Padrões (velocidades antes do spdK 1,15; esperas por pW, contagens por pN / pRing).
   // SWAY/OMEGA = balanço por turno; TELL = gaveta abrindo antes do tiro da gaveta; BOX_* = caixas da blusinha
   // (BOX_STEP rad entre caixas; ALF_Y·H = alfândega, onde cada caixa vira 3 blusinhas ±SPLIT_A rad a ×SPLIT_K:
@@ -63,7 +68,7 @@
   // (moldura W×H, régua a cada STEP px andando para dentro, FURO px de saída); ZERO_* = o "00" (elipses RX×RY a
   // ±DX do meio, DY abaixo dele, bala a cada STEP px de contorno, ROMBO px sem bala a ±ROMBO_DX do centro de cada
   // zero); PIX_* = trens da maquininha (N balas a GAP px, DOWN rad para baixo); IOF_* = laser no x do carro.
-  const TX = {
+  const TX = tune('taxad.TX', {
     SWAY: [50, 25, 60, 30, 70], OMEGA: [0.5, 0.45, 0.5, 0.45, 0.8], BOB: 6, GLIDE: 2.4,
     TELL: 0.45, BOX_N: 3, BOX_N_L2: 4, BOX_STEP: 0.45, BOX_SPD: 115, ALF_Y: 0.50, SPLIT_A: 0.24, SPLIT_K: 1.15,
     IMP_N: 16, IMP_SPD: 90, IMP_DELAY: 0.5, P1_WAIT: 2.6,
@@ -76,12 +81,14 @@
     PIX_Y0: 0.40, PIX_Y1: 0.62, PIX_ROW_MIN: 34, PIX_GLIDE: 0.4, MQ_X: 14,
     IOF_EVERY: 5, IOF_WARN: 1.0, IOF_LIFE: 0.5, IOF_W: 22,
     P5_SPD: 1.12, P5_REST: 0.6, P5_TRAINS: 3, P5_ZERO_WAIT: 2.5, CHAT: [7, 10],
-  };
+  });
   // A manha ACHAR (SPEC5 §6.5). Por turno (índice 0..4): SW s por troca, SWAPS trocas, GAP s entre trocas, FEINT trocas
   // que voltam a 40%, RELABEL plaquinhas voando no meio, ROT uma troca vira rodízio dos 3, DRIFT ±px no "escolha",
   // PICK s para escolher, STUN/MUL o tonto, NEXT s (relógio, fora do tonto) até a próxima rodada.
   // ALIQ = armadura por ALÍQUOTA 0..3; REFUND = Pix do saco; SW_MIN / PICK_MIN = pisos com 2º mandato e PRESSÃO.
-  const CF = {
+  // 2º mandato e PRESSÃO (nível lv travado no turno): PICK − PICK_L2 − PICK_LV·lv; SW × SW_L2 × (1 − SW_LV·lv);
+  // SWAPS + SWAPS_L2 (+1 a partir do nível SWAPS_LV); NEXT × NEXT_L2.
+  const CF = tune('taxad.CF', {
     ROW_Y: 0.46, PICK_Y: 0.64, X: [0.25, 0.5, 0.75], W: 40, H: 36, TOUCH_R: 18, ARC: 28, FIRST: 5.0,
     SHOW: 1.2, DROP: 0.5,
     SW: [0.62, 0.56, 0.50, 0.46, 0.42],
@@ -96,17 +103,19 @@
     MUL: [2.3, 2.3, 2.3, 2.3, 2.5],
     NEXT: [10, 9, 9, 8, 6],
     ALIQ: [1, 0.9, 0.8, 0.7], REFUND: 14, SW_MIN: 0.30, PICK_MIN: 2.0,
+    PICK_L2: 0.3, PICK_LV: 0.05, SW_L2: 0.85, SW_LV: 0.04, SWAPS_L2: 1, SWAPS_LV: 4, NEXT_L2: 0.9,
     DEMO_SW: 0.9, DEMO_SWAPS: 2,
     REL_DUR: 0.5, REL_FLY: 0.35, CANCEL_NEXT: 2.5, DEATH_NEXT: 3.0,
-  };
-  // Tiros durante a rodada (d.hold: as corrotinas param; nunca laser, moldura nem "00").
-  const ROUND = {
-    FIRST: 0.9, KEY: 1.6, KEY_N: 3, KEY_SPREAD: 0.18, KEY_SPD: 145,
+  });
+  // Tiros durante a rodada (d.hold: as corrotinas param; nunca laser, moldura nem "00"). FIRST / FIRST + FIRST_B =
+  // primeiro tiro de cada relógio; FAN_N = tiros do leque do 3º e do 5º turno.
+  const ROUND = tune('taxad.ROUND', {
+    FIRST: 0.9, FIRST_B: 0.8, KEY: 1.6, KEY_N: 3, KEY_SPREAD: 0.18, KEY_SPD: 145,
     RING_P2: 2.4, RING_P2_N: 8, RING_SPD: 90,
-    FAN_P3: 1.5, FAN_SPREAD: 0.3,
+    FAN_P3: 1.5, FAN_N: 3, FAN_SPREAD: 0.3,
     SPIRAL: 0.25, SPIRAL_ARMS: 2, SPIRAL_SPD: 90, SPIRAL_W: 0.42,
     P5: 1.6, RING_P5_N: 10,
-  };
+  });
 
   // ======================================================================
   // Visual (SPEC5 §6.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -485,8 +494,9 @@
   const BLUSA_P = { style: 'tx_blusa', color: COL.pink }, BLUSA_M = { style: 'tx_blusa', color: COL.magenta };
   const KEY = { style: 'tx_tecla', color: COL.red }, DARF = { style: 'tx_darf', color: COL.orange };
   const PIXB = { style: 'tx_pix', color: COL.orange };
-  const REGUA = { style: 'tx_regua', color: '#ffb02e', life: TX.ARC_LIFE, noPress: true };
-  const ZERO = { style: 'small', color: COL.red, delay: TX.ZERO_DELAY, noPress: true };
+  // life / delay lidos na hora do TX (o G.fire lê o.life / o.delay a cada tiro): seguem o modo
+  const REGUA = { style: 'tx_regua', color: '#ffb02e', get life() { return TX.ARC_LIFE; }, noPress: true };
+  const ZERO = { style: 'small', color: COL.red, get delay() { return TX.ZERO_DELAY; }, noPress: true };
 
   // todo tiro do Taxad passa por aqui (o 5º turno acelera tudo: d.spdMul)
   function txShoot(x, y, a, spd, o) {
@@ -634,10 +644,13 @@
     }
   }
   // ---------- 3º turno: DÉFICIT ZERO (o "00" rígido caindo, com rombos embaixo e em cima) ----------
-  // pontos do contorno de uma elipse RX×RY a cada ~STEP px (calculado uma vez): [cos, sen, arco] × N, P = perímetro
-  let ZPTS = null;
+  // pontos do contorno de uma elipse RX×RY a cada ~STEP px: [cos, sen, arco] × N, P = perímetro. Calculado uma vez
+  // por (RX, RY, STEP): refeito se o modo trocar esses números.
+  let ZPTS = null, zKey = '';
   function zeroPts() {
-    if (ZPTS) return ZPTS;
+    const key = TX.ZERO_RX + '|' + TX.ZERO_RY + '|' + TX.ZERO_STEP;
+    if (ZPTS && zKey === key) return ZPTS;
+    zKey = key;
     const a = TX.ZERO_RX, bb = TX.ZERO_RY, S = 720, cum = new Float32Array(S + 1);
     let px = a, py = 0;
     for (let i = 1; i <= S; i++) { const th = (i / S) * TAU, x = a * Math.cos(th), y = bb * Math.sin(th); cum[i] = cum[i - 1] + Math.hypot(x - px, y - py); px = x; py = y; }
@@ -796,9 +809,9 @@
     const d = b.data, run = G.run || {}, ph = cfPh(b), l2 = L2(), lv = d.pl | 0;
     const demo = !l2 && !run._txSeen;
     run._txSeen = 1;
-    let sw, n, pick = CF.PICK[ph] - (l2 ? 0.3 : 0) - 0.05 * lv;
+    let sw, n, pick = CF.PICK[ph] - (l2 ? CF.PICK_L2 : 0) - CF.PICK_LV * lv;
     if (demo) { sw = CF.DEMO_SW; n = CF.DEMO_SWAPS; }
-    else { sw = Math.max(CF.SW_MIN, CF.SW[ph] * (l2 ? 0.85 : 1) * (1 - 0.04 * lv)); n = CF.SWAPS[ph] + (l2 ? 1 : 0) + (lv >= 4 ? 1 : 0); }
+    else { sw = Math.max(CF.SW_MIN, CF.SW[ph] * (l2 ? CF.SW_L2 : 1) * (1 - CF.SW_LV * lv)); n = CF.SWAPS[ph] + (l2 ? CF.SWAPS_L2 : 0) + (lv >= CF.SWAPS_LV ? 1 : 0); }
     pick = Math.max(CF.PICK_MIN, pick);
     const plates = [0, 1, 2];
     for (let i = 2; i > 0; i--) { const j = M.randi(0, i), t = plates[i]; plates[i] = plates[j]; plates[j] = t; }
@@ -816,7 +829,7 @@
     say(b, ph === 4 ? 'TUDO OU NADA, ZÉ!' : 'CADÊ O SEU DINHEIRO?', 1.8);
     sfx('cofre');
     if (demo) K.mechHint('tx_cofre', G.W / 2, G.H * 0.56, 'SIGA O COFRE DO SEU DINHEIRO!');
-    d.rp.a = ROUND.FIRST; d.rp.b = ROUND.FIRST + 0.8; d.rp.ang = Math.random() * TAU;
+    d.rp.a = ROUND.FIRST; d.rp.b = ROUND.FIRST + ROUND.FIRST_B; d.rp.ang = Math.random() * TAU;
     return C;
   }
   // começo de uma troca: de onde / para onde vai cada cofre (por cima = indo para a direita)
@@ -935,7 +948,7 @@
       K.mechMiss(b); d.cfMiss++;
       d.aliq = Math.min(3, d.aliq + 1);
     }
-    d.cfT = CF.NEXT[ph] * (L2() ? 0.9 : 1);
+    d.cfT = CF.NEXT[ph] * (L2() ? CF.NEXT_L2 : 1);
   }
   function cfReveal(b, C) {
     const d = b.data, R = C.list[C.right], bag = C.bag;
@@ -1024,12 +1037,12 @@
       if (rp.a <= 0) { rp.a = ROUND.KEY; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), ROUND.KEY_N, ROUND.KEY_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
       if (ph === 1 && rp.b <= 0) { rp.b = ROUND.RING_P2; txRing(b.x, b.y + 50, ROUND.RING_P2_N, ROUND.RING_SPD, DARF, Math.random() * TAU); }
     } else if (ph === 2) {
-      if (rp.a <= 0) { rp.a = ROUND.FAN_P3; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), 3, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
+      if (rp.a <= 0) { rp.a = ROUND.FAN_P3; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), ROUND.FAN_N, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
     } else if (ph === 3) {
       if (rp.a <= 0) { rp.a = ROUND.SPIRAL; txRing(b.x, b.y + 30, ROUND.SPIRAL_ARMS, ROUND.SPIRAL_SPD, PIXB, rp.ang); rp.ang += ROUND.SPIRAL_W; }
     } else {
       if (rp.a <= 0) { rp.a = ROUND.P5; txRing(b.x, b.y + 50, ROUND.RING_P5_N, ROUND.RING_SPD, DARF, Math.random() * TAU); }
-      if (rp.b <= 0) { rp.b = ROUND.P5; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), 3, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
+      if (rp.b <= 0) { rp.b = ROUND.P5; const q = calcXY(b); txFan(q[0], q[1], G.aim(q[0], q[1]), ROUND.FAN_N, ROUND.FAN_SPREAD, ROUND.KEY_SPD, KEY); sfx('enemy_shot'); }
     }
   }
   // alvo do piloto automático / humanbot (uma rodada = um id: o humanbot guarda a decisão)
@@ -1258,7 +1271,12 @@
   // O chefão
   // ======================================================================
   G.Bosses.define('taxad', {
-    name: 'FERNANDO TAXAD', title: 'O Taxador-Geral', hp: HP, r: 42, homeY: 165, spdK: 1.15, fatStart: 190,
+    // hp / fatStart / spdK lidos na hora do bloco 'taxad.T' (o core lê def.hp no spawn; o BossKit, fatStart e spdK).
+    // Quem escrever no def escreve no T (uma fonte só).
+    name: 'FERNANDO TAXAD', title: 'O Taxador-Geral', r: 42, homeY: 165,
+    get hp() { return T.HP; }, set hp(v) { T.HP = v; },
+    get fatStart() { return T.FAT_START; }, set fatStart(v) { T.FAT_START = v; },
+    get spdK() { return T.SPD_K; }, set spdK(v) { T.SPD_K = v; },
     score: 300000, pix: 260, music: 'boss', defeatText: 'TAXA ZERO!',
     phases: [
       { at: 1, name: 'Taxa das Blusinhas' },
@@ -1269,7 +1287,7 @@
     ],
     init(b) {
       const d = b.data;
-      if (L2() && HP_L2 !== HP) b.hp = b.maxHp = b.maxHp * (HP_L2 / HP);
+      if (L2() && T.HP_L2 !== T.HP) b.hp = b.maxHp = b.maxHp * (T.HP_L2 / T.HP);
       K.mechInit(b, 'cofre'); b.mech.aliq = 0;
       d.fx = []; d.clk = 0; d.stunT = 0; d.mechCd = 0; d.spdMul = 1; d.aliq = 0; d.armor = 1; d.armorTag = null;
       d.cf = null; d.cfT = CF.FIRST; d.cfN = 0; d.cfOk = 0; d.cfMiss = 0; d.hold = false;
