@@ -695,6 +695,56 @@
   }
   G.vibrate = function (ms) { if (!G.save.settings.vibrate) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* nada */ } };
 
+  // ===================== Modos de dificuldade: NORMAL e MODO CPI (bônus) =====================
+  // Cada módulo registra seus blocos de números com G.tune(id, obj[, keys]) (ids 'modulo.BLOCO', ex. 'taxad.TX').
+  // Os valores escritos no código são os do MODO CPI (a dificuldade pesada). Os ajustes do modo NORMAL ficam todos
+  // num lugar só, G.TUNE_NORMAL (data.js): { 'taxad.TX': { ARC_SPD: 26 }, 'erika.T': { HP: 7600 } }.
+  // G.applyMode(mode) devolve tudo ao valor do CPI e, no NORMAL, aplica os ajustes. Arrays e objetos são alterados
+  // no lugar (quem guardou a referência vê a mudança). Só o que é lido em tempo de jogo muda: nada de copiar um
+  // número registrado para uma constante solta no carregamento do módulo.
+  const TUNES = {};
+  let tuneMode = null;
+  function tSnap(v) {
+    if (Array.isArray(v)) return v.map(tSnap);
+    if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) { const o = {}; for (const k in v) o[k] = tSnap(v[k]); return o; }
+    return v;
+  }
+  function tPut(obj, k, v) {
+    const cur = obj[k];
+    if (Array.isArray(v) && Array.isArray(cur)) { cur.length = 0; for (let i = 0; i < v.length; i++) cur.push(tSnap(v[i])); return; }
+    if (v && typeof v === 'object' && !Array.isArray(v) && cur && typeof cur === 'object' && !Array.isArray(cur)) { for (const kk in v) tPut(cur, kk, v[kk]); return; }
+    obj[k] = tSnap(v);
+  }
+  function tApply(id) {
+    const t = TUNES[id];
+    for (const k in t.base) tPut(t.obj, k, t.base[k]);
+    const ov = tuneMode === 'normal' && G.TUNE_NORMAL && G.TUNE_NORMAL[id];
+    if (ov) for (const k in ov) if (k in t.base) tPut(t.obj, k, ov[k]);
+  }
+  G.tune = function (id, obj, keys) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const base = {};
+    for (const k of (keys || Object.keys(obj))) if (typeof obj[k] !== 'function') base[k] = tSnap(obj[k]);
+    TUNES[id] = { obj, base };
+    if (tuneMode) tApply(id); // módulo carregado depois do applyMode: já entra no modo certo
+    return obj;
+  };
+  G.applyMode = function (mode) {
+    tuneMode = mode === 'cpi' ? 'cpi' : 'normal';
+    for (const id in TUNES) tApply(id);
+    return tuneMode;
+  };
+  G.tuneMode = function () { return tuneMode || 'normal'; };
+  // testes: ajustes do NORMAL que não batem com nada registrado (erro de digitação no balanço não passa calado)
+  G.tuneCheck = function () {
+    const bad = [], tn = G.TUNE_NORMAL || {};
+    for (const id in tn) {
+      if (!TUNES[id]) { bad.push(id + ' (bloco não registrado)'); continue; }
+      for (const k in tn[id]) if (!(k in TUNES[id].base)) bad.push(id + '.' + k);
+    }
+    return { ids: Object.keys(TUNES), bad };
+  };
+
   // ===================== PRESSÃO (dificuldade dinâmica) =====================
   // Um "rank" visível de 0 a 1 (G.press.R). Sobe com o nível da arma (forte no 4-5) e com o tempo vivo
   // (run.heat); cai na morte e na Delação. Acelera e adensa os tiros, engrossa os inimigos e PAGA de volta:
