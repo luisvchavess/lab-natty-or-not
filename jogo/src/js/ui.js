@@ -187,8 +187,12 @@
     const n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     return (r * 299 + g * 587 + b * 114) / 1000 > 140 ? '#121519' : '#ffffff';
   }
-  // quantas fases o jogo tem (5 com o stages.js; a lista de reserva quando ele não carregou)
-  const nStages = () => (G.Stages && G.Stages.list && G.Stages.list.length) || STAGE_FALLBACK.length;
+  // quantas fases o jogo tem (5 com o stages.js; a lista de reserva quando ele não carregou — a
+  // 'Fase de Teste' que o core cria nos testes isolados (?mods=) também conta como "sem stages.js")
+  const nStages = () => {
+    const L = G.Stages && G.Stages.list;
+    return (L && L.length && !(L.length === 1 && L[0].id === 'teste')) ? L.length : STAGE_FALLBACK.length;
+  };
   function stageInfo(i, st) {
     st = st || (G.Stages && G.Stages.list && G.Stages.list[i]) || {};
     const fb = STAGE_FALLBACK[i] || STAGE_FALLBACK[0];
@@ -233,6 +237,7 @@
     root.className = 'scr scr-' + kind + (extra ? ' ' + extra : '');
     if (reducedMotion()) root.classList.add('rm');
     if (G.H < 700) root.classList.add('short');
+    if (G.H < 630) root.classList.add('tiny'); // celulares bem baixos: a seleção de 5 fases aperta mais
     // telas com texto animado (máquina de escrever, letreiro, contadores) não devem
     // disparar o aria-live do #ui a cada quadro; o texto completo continua no DOM
     if (/^(title|story|dlg|clear|roll|howto)$/.test(kind)) root.setAttribute('aria-live', 'off');
@@ -276,7 +281,7 @@
   }
   // mantém a classe 'short' da tela atual em dia quando o celular gira/redimensiona
   // (adiado um quadro: o core recalcula G.H e o tamanho do #ui no próprio listener de resize)
-  window.addEventListener('resize', () => requestAnimationFrame(() => { if (cur) cur.root.classList.toggle('short', G.H < 700); }));
+  window.addEventListener('resize', () => requestAnimationFrame(() => { if (cur) { cur.root.classList.toggle('short', G.H < 700); cur.root.classList.toggle('tiny', G.H < 630); } }));
   // fn roda no resize e também quando as fontes da web chegam (G.UI.fontsReady): o texto muda de
   // tamanho e o que foi medido ou pintado uma vez (silhuetas com "?", altura da urna) fica velho
   function onResize(scr, fn) {

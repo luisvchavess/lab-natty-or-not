@@ -536,6 +536,9 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .short.scr-stages .lcd-body { padding-bottom: .8rem; }
 #ui .short .has-final .sigilo { top: 4rem; }
 #ui .short .has-final .sant.final .sigilo { top: 2.15rem; }
+#ui .tiny .has-final .sant:not(.final) .sant-photo { flex-basis: 3.6rem; min-height: 3.6rem; }
+#ui .tiny .has-final .sant:not(.final) .sant-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#ui .tiny .has-final .sant.final .sant-photo { min-height: 5rem; }
 
 /* ============================================================
    HISTÓRIA (quadrinhos)
@@ -1112,6 +1115,7 @@ html { font-size: calc(10px * var(--gs, 1)); }
   transform: rotate(-5deg);
   animation: u-fin-stamp .34s cubic-bezier(.3, 1.4, .5, 1) both .9s;
 }
+#ui .rm .fin-stamp { animation: none; }
 @keyframes u-fin-stamp { 0% { opacity: 0; transform: rotate(-18deg) scale(2.6); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
 #ui .fin .k-menu { max-width: 30rem; }
 #ui .fin .k-menu .kl { font: 900 1.7rem/1 var(--font-display); }
