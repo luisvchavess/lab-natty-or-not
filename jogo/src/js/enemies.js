@@ -15,6 +15,11 @@
   const M = G.m, TAU = Math.PI * 2, PI = Math.PI, DOWN = Math.PI / 2;
   const INK = '#101418';
   const sfx = (n) => G.call(G.Audio, 'sfx', n);
+  // MODO CPI / NORMAL (core: G.tune): os números dos blocos registrados abaixo são os do MODO CPI; o NORMAL só muda o
+  // que estiver em G.TUNE_NORMAL['enemies.T'] etc. Tudo é lido na hora (no spawn ou no quadro), nunca copiado no
+  // carregamento. Blocos: enemies.T (nível por fase, PRESSÃO, revanches), enemies.HP (vida de cada tipo), enemies.FIS,
+  // enemies.MQ, enemies.MB (cansaço e duração dos chefes intermediários), enemies.TRIO_DUR / LOBMOR_DUR / SERV_DUR, enemies.IMP.
+  const tune = G.tune || ((id, o) => o);
 
   // Cores de tiro inimigo (saturadas, legíveis contra o cenário e os tiros do Zé)
   const COL = {
@@ -85,21 +90,30 @@
   // Utilidades
   // ======================================================================
   // nível de dificuldade por fase (5 fases): Rodoviária 0 · Esplanada 1 · Paranoá 2 · Fazenda 2,6 · Planalto 3,2;
-  // +1,5 no 2º Mandato. A mesma tabela escala a vida dos inimigos comuns (define, abaixo).
-  const LVL = [0, 1, 2, 2.6, 3.2];
-  const stageLvl = (g) => { const i = (g && g.stageIdx) || 0; return LVL[Math.min(LVL.length - 1, Math.max(0, i))]; };
-  const lvl = () => { const g = G.game; return g ? stageLvl(g) + (g.loop > 1 ? 1.5 : 0) : 0; };
+  // +LVL_L2 (1,5) no 2º Mandato. A mesma tabela escala a vida dos inimigos comuns (define, abaixo: ×(1 + LVL_HP·nível)).
+  // LVL_SPD = tiro ×(1 + LVL_SPD·nível); LVL_IVL / LVL_FIRST = intervalo / 1º tiro ×(1 − k·nível − P_IVL/P_FIRST·R), com
+  // piso IVL_MIN / FIRST_MIN. PRESSÃO: P_FAN3 / P_FAN5 = tiros a mais no leque mirado em lv ≥ 3 / lv 5, P_RING = anel
+  // ×(1 + P_RING·R). REV_* = revanche do 2º Mandato (1 tiro / leque); PREV_* = revanche da PRESSÃO (a partir de lv PREV_LV,
+  // PREV_CHANCE de 1 tiro; em lv 5 sempre um leque de PREV_N5).
+  const ET = tune('enemies.T', {
+    LVL: [0, 1, 2, 2.6, 3.2], LVL_L2: 1.5, LVL_HP: 0.2, LVL_SPD: 0.065, LVL_IVL: 0.1, LVL_FIRST: 0.13,
+    IVL_MIN: 0.5, FIRST_MIN: 0.5, P_IVL: 0.22, P_FIRST: 0.22, P_FAN3: 1, P_FAN5: 1, P_RING: 0.25,
+    REV_SPD1: 105, REV_SPD: 95, REV_SPREAD: 0.55,
+    PREV_LV: 3, PREV_CHANCE: 0.5, PREV_N5: 3, PREV_SPREAD: 0.5, PREV_SPD: 95,
+  });
+  const stageLvl = (g) => { const i = (g && g.stageIdx) || 0, L = ET.LVL; return L[Math.min(L.length - 1, Math.max(0, i))]; };
+  const lvl = () => { const g = G.game; return g ? stageLvl(g) + (g.loop > 1 ? ET.LVL_L2 : 0) : 0; };
   // PRESSÃO (core: G.press = { R 0..1, lv 0..5 }); sem o core novo vale 0
   const PRESS0 = { R: 0, lv: 0 };
   const press = () => G.press || PRESS0;
   const pR = () => { const R = +press().R; return R > 0 ? Math.min(1, R) : 0; };
   const pLv = () => press().lv | 0;
-  const spd = (v) => v * (1 + 0.065 * lvl());                       // velocidade de tiro por fase (a PRESSÃO entra no G.fire)
-  const ivl = (v) => v * Math.max(0.5, 1 - 0.1 * lvl() - 0.22 * pR());          // intervalo entre ataques
-  const first = (a, b) => M.rand(a, b) * Math.max(0.5, 1 - 0.13 * lvl() - 0.22 * pR()); // demora do 1º tiro
+  const spd = (v) => v * (1 + ET.LVL_SPD * lvl());                       // velocidade de tiro por fase (a PRESSÃO entra no G.fire)
+  const ivl = (v) => v * Math.max(ET.IVL_MIN, 1 - ET.LVL_IVL * lvl() - ET.P_IVL * pR());          // intervalo entre ataques
+  const first = (a, b) => M.rand(a, b) * Math.max(ET.FIRST_MIN, 1 - ET.LVL_FIRST * lvl() - ET.P_FIRST * pR()); // demora do 1º tiro
   // densidade: leque mirado +1 tiro em CRISE (lv 3) e +1 em CPI! (lv 5); anel ×(1 + 0,25 R)
-  const nP = (n) => n + (pLv() >= 3 ? 1 : 0) + (pLv() >= 5 ? 1 : 0);
-  const nRing = (n) => Math.round(n * (1 + 0.25 * pR()));
+  const nP = (n) => n + (pLv() >= 3 ? ET.P_FAN3 : 0) + (pLv() >= 5 ? ET.P_FAN5 : 0);
+  const nRing = (n) => Math.round(n * (1 + ET.P_RING * pR()));
   // Leque mirado com a PRESSÃO: os tiros extras abrem o leque no MESMO passo angular
   // (o vão entre dois tiros nunca encolhe). odd = mantém o nº ímpar (o tiro do meio vem em você).
   function pFan(x, y, n, spread, speed, o, odd) {
@@ -138,18 +152,18 @@
     if (!loop2() || bossDying() || !okShot(e, 115)) return;
     e.data.rev = true;
     const o = { style: 'small', color: COL.pink };
-    if (n <= 1) G.pat.aimed(e.x, e.y, spd(speed || 105), o);
-    else G.pat.aimedFan(e.x, e.y, n, 0.55, spd(speed || 95), o);
+    if (n <= 1) G.pat.aimed(e.x, e.y, spd(speed || ET.REV_SPD1), o);
+    else G.pat.aimedFan(e.x, e.y, n, ET.REV_SPREAD, spd(speed || ET.REV_SPD), o);
   }
   // Revanche da PRESSÃO (todos os comuns, pelo define): CRISE+ 50% de 1 tiro; CPI! sempre um leque de 3
   const REV_O = { style: 'small', color: '#ff3d7f' };
   function pressRevenge(e, opts) {
     const lv = pLv();
-    if (lv < 3 || (opts && opts.silent) || e.big || e.data.rev || bossDying()) return;
+    if (lv < ET.PREV_LV || (opts && opts.silent) || e.big || e.data.rev || bossDying()) return;
     const g = G.game, p = player();
     if (!g || g.eb.length >= 300 || !okShot(e, 115) || (p && (p.inv > 0 || p.bombT > 2.0))) return;
-    if (lv >= 5) G.pat.aimedFan(e.x, e.y, 3, 0.5, spd(95), REV_O);
-    else if (Math.random() < 0.5) G.pat.aimed(e.x, e.y, spd(95), REV_O);
+    if (lv >= 5) G.pat.aimedFan(e.x, e.y, ET.PREV_N5, ET.PREV_SPREAD, spd(ET.PREV_SPD), REV_O);
+    else if (Math.random() < ET.PREV_CHANCE) G.pat.aimed(e.x, e.y, spd(ET.PREV_SPD), REV_O);
   }
 
   // Mão de um personagem (para encaixar adereços)
@@ -417,12 +431,22 @@
     G.call(G.Art, 'pickup', ctx, type, 0, 0, t, BADGE_ITEM);
     ctx.restore();
   }
+  // Vida de cada tipo (bloco 'enemies.HP', registrado no fim do arquivo: { cabo: 3, ..., impostometro: 1600 }).
+  // def.hp vira um getter que lê daqui: o core lê def.hp no spawnEnemy, então o modo vale a partir do próximo spawn.
+  // (fora: as zonas de acerto 'mb_hit' e o placar 'imp_zero', que não são vida de verdade; o o.hp dos roteiros
+  // continua mandando quando vem)
+  const HP = {};
+  const HP_SKIP = { mb_hit: 1, imp_zero: 1 };
   // Define com moldura: chama introdução, desenha carregador/etiqueta em volta do desenho próprio
   function define(kind, def) {
     const draw = def.draw, update = def.update, init = def.init, onDeath = def.onDeath;
+    if (typeof def.hp === 'number' && !HP_SKIP[kind]) {
+      HP[kind] = def.hp;
+      Object.defineProperty(def, 'hp', { get() { return HP[kind]; }, enumerable: true, configurable: true });
+    }
     def.init = function (e, o, g) {
       // fases mais adiantadas: inimigos comuns mais resistentes (o Zé também chega mais forte)
-      if (!def.big && !def.noScale && g) { const k = 1 + 0.2 * stageLvl(g); e.hp *= k; e.maxHp = e.hp; }
+      if (!def.big && !def.noScale && g) { const k = 1 + ET.LVL_HP * stageLvl(g); e.hp *= k; e.maxHp = e.hp; }
       if (init) init.call(this, e, o || {}, g);
       if (o && o.ambient) e.ignoreClear = true; // pipoca de fundo não segura a fase
       introduce(e, g);
@@ -1570,7 +1594,13 @@
   // alterna a MALHA FINA (rede de DARFs caindo, com um furo) e um leque mirado de DARFs. Sai de lado.
   // ======================================================================
   const FISCAL = { skin: '#e0b089', hair: 'short', hairColor: '#2a221c', body: 'suit', suit: '#5d6470', shirt: '#f2f2f2', tie: '#1b3fa0', face: 'oval', brows: 'normal', seed: 40 };
-  const FIS_SIZE = 44, FIS_TELL = 0.6, MALHA_DX = 18;
+  const FIS_SIZE = 44, MALHA_DX = 18; // (desenho; MALHA_DX é o vão da rede: justiça, igual nos dois modos)
+  // TELL = aviso antes do tiro; IVL / IVL_MIN = ciclo (ivl) e piso depois do aviso; FIRST = 1ª espera; HOLD = s parado
+  // na tela; MALHA_N(_L2) = DARFs da rede (1 furo) e MALHA_SPD; FAN_* = o leque mirado de DARFs
+  const FIS = tune('enemies.FIS', {
+    TELL: 0.6, IVL: 2.8, IVL_MIN: 0.4, FIRST: [1.2, 2.0], HOLD: 7,
+    MALHA_N: 7, MALHA_N_L2: 9, MALHA_SPD: 75, FAN_N: 3, FAN_SPREAD: 0.4, FAN_SPD: 120,
+  });
   const DARF_O = { style: 'en_darf', color: COL.red };
   // Redes vivas na tela (de todos os fiscais): uma rede nova nunca nasce na mesma altura de outra
   // que cubra a mesma faixa de x (duas redes coladas fechariam o furo uma da outra).
@@ -1584,7 +1614,7 @@
     return false;
   }
   function fireMalha(e, g) {
-    const n = loop2() ? 9 : 7, hw = ((n - 1) * MALHA_DX) / 2;
+    const n = loop2() ? FIS.MALHA_N_L2 : FIS.MALHA_N, hw = ((n - 1) * MALHA_DX) / 2;
     const x0 = e.x, y = e.y + 20;
     if (netsBusy(g, x0, y, hw)) return false;
     // o furo: um encaixe de dentro da rede (nunca a ponta), que esteja dentro da tela
@@ -1594,10 +1624,10 @@
     let vy = 0;
     for (let i = 0; i < n; i++) {
       if (i === gap) continue;
-      const b = G.fire(x0 - hw + i * MALHA_DX, y, DOWN, spd(75), DARF_O);
+      const b = G.fire(x0 - hw + i * MALHA_DX, y, DOWN, spd(FIS.MALHA_SPD), DARF_O);
       if (b && !vy) vy = b.vy;
     }
-    g._nets.push({ x: x0, y0: y, t0: g.t, vy: vy || spd(75), hw });
+    g._nets.push({ x: x0, y0: y, t0: g.t, vy: vy || spd(FIS.MALHA_SPD), hw });
     return true;
   }
   function drawClipboard(ctx, x, y, fl) {
@@ -1630,9 +1660,9 @@
   define('fiscal', {
     hp: 18, r: 15, score: 700, pix: 6,
     init(e, o) {
-      initMove(e, o, { path: 'stop', ty: M.rand(110, 160), hold: 7, inT: 1.4, exit: 'side', sway: 12 });
+      initMove(e, o, { path: 'stop', ty: M.rand(110, 160), hold: FIS.HOLD, inT: 1.4, exit: 'side', sway: 12 });
       const d = e.data;
-      d.cyc = 'wait'; d.ct = first(1.2, 2.0); d.tell = 0; d.malha = M.chance(0.5);
+      d.cyc = 'wait'; d.ct = first(FIS.FIRST[0], FIS.FIRST[1]); d.tell = 0; d.malha = M.chance(0.5);
     },
     update(e, dt, g) {
       move(e, dt);
@@ -1640,15 +1670,15 @@
       if (d.mv !== 'hold') { if (d.cyc === 'tell') d.cyc = 'wait'; return; }
       if (d.cyc === 'wait') {
         d.ct -= dt;
-        if (d.ct <= 0) { d.cyc = 'tell'; d.tell = FIS_TELL; talk(e, 'CPF NA NOTA?', 0.3); }
+        if (d.ct <= 0) { d.cyc = 'tell'; d.tell = FIS.TELL; talk(e, 'CPF NA NOTA?', 0.3); }
       } else if (d.cyc === 'tell') {
         d.tell -= dt;
         if (d.tell <= 0) {
-          d.cyc = 'wait'; d.ct = Math.max(0.4, ivl(2.8) - FIS_TELL);
+          d.cyc = 'wait'; d.ct = Math.max(FIS.IVL_MIN, ivl(FIS.IVL) - FIS.TELL);
           if (okShot(e, 95)) {
             let net = false;
             if (d.malha) net = fireMalha(e, g);
-            if (!net) pFan(e.x, e.y + 14, 3, 0.4, spd(120), DARF_O);
+            if (!net) pFan(e.x, e.y + 14, FIS.FAN_N, FIS.FAN_SPREAD, spd(FIS.FAN_SPD), DARF_O);
             else talk(e, 'CAIU NA MALHA FINA!', 0.1);
             d.malha = !net; // depois da rede, o leque; depois do leque (ou rede adiada), tenta a rede
             sfx(net ? 'stamp' : 'enemy_shot2');
@@ -1662,7 +1692,7 @@
       person(ctx, e, FIS_SIZE, FISCAL, { pose, mood: tell ? 'angry' : 'smug' });
       const hl = hand(FIS_SIZE, pose, e.t, FISCAL.seed, false), hr = hand(FIS_SIZE, pose, e.t, FISCAL.seed, true);
       drawClipboard(ctx, e.x + hl.x - 1, e.y + hl.y - 2, fl);
-      drawStamp(ctx, e.x + hr.x + 1, e.y + hr.y + (tell ? -2 : 1), tell, fl, tell ? 1 - d.tell / FIS_TELL : 0);
+      drawStamp(ctx, e.x + hr.x + 1, e.y + hr.y + (tell ? -2 : 1), tell, fl, tell ? 1 - d.tell / FIS.TELL : 0);
       // distintivo da Receita no peito
       ctx.beginPath(); ctx.arc(e.x + 5.5, e.y + 9, 2.8, 0, TAU); inked(ctx, fcol('#ffd23f', fl), 0.9);
       if (!fl) { ctx.fillStyle = INK; ctx.font = '4px ' + G.FONT_DISPLAY; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('R', e.x + 5.5, e.y + 9.3); }
@@ -1673,7 +1703,9 @@
   // MAQUININHA DA TAXA (fase 4) — voa em formação (fly/swarm/side, como bot e ministro);
   // a tela pisca "+R$" (0,5 s) e solta um anel de "IOF"
   // ======================================================================
-  const MQ_BOX = [-12, -22, 24, 38], MQ_TELL = 0.5;
+  const MQ_BOX = [-12, -22, 24, 38];
+  // TELL = a tela piscando "+R$" antes do anel; FIRST = 1ª espera; IVL = ciclo (ivl, ÷ o.fire); RING(_L2) = tiros do anel
+  const MQ = tune('enemies.MQ', { TELL: 0.5, FIRST: 1.0, IVL: 2.2, RING: 6, RING_L2: 8, SPD: 85 });
   function paintMaq(c, st) {
     // st: 'n' normal · 't' aviso (+R$) · 'f' flash de dano
     const fl = st === 'f';
@@ -1705,7 +1737,7 @@
       initMove(e, o, { vy: 80 });
       const d = e.data;
       d.fire = o.fire != null ? o.fire : 1;
-      d.ft = 1.0; d.tell = 0;
+      d.ft = MQ.FIRST; d.tell = 0;
       d.wob = Math.random() * TAU;
     },
     update(e, dt) {
@@ -1715,16 +1747,16 @@
       if (d.tell > 0) {
         d.tell -= dt;
         if (d.tell <= 0 && okShot(e, 90)) {
-          const n = nRing(loop2() ? 8 : 6);
-          G.pat.ring(e.x, e.y, n, spd(85), { style: 'en_pixtax', color: COL.orange }, Math.random() * TAU);
+          const n = nRing(loop2() ? MQ.RING_L2 : MQ.RING);
+          G.pat.ring(e.x, e.y, n, spd(MQ.SPD), { style: 'en_pixtax', color: COL.orange }, Math.random() * TAU);
           sfx('enemy_shot');
         }
         return;
       }
       d.ft -= dt;
       if (d.ft <= 0) {
-        d.ft = ivl(2.2) / d.fire;
-        if (okShot(e, 90)) d.tell = MQ_TELL;
+        d.ft = ivl(MQ.IVL) / d.fire;
+        if (okShot(e, 90)) d.tell = MQ.TELL;
       }
     },
     draw(ctx, e, g) {
@@ -1773,12 +1805,14 @@
   }
   // Cansaço: a partir de 55% do tempo de luta o chefe intermediário vai cansando e passa a levar
   // até 2,2× de dano no fim (quem chega fraco ainda consegue derrubar; quem chega forte nem percebe).
-  const MB_TIRED_AT = 0.55, MB_TIRED_MAX = 1.2;
+  // TIRED_AT / TIRED_MAX = começa a cansar em TIRED_AT do tempo e chega a ×(1 + TIRED_MAX); DUR = s de luta antes de
+  // fugir, por tipo (o Impostômetro usa o IMP.DUR; o o.dur dos roteiros continua mandando quando vem)
+  const MB = tune('enemies.MB', { TIRED_AT: 0.55, TIRED_MAX: 1.2, DUR: { trio: 50, lobista_mor: 50, servidor: 52, comitiva: 54 } });
   function mbTiredK(e) {
     const d = e.data;
     if (d.st !== 'fight' || !d.dur) return 1;
-    const a = d.dur * MB_TIRED_AT;
-    return d.fightT <= a ? 1 : 1 + MB_TIRED_MAX * Math.min(1, (d.fightT - a) / (d.dur - a));
+    const a = d.dur * MB.TIRED_AT;
+    return d.fightT <= a ? 1 : 1 + MB.TIRED_MAX * Math.min(1, (d.fightT - a) / (d.dur - a));
   }
   // onHit comum: aplica o cansaço (o core já tirou o dano normal antes de chamar o onHit)
   function mbOnHit(e, dmg) {
@@ -1846,7 +1880,7 @@
   // ----------------------------------------------------------------------
   const TRIO_C = { skin: '#e8b48a', hair: 'pompadour', hairColor: '#3a2a20', body: 'suit', suit: '#f4f1e8', shirt: '#ffd23f', tie: '#e63946', sash: ['#e63946', '#ffd23f'], grin: true, seed: 30 };
   const TRIO_LINES = ['Tira o pé do chão!', 'Vem pro trio, eleitor!', 'Mão pro alto quem é 171!', 'Aí, galera do Plano!', 'Promessa é dívida... né?'];
-  const TRIO_DUR = { rings: 5.2, santinhos: 3.8, notas: 3.6 };
+  const TRIO_DUR = tune('enemies.TRIO_DUR', { rings: 5.2, santinhos: 3.8, notas: 3.6 }); // s de cada padrão
   function drawTrio(ctx, e, g) {
     const d = e.data, fl = G.isFlash(e), C = (c) => fcol(c, fl), t = e.t;
     ctx.save(); ctx.translate(e.x, e.y);
@@ -1899,7 +1933,7 @@
   define('trio', {
     hp: 900, r: 42, score: 15000, pix: 40, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 50, 172);
+      mbStart(e, o, MB.DUR.trio, 172);
       const d = e.data;
       d.kids = [];
       for (const side of [-1, 1]) { const k = G.spawnEnemy('trio_caixa', e.x + side * 92, e.y - 4, { parent: e, side }); if (k) d.kids.push(k); }
@@ -1994,11 +2028,11 @@
   // ----------------------------------------------------------------------
   const LOBMOR = { skin: '#e0a882', hair: 'slick', hairColor: '#111111', body: 'suit', suit: '#141a28', shirt: '#f4f1e8', tie: '#ffd23f', glasses: 'dark', face: 'jowl', templeColor: '#9aa0a6', seed: 31 };
   const LOBMOR_LINES = ['Todo mundo tem seu preço!', 'Aceita uma malinha?', 'Pode contar, tá tudo aí!', 'É só um agrado, campeão!', 'Isso aqui é consultoria!'];
-  const LOBMOR_DUR = { mala: 3.4, maletas: 2.8, propina: 2.8 };
+  const LOBMOR_DUR = tune('enemies.LOBMOR_DUR', { mala: 3.4, maletas: 2.8, propina: 2.8 }); // s de cada padrão
   define('lobista_mor', {
     hp: 1050, r: 40, score: 20000, pix: 50, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 50, 165);
+      mbStart(e, o, MB.DUR.lobista_mor, 165);
       const d = e.data;
       d.open = 0; d.dir = 1; d.ang = 0;
       if (!o.drop) e.drop = ['power', 'shield'];
@@ -2097,7 +2131,7 @@
   // MINISTÉRIO DA VERDADE (fase 3) — rack voador: solta bots, varre com lasers
   // (com aviso) e levanta muralhas de "censura" com brecha
   // ----------------------------------------------------------------------
-  const SERV_DUR = { bots: 4.4, laser: 4.8, muro: 5.4 };
+  const SERV_DUR = tune('enemies.SERV_DUR', { bots: 4.4, laser: 4.8, muro: 5.4 }); // s de cada padrão
   const SERV_LINES = ['Isso é desinformação!', 'Conteúdo removido!', 'Só vale a versão oficial!', 'Denunciado com sucesso!'];
   function drawServer(ctx, e, g) {
     const d = e.data, fl = G.isFlash(e), C = (c) => fcol(c, fl), t = e.t;
@@ -2168,7 +2202,7 @@
   define('servidor', {
     hp: 1400, r: 44, score: 25000, pix: 55, big: true, keepOffscreen: true,
     init(e, o) {
-      mbStart(e, o, 52, 168);
+      mbStart(e, o, MB.DUR.servidor, 168);
       e.data.gapI = 9;
       G.banner('MINISTÉRIO DA VERDADE', 'CHECAGEM OFICIAL 24H', { small: true, color: G.C.orange, dur: 2.2 });
       sfx('charge');
@@ -2242,11 +2276,15 @@
   const SEG7 = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f];
   // segmentos a..g de uma caixa ±hw × ±hh: [x0, y0, x1, y1] em unidades de hw/hh
   const SEGS = [[-1, -1, 1, -1], [1, -1, 1, 0], [1, 0, 1, 1], [-1, 1, 1, 1], [-1, 0, -1, 1], [-1, -1, -1, 0], [-1, 0, 1, 0]];
-  const IMP = {
+  // Registrados para o modo: BLINK (aviso das casas), MAX_DIG (dígitos na tela), A/A_L2 (O NÚMERO CAI, via ivl), B (leque
+  // de DARFs: B_N tiros, B_SPREAD, B_SPD), C (anel com vão abaixo de 50%: C_SPD), FALL/FALL_L2 (queda dos dígitos), DUR,
+  // A0/B0/C0 (1ª espera de cada ataque). Fora: o desenho do painel (CW…PH, DIG_W/H) e o DIG_MIN_DX (espaço entre dígitos).
+  const IMP = tune('enemies.IMP', {
     CW: 11, CH: 19, CG: 1, DOT: 4, RS: 18, PAD: 6, PH: 52,
     BLINK: 0.7, DIG_W: 30, DIG_H: 50, DIG_MIN_DX: 74, MAX_DIG: 3,
     A: 2.4, A_L2: 2.0, B: 1.5, C: 4.0, FALL: 80, FALL_L2: 92, DUR: 55,
-  };
+    A0: 1.4, B0: 0.9, C0: 2.0, B_N: 3, B_SPREAD: 0.42, B_SPD: 130, C_SPD: 88,
+  }, ['BLINK', 'MAX_DIG', 'A', 'A_L2', 'B', 'C', 'FALL', 'FALL_L2', 'DUR', 'A0', 'B0', 'C0', 'B_N', 'B_SPREAD', 'B_SPD', 'C_SPD']);
   // posição x (relativa ao centro) de cada casa; grupos de 3 contados da direita
   function impLayout(N) {
     const xs = [];
@@ -2358,7 +2396,7 @@
       if (!o.drop) e.drop = ['power'];
       const d = e.data;
       d.N = 10; d.cells = [1, 1, 7, 1, 1, 7, 1, 1, 7, 1]; d.cnt = 171; d.refill = []; // entra lendo R$ 1.171.171.171
-      d.tA = 1.4; d.tB = 0.9; d.tC = 2.0; d.blink = 0; d.blinkT = 0; d.pick = []; d.digs = []; d.late = false;
+      d.tA = IMP.A0; d.tB = IMP.B0; d.tC = IMP.C0; d.blink = 0; d.blinkT = 0; d.pick = []; d.digs = []; d.late = false;
       mbHitZone(e, -58, 4, 24); mbHitZone(e, 58, 4, 24); // painel largo
       G.banner('IMPOSTÔMETRO', 'NÃO PARA DE SUBIR', { small: true, color: G.C.orange, dur: 2.2 });
       sfx('charge');
@@ -2436,7 +2474,7 @@
       d.tB -= dt;
       if (d.tB <= 0) {
         d.tB = ivl(IMP.B);
-        if (okShot(e, 100)) { pFan(e.x, e.y + IMP.PH / 2 + 4, 3, 0.42, spd(130), DARF_O); sfx('enemy_shot'); }
+        if (okShot(e, 100)) { pFan(e.x, e.y + IMP.PH / 2 + 4, IMP.B_N, IMP.B_SPREAD, spd(IMP.B_SPD), DARF_O); sfx('enemy_shot'); }
       }
       // C) anel de DARFs com vão de 3 (o vão é medido no anel base de 14)
       if (d.late) {
@@ -2445,7 +2483,7 @@
           d.tC = IMP.C;
           if (okShot(e, 100)) {
             const n0 = 14, n = nRing(n0), gapA = aim(e) + M.rand(-0.5, 0.5), gapHalf = (1.5 * TAU) / n0, off = Math.random() * TAU;
-            for (let i = 0; i < n; i++) { const a = off + (i * TAU) / n; if (Math.abs(M.wrapAngle(a - gapA)) >= gapHalf) G.fire(e.x, e.y + IMP.PH / 2 + 4, a, spd(88), DARF_O); }
+            for (let i = 0; i < n; i++) { const a = off + (i * TAU) / n; if (Math.abs(M.wrapAngle(a - gapA)) >= gapHalf) G.fire(e.x, e.y + IMP.PH / 2 + 4, a, spd(IMP.C_SPD), DARF_O); }
             sfx('enemy_shot2');
           }
         }
@@ -2512,7 +2550,7 @@
     hp: 460, r: 19, score: 20000, pix: 40, big: true, keepOffscreen: true,
     init(e, o) {
       const d = e.data;
-      d.st = 'enter'; d.fightT = 0; d.dur = o.dur || 54; d.tau = 0; d.ripCd = 0;
+      d.st = 'enter'; d.fightT = 0; d.dur = o.dur || MB.DUR.comitiva; d.tau = 0; d.ripCd = 0;
       d.hx = new Float32Array(HIST); d.hy = new Float32Array(HIST); d.hi = 0;
       for (let i = 0; i < HIST; i++) { d.hx[i] = e.x; d.hy[i] = e.y; }
       d.ft = 1.5; d.rt = 4.5; d.facing = 1; d.photoT = 6; d.pause = 0;
@@ -2725,4 +2763,6 @@
   }
   // lion / taxBite: consumidos pelo lule.js (o Leão da Receita no Planalto), com fallback local
   G.EnemyArt = { prewarm, pending: () => PWQ.length + BWQ.length, lion: drawLion, taxBite };
+  // vida de cada tipo (todos os define acima já passaram por aqui): G.TUNE_NORMAL['enemies.HP'] = { fiscal: 16, ... }
+  tune('enemies.HP', HP);
 })();

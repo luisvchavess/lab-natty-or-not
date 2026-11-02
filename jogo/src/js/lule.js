@@ -40,14 +40,24 @@
   // qualidade (ENGINE §10): partículas puramente decorativas contínuas e brilhos extras
   // 'high' tudo, 'mid' metade das partículas (sem o brilho dourado), 'low' nenhuma partícula decorativa
   const decoK = () => (G.quality === 'low' ? 0 : G.quality === 'mid' ? 0.5 : 1);
+  // MODO CPI / NORMAL (core: G.tune): os números escritos aqui são os do MODO CPI; o NORMAL só muda o que estiver
+  // em G.TUNE_NORMAL['lule.T'] etc. Tudo é lido na hora (nada de copiar um destes números no carregamento).
+  const tune = G.tune || ((id, o) => o);
 
   // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,07 e o ×1,25 do 2º mandato;
-  // d.hpMul = b.maxHp / HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
+  // d.hpMul = b.maxHp / T.HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
   // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
-  const HP1 = 7200, HP2 = 5200, HP3 = 3200, HOME_Y = 178;
   // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
-  const FAT1 = 140, FAT2 = 170, FAT3 = 60, FAT_RAMP = 90, FAT_MAX = 0.75;
-  const fatStartOf = (life) => (life === 1 ? FAT1 : life === 2 ? FAT2 : FAT3);
+  // CPI_* = o leque mirado extra do nível CPI! (cpiCo); QUINTO_LV = níveis a mais nas variantes do LULE 5.0;
+  // QUINTO_SEG = duração de cada bloco do medley do QUINTO MANDATO; PHASE_STUN = teto do tonto numa troca de turno.
+  const T = tune('lule.T', {
+    HP1: 7200, HP2: 5200, HP3: 3200,
+    FAT1: 140, FAT2: 170, FAT3: 60, FAT_RAMP: 90, FAT_MAX: 0.75,
+    CPI_EVERY: 3.2, CPI_N: 3, CPI_SPREAD: 0.4, CPI_SPD: 130,
+    QUINTO_LV: 1, QUINTO_SEG: 12, PHASE_STUN: 2.0,
+  });
+  const HOME_Y = 178;
+  const fatStartOf = (life) => (life === 1 ? T.FAT1 : life === 2 ? T.FAT2 : T.FAT3);
   // Lule (G.Art.person) é desenhado com este tamanho, centrado em (0, PY) relativo ao chefão
   const PS = 136, PY = -30, GY = 6; // GY: churrasqueira um pouco mais baixa
 
@@ -95,20 +105,29 @@
   // lv 5 +1 de novo, esperas ×0,82 e o cpiCo. Nunca em aviso, telegrafia, delay, aviso de laser, parede nem no Leão.
   const PRESS0 = { R: 0, lv: 0 };
   const press = () => G.press || PRESS0;
-  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? 1 : 0) + (lv >= 5 ? 1 : 0); }
-  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + 0.25 * (R || 0))); }
-  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? 0.82 : lv >= 3 ? 0.9 : 1); }
+  // PV: N3/N5 = tiros a mais em lv ≥ 3 / lv 5; W3/W5 = fator das esperas; RING = anel ×(1 + RING·R)
+  const PV = tune('lule.PV', { N3: 1, N5: 1, W3: 0.9, W5: 0.82, RING: 0.25 });
+  function pN(n, lv) { if (lv == null) lv = press().lv; return n + (lv >= 3 ? PV.N3 : 0) + (lv >= 5 ? PV.N5 : 0); }
+  function pRing(n, R) { if (R == null) R = press().R; return Math.round(n * (1 + PV.RING * (R || 0))); }
+  function pW(s, lv) { if (lv == null) lv = press().lv; return s * (lv >= 5 ? PV.W5 : lv >= 3 ? PV.W3 : 1); }
   // o LULE 5.0 usa as variantes um nível acima (teto 5)
-  function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; if (d.life === 3) d.pl = Math.min(5, d.pl + 1); }
+  function pLatch(b) { const p = press(), d = b.data; d.pl = p.lv | 0; d.pR = p.R || 0; if (d.life === 3) d.pl = Math.min(5, d.pl + T.QUINTO_LV); }
   const N = (d, n) => pN(n, d.pl), W = (d, s) => pW(s, d.pl), RG = (d, n) => pRing(n, d.pR);
   const pressStun = () => { const P = G.PRESS; return P && P.STUN != null ? P.STUN : 0.3; };
-  // ÚLTIMO RECURSO (turno last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×1,5) contra o empate
-  const P5 = {
+  // ÚLTIMO RECURSO (turno last: true): depois de P5.LIMIT s nele, SEM SAÍDA (dano ×P5.MUL) contra o empate
+  const P5 = tune('lule.P5', {
     LIMIT: 30, MUL: 1.5, TAG: { text: 'ÚLTIMO RECURSO', color: '#ff2a4a' },
     TAG2: { text: 'SEM SAÍDA ×1,5', color: '#ff2a4a' },
-  };
+  }, ['LIMIT', 'MUL']);
   function lastStand(b) { const d = b.data; d.p5 = true; d.p5T0 = b.ft; d.p5Mul = 1; d.mechCd = 0; }
-  function p5Update(b) { const d = b.data; if (d.p5 && b.ft - d.p5T0 > P5.LIMIT) d.p5Mul = P5.MUL; }
+  function p5Update(b) {
+    const d = b.data;
+    if (!(d.p5 && b.ft - d.p5T0 > P5.LIMIT)) return;
+    d.p5Mul = P5.MUL;
+    // a etiqueta acompanha o multiplicador do modo (no MODO CPI continua 'SEM SAÍDA ×1,5')
+    const t2 = P5.TAG2;
+    if (t2.mul !== P5.MUL) { t2.mul = P5.MUL; t2.text = 'SEM SAÍDA ×' + fmtMul(P5.MUL); }
+  }
 
   // ---------- JANJINHA (janjinha.js, carrega DEPOIS do lule.js; SPEC5 §2.4) ----------
   // Lido na hora e sempre com guarda: sem o módulo (mods=lule) o Lule luta como antes. Um erro lá dentro é
@@ -201,11 +220,15 @@
   // AIM 1,45 (trava 1,0 s; a spec começava em 1,0 = trava 0,55): com 0,55 s o humanbot casual levava a mordida em 60%
   // dos leões que ele via (reação 0,45 s + o movimento); com 0,75 s (AIM 1,2) o olé dava certo em ~40% dos leões do casual e
   // ~70–80% do good. Rodada 4: AIM 1,45 e o tonto mais curto (STUN 4,0/3,2 → 3,4/2,8) para o tempo de luta não cair.
-  const LEAO = {
+  // *_L2 = 2º mandato (STALK_L2 e SPD_L2 trocam o valor; AIM_L2 sai do AIM; GAP_L2 e STUN_L2 multiplicam).
+  // Registrados para o modo: tudo menos as distâncias de acerto (ZE_R, COMP_R, PIC_R), o XR (botão) e o PIX.
+  const LEAO = tune('lule.LEAO', {
     FIRST: 7, GAP: [11, 10, 0, 9, 8, 10, 9, 8, 7, 8], ENTER: 160, STALK: 120, STALK_MAX: 2.2, AIM: 1.45, TRACK: 0.45, SPD: 600,
     CLAMP: 0.61, ZE_R: 26, COMP_R: 22, PIC_R: 30, STUN: [3.4, 2.8, 2.8], MUL: 2.3, PIX: 30, XR: 110, RISE: 256,
     LAST_T: 1.5, // no ÚLTIMO RECURSO o próximo leão sai em ≤ 1,5 s (SPEC5 §2.3)
-  };
+    STALK_L2: 140, AIM_L2: 0.15, SPD_L2: 660, GAP_L2: 0.9, STUN_L2: 0.85,
+  }, ['FIRST', 'GAP', 'ENTER', 'STALK', 'STALK_MAX', 'AIM', 'TRACK', 'SPD', 'CLAMP', 'STUN', 'MUL', 'RISE', 'LAST_T',
+    'STALK_L2', 'AIM_L2', 'SPD_L2', 'GAP_L2', 'STUN_L2']);
   // XR: o leão nunca passa de x = W − XR (no canto de baixo à direita fica o botão da DELAÇÃO, por cima do canvas;
   // com 110 nem a juba nem o rabo entram no botão, de 360×640 a 412×915). O Lule anda em x ≤ W − 95, então o bote
   // ainda pega o Lule em qualquer lugar (o piloto mira na reta leão → Lule). Do lado direito ele não entra andando
@@ -227,7 +250,7 @@
   function luleStun(b, dur, mul) {
     const d = b.data, g = G.game;
     mul = Math.min(4, mul + pressStun() * (press().R || 0));
-    d.stunT = d.stunT0 = dur * (L2() ? 0.85 : 1); d.stunMul = mul;
+    d.stunT = d.stunT0 = dur * (L2() ? LEAO.STUN_L2 : 1); d.stunMul = mul;
     d.stunTag = { text: 'BRECHA ×' + fmtMul(mul), color: '#ffd23f' };
     d.stunId = 'stun' + (d.lionN || 0);
     d.lanes.length = 0; d.stamps.length = 0; d.lsign = null;
@@ -281,7 +304,7 @@
   // st: enter → stalk (segue o x do Zé embaixo) → aim (mira; trava) → lunge (bote) → hold (pendurado no Lule) | flee
   function lionGap(b) {
     const d = b.data, i = (d.life === 1 ? 0 : d.life === 2 ? 5 : 9) + (b.phase || 0);
-    return (LEAO.GAP[M.clamp(i, 0, LEAO.GAP.length - 1)] || 0) * (L2() ? 0.9 : 1);
+    return (LEAO.GAP[M.clamp(i, 0, LEAO.GAP.length - 1)] || 0) * (L2() ? LEAO.GAP_L2 : 1);
   }
   function spawnLion(b) {
     const d = b.data, p = pl();
@@ -443,7 +466,7 @@
       case 'stalk': {
         if (!p.alive) { lionFlee(b); break; }
         L.y = yF;
-        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
+        L.x = M.clamp(M.approach(L.x, p.x, (l2 ? LEAO.STALK_L2 : LEAO.STALK) * dt), 22, xMax);
         L.bristle = Math.min(1, L.bristle + dt / LEAO.STALK_MAX);
         if (Math.abs(p.x - L.x) < 16 || L.t >= LEAO.STALK_MAX) { L.st = 'aim'; L.t = 0; }
         break;
@@ -453,7 +476,7 @@
         L.y = yF;
         if (!L.locked) {
           // enquanto mira, ainda se ajeita embaixo do Zé (o raio sai quase reto: quem está embaixo do Lule acerta o Lule)
-          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? 140 : LEAO.STALK) * dt), 22, xMax);
+          L.x = M.clamp(M.approach(L.x, p.x, (l2 ? LEAO.STALK_L2 : LEAO.STALK) * dt), 22, xMax);
           L.a = clampAim(Math.atan2(p.y - L.y, p.x - L.x));
           if (L.t >= LEAO.TRACK) {
             // TRAVOU: olhos vermelhos, agacha e o "SAI!" aponta para o lado com mais espaço
@@ -466,11 +489,11 @@
         L.sy = L.locked ? 0.85 : 1;
         L.bristle = 1;
         lionRay(b, L); // (também acerta L.gold / L.hitJ)
-        if (L.t >= LEAO.AIM - (l2 ? 0.15 : 0)) { L.st = 'lunge'; L.t = 0; L.sy = 1; sfx('whoosh'); }
+        if (L.t >= LEAO.AIM - (l2 ? LEAO.AIM_L2 : 0)) { L.st = 'lunge'; L.t = 0; L.sy = 1; sfx('whoosh'); }
         break;
       }
       case 'lunge': {
-        const dist = (l2 ? 660 : LEAO.SPD) * dt, n = Math.max(1, Math.ceil(dist / 8));
+        const dist = (l2 ? LEAO.SPD_L2 : LEAO.SPD) * dt, n = Math.max(1, Math.ceil(dist / 8));
         const sx = (Math.cos(L.a) * dist) / n, sy = (Math.sin(L.a) * dist) / n;
         L.rot = (L.a + DOWN) * 0.8;
         for (let i = 0; i < n; i++) {
@@ -705,8 +728,11 @@
   // ======================================================================
   // Sub-inimigo: COMPANHEIRO (estrelinha vermelha que dança a ciranda em volta do Lule)
   // ======================================================================
+  // HP = vida de cada um; GIVE = HP que o Lule perde quando um cai; BACK = s até voltar; FIRE = intervalo dos tiros
+  // (×FIRE_L2 no 2º mandato) e SPD = velocidade da estrelinha
+  const COMP = tune('lule.COMP', { HP: 18, GIVE: 11, BACK: 5.2, FIRE: [2.8, 3.8], FIRE_L2: 0.8, SPD: 118 });
   G.Enemies.define('lule_companheiro', {
-    hp: 18, r: 13, score: 2000, pix: 1, keepOffscreen: true, ignoreClear: true, noPress: true, // (parte do chefão: a PRESSÃO não engrossa)
+    get hp() { return COMP.HP; }, r: 13, score: 2000, pix: 1, keepOffscreen: true, ignoreClear: true, noPress: true, // (parte do chefão: a PRESSÃO não engrossa)
     init(e, o) { e.data.i = o.i || 0; e.data.R = 0; e.data.fireT = 2 + (o.i || 0) * 0.45; },
     update(e, dt, g) {
       const b = g.boss, d = e.data;
@@ -723,8 +749,8 @@
       if (bd.stunT > 0) return; // Lule tonto: a roda para e ninguém atira
       d.fireT -= dt;
       if (d.fireT <= 0) {
-        d.fireT = M.rand(2.8, 3.8) * (L2() ? 0.8 : 1);
-        if (e.y > b.y + 20 && d.R > bd.compR * 0.8) shoot(e.x, e.y, G.aim(e.x, e.y), 118, { style: 'lule_estrela', color: COL.red });
+        d.fireT = M.rand(COMP.FIRE[0], COMP.FIRE[1]) * (L2() ? COMP.FIRE_L2 : 1);
+        if (e.y > b.y + 20 && d.R > bd.compR * 0.8) shoot(e.x, e.y, G.aim(e.x, e.y), COMP.SPD, { style: 'lule_estrela', color: COL.red });
       }
     },
     // com o Lule em cena, ele mesmo desenha os companheiros POR CIMA dele (veja drawLule)
@@ -734,10 +760,10 @@
       if (opts && opts.silent) return;
       G.text(e.x, e.y - 12, M.pick(['VOLTA AQUI!', 'COMPANHEIRO!', 'FUI!']), { color: '#ffd23f', size: 10, life: 0.8 });
       if (b && b.id === 'lule' && fighting(b) && b.data.wantComps) {
-        b.data.respawn.push(5.2);
+        b.data.respawn.push(COMP.BACK);
         // derrubar um companheiro tira apoio do Lule: ~60% da vida dele passa para o chefão (as panelas
         // teleguiadas miram no alvo mais perto; sem isso a Companheirada virava um moedor com a arma fraca)
-        G.hitBoss(b, 11);
+        G.hitBoss(b, COMP.GIVE);
       }
     },
   });
@@ -1004,7 +1030,7 @@
     d.compR = 92;
     for (let i = 0; i < n; i++) {
       if (!fighting(b)) return;
-      G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i, hp: 18 });
+      G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i, hp: COMP.HP });
       sfx('spawn');
       yield 0.18;
     }
@@ -1082,10 +1108,10 @@
   function* cpiCo(b, d) {
     for (;;) {
       yield () => d.pl === 5;
-      yield pW(3.2, 5);
+      yield pW(T.CPI_EVERY, 5);
       if (d.pl !== 5 || d.stunT > 0 || !canShoot()) continue;
       const x = b.x, y = b.y + 40;
-      fan(x, y, G.aim(x, y), 3, 0.4, 130, { style: 'small', color: '#ff2a4a' });
+      fan(x, y, G.aim(x, y), T.CPI_N, T.CPI_SPREAD, T.CPI_SPD, { style: 'small', color: '#ff2a4a' });
     }
   }
   function* wander(b, d, amp, every) {
@@ -1340,7 +1366,7 @@
     d.lionThruL = true;
     co(b, wander(b, d, 60, 2.2));
     yield 1.0;
-    const SEG = 12;
+    const SEG = T.QUINTO_SEG; // (lido no começo do turno: o modo já está aplicado)
     let k = 0, s = pl().x > G.W / 2 ? 1 : -1;
     for (let seg = 0; ; seg = (seg + 1) % 4) {
       const t0 = clk(b), left = () => SEG - (clk(b) - t0);
@@ -1441,13 +1467,13 @@
         G.banner('ELE VOLTOU DE NOVO!', 'LULE 5.0 — QUINTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
         b.name = 'LULE 5.0';
         d.life = 3; d.slumpTo = 0;
-        b.maxHp = HP3 * d.hpMul; b.hp = 0;
+        b.maxHp = T.HP3 * d.hpMul; b.hp = 0;
         say(b, 'QUINTO MANDATO!', 2.6);
       } else {
         G.banner('ELE VOLTOU!', 'LULE 4.0 — QUARTO MANDATO', { color: '#ff3b4e', dur: 3.2 });
         b.name = 'LULE 4.0';
         d.life = 2; d.slumpTo = 0;
-        b.maxHp = HP2 * d.hpMul; b.hp = 0;
+        b.maxHp = T.HP2 * d.hpMul; b.hp = 0;
         say(b, 'QUARTO MANDATO!', 2.6);
       }
       d.refill0 = t;
@@ -2078,7 +2104,7 @@
   const HB = [[-46, 42, 25], [46, 42, 25], [0, 46, 26], [0, -4, 28], [0, -49, 36]]; // grelha primeiro (o jato para nela)
 
   G.Bosses.define('lule', {
-    name: 'LULE', title: 'O Picanheiro', hp: HP1, r: 44, homeY: HOME_Y,
+    name: 'LULE', title: 'O Picanheiro', get hp() { return T.HP1; }, r: 44, homeY: HOME_Y, // hp lido no spawnBoss (modo)
     score: 500000, pix: 400, music: 'boss_final', defeatText: 'A CONTA CHEGOU!',
     phases: PH1,
     init(b) {
@@ -2087,7 +2113,7 @@
       d.smokeT = 0; d.life = 1; d.pose = 'idle'; d.poseT = 0; d.moodT = 0; d.moodOv = 'hurt';
       d.compA = 0; d.compR = 92; d.wantComps = false; d.dim = 0; d.slump = 0; d.slumpTo = 0; d.dmg = 0;
       d.tx = b.homeX; d.ty = HOME_Y; d.hitAcc = 0;
-      d.hpMul = b.maxHp / HP1; // 2º mandato: o core já multiplicou o HP
+      d.hpMul = b.maxHp / T.HP1; // 2º mandato: o core já multiplicou o HP
       b.hitboxes = HB.map((h) => ({ dx: h[0], dy: h[1], r: h[2] }));
       b.phases = PH1.slice();
       // manha (OLÉ): relógio do chefão, tonto, o Leão e os contadores
@@ -2113,7 +2139,7 @@
       updSmoke(d, b, dt, heat);
       if (d.reviving) { updLion(b, dt, g); updateRevive(b, dt, g); return; } // o Leão termina de fugir na cena
       // cansaço por vida: a luta de quem chega fraco não vira um moedor sem fim (bons jogadores nem percebem)
-      const lf = b.ft - (d.lifeT0 || 0), fat = FAT_MAX * M.clamp((lf - fatStartOf(d.life)) / FAT_RAMP, 0, 1);
+      const lf = b.ft - (d.lifeT0 || 0), fat = T.FAT_MAX * M.clamp((lf - fatStartOf(d.life)) / T.FAT_RAMP, 0, 1);
       d.fat = fat;
       p5Update(b); // ÚLTIMO RECURSO: SEM SAÍDA ×1,5 depois de 30 s no turno
       // TONTO = PAUSA: sem corrotinas, relógio, movimento, ciranda nem companheiros voltando
@@ -2153,7 +2179,7 @@
           if (d.respawn[i] <= 0) {
             d.respawn.splice(i, 1);
             const slot = freeCompSlot();
-            if (slot >= 0 && compAlive() < 8) { G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i: slot, hp: 18 }); sfx('spawn'); }
+            if (slot >= 0 && compAlive() < 8) { G.spawnEnemy('lule_companheiro', b.x, b.y + 6, { i: slot, hp: COMP.HP }); sfx('spawn'); }
           }
         }
       }
@@ -2182,7 +2208,7 @@
       startPhase(b, idx);
       // troca de fase no meio do tonto: as corrotinas novas começam quando ele acabar; o tonto fica ≤ 2 s
       if (d.stunT > 0) {
-        d.stunT = Math.min(d.stunT, 2.0);
+        d.stunT = Math.min(d.stunT, T.PHASE_STUN);
         pose(b, 'shrug', d.stunT); d.moodT = d.stunT; d.moodOv = 'hurt';
       }
     },
