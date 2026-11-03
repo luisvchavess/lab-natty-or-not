@@ -644,6 +644,9 @@ html { font-size: calc(10px * var(--gs, 1)); }
 }
 #ui .mini-rank.r-S { background: #ffd23f; color: #121519; border-color: #121519; }
 #ui .mini-new { padding: .25rem .45rem .2rem; border: .2rem solid #fff; border-radius: .3rem; background: var(--u-red); font: 900 .95rem/1 var(--font-display); font-style: normal; animation: u-pulse 1.2s ease-in-out infinite; }
+/* o selo não engorda a faixa: com ou sem nota o santinho tem a mesma altura (a tela FASES não rola) */
+#ui .sant-band .mini-rank { margin: -.45rem 0; }
+#ui .sant-band .mini-new { margin: -.25rem 0; }
 #ui .lock-ico { position: relative; display: inline-block; width: 1.4rem; height: 1.2rem; margin-top: .5rem; border-radius: .2rem; background: #fff; }
 #ui .lock-ico::before { content: ''; position: absolute; left: .25rem; right: .25rem; top: -.75rem; height: .9rem; border: .22rem solid #fff; border-bottom: 0; border-radius: .6rem .6rem 0 0; }
 #ui .sant.locked { background: #d4d8cc; color: #5b6168; box-shadow: .35rem .35rem 0 rgba(23, 34, 26, .25); }
@@ -707,7 +710,8 @@ html { font-size: calc(10px * var(--gs, 1)); }
 #ui .short .has-final .mini-rank { width: 2rem; height: 2rem; font-size: 1.05rem; }
 #ui .short .has-final .sant-photo { min-height: 4.4rem; }
 #ui .short .has-final .sant-num { bottom: -1.15rem; padding: .2rem .38rem .15rem; font-size: 1.3rem; }
-#ui .short .has-final .sant-boss { min-height: 1.2rem; margin: .3rem .4rem 0 5.5rem; font-size: .95rem; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* nome do chefão: quebra no espaço em até 2 linhas (ERIKA / VIRALTON, FERNANDO / TAXAD), sem "…" */
+#ui .short .has-final .sant-boss { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-height: 1.2rem; margin: .3rem .4rem 0 5.5rem; font-size: .95rem; line-height: 1.1; overflow: hidden; overflow-wrap: normal; }
 #ui .short .has-final .sant-name { margin-top: .5rem; font-size: 1.1rem; }
 #ui .short .has-final .sant-sub { margin-top: .2rem; font-size: 1.05rem; line-height: 1.12; }
 #ui .short .has-final .sant.final .sant-num { bottom: .35rem; }
@@ -1641,7 +1645,7 @@ body.in-play #toasts { opacity: 0; }
     // Rodada 5: Fazenda, Janjinha, PRESSÃO e o mandato sem recurso ('cofre' e 'cartao' são contadores dos módulos)
     { id: 'taxad',        name: 'Taxa Zero',            desc: 'Derrote Fernando Taxad' },
     { id: 'restituicao',  name: 'Restituição na Conta', desc: 'Ache o seu dinheiro em 10 cofres do Taxad', counter: 'cofre', goal: 10 },
-    { id: 'isento',       name: 'Isento!',              desc: 'Vença o Taxad sem errar nenhum cofre' },
+    { id: 'isento',       name: 'Isento!',              desc: 'Vença o Taxad acertando todos os cofres (no mínimo 4)' },
     { id: 'embarcou',     name: 'Embarque Imediato',    desc: 'Mande a Janjinha para uma viagem oficial' },
     { id: 'cartao',       name: 'Cartão Bloqueado',     desc: 'Faça o Leão bloquear o cartão corporativo' },
     { id: 'carimbo_ouro', name: 'Nota de Ouro',         desc: 'Ganhe 3 Carimbos de Ouro na mesma partida' },
@@ -1683,9 +1687,13 @@ body.in-play #toasts { opacity: 0; }
       { scene: 'fusca',    text: 'Zé devolveu o Fusca para a Vó Dirce e foi dormir. Segunda-feira tem corrida às seis da manhã. Escala 7x0, como sempre.' },
       { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em quinto mandato." Zé: "Liga o motor, vó."' },
     ],
-    // Painel extra do final (ui.js mostra antes do último painel quando info.secret === 'won': venceu o Lule 5.0)
+    // Painel extra do final (ui.js mostra logo depois do 1º painel quando info.secret === 'won': venceu o Lule 5.0)
     endingQuinto: [
       { scene: 'planalto', text: 'Quinto mandato? Não desta vez. O Zé entregou a fatura, o recibo e a segunda via, tudo com firma reconhecida. O Lule 5.0 saiu prometendo picanha pro sexto.' },
+    ],
+    // Último painel quando venceu o Lule 5.0 (no lugar do último do ending: o quinto já foi barrado)
+    endingQuintoLast: [
+      { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em sexto mandato." Zé: "Liga o motor, vó."' },
     ],
     // Diálogos por fase (id da fase). intro: antes da fase. Os diálogos de chefão ficam em STORY.boss.
     stages: {
@@ -2891,17 +2899,19 @@ body.in-play #toasts { opacity: 0; }
   };
   // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: sem a PRESSÃO), arredondado na sorte.
   // MODO CPI: ×1,25 sempre (é prêmio do modo, não da PRESSÃO: vale também com noPress)
+  // Devolve o valor sorteado (o que cai de fato), para o texto mostrar o mesmo número.
   G.dropPix = function (x, y, amount, o) {
     let a = +amount || 0;
     if (!(o && o.noPress)) a *= 1 + PC().PIX * G.press.R;
     if (cpiRun()) a *= MODE_PIX;
-    const fa = Math.floor(a);
-    let left = fa + (Math.random() < a - fa ? 1 : 0);
+    const fa = Math.floor(a), n = fa + (Math.random() < a - fa ? 1 : 0);
+    let left = n;
     while (left > 0) {
       if (left >= 25 && M.chance(0.5)) { G.drop('mala', x, y, o); left -= 25; }
       else if (left >= 5) { G.drop('pix5', x, y, o); left -= 5; }
       else { G.drop('pix', x, y, o); left -= 1; }
     }
+    return n;
   };
 
   // ===================== Efeitos =====================
@@ -4236,6 +4246,16 @@ body.in-play #toasts { opacity: 0; }
   // A faixa de cima (votos, Pix, vidas, aprovação) vai para um canvas guardado e só é redesenhada
   // quando algum valor muda (no máximo ~15x/s para o placar). A barra do chefão e a arma são diretas.
   const HUD_BAND_H = 48;
+  // etiqueta da barra do chefão em tom de vermelho (#rrggbb)? guardado por cor
+  const tagRedMemo = {};
+  function tagRed(c) {
+    if (!c) return false;
+    if (tagRedMemo[c] == null) {
+      const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+      tagRedMemo[c] = !!m && parseInt(m[1], 16) > 180 && parseInt(m[2], 16) < 110 && parseInt(m[3], 16) < 130;
+    }
+    return tagRedMemo[c];
+  }
   const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1, mode: '' };
   function paintHudBand(g, run, k) {
     const W = G.W, hc = hudCache;
@@ -4354,8 +4374,14 @@ body.in-play #toasts { opacity: 0; }
       const tag = b.hudTag;
       if (tag && tag.text && b.state === 'fight') {
         ctx.save();
-        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(g.t * 10);
         ctx.textAlign = 'center'; ctx.font = '10px ' + G.FONT_DISPLAY;
+        // vermelha (ÚLTIMO RECURSO / SEM SAÍDA) some no vermelho escuro da barra: tarja escura atrás e piscar mais raso
+        const red = tagRed(tag.color);
+        if (red) {
+          const tw = ctx.measureText(tag.text).width + 10;
+          ctx.fillStyle = 'rgba(8,12,22,0.92)'; roundRect(bx + bw / 2 - tw / 2, by - 3, tw, 12, 4); ctx.fill();
+        }
+        ctx.globalAlpha = red ? 0.85 + 0.15 * Math.sin(g.t * 10) : 0.65 + 0.35 * Math.sin(g.t * 10);
         ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(8,12,22,0.9)';
         ctx.strokeText(tag.text, bx + bw / 2, by + 7);
         ctx.fillStyle = tag.color || '#ffd23f';
@@ -4575,6 +4601,8 @@ body.in-play #toasts { opacity: 0; }
     if (G.state === 'over') return;
     // perdeu na luta secreta (LULE 5.0): sem tela de recurso, a partida conta como vencida
     if (run.secret === 'on') { run.secret = 'lost'; G.unlock('lule'); G.finishGame(); return; }
+    // o tiro no ar derrubou o LULE 5.0 depois da última vida: o carro fica no chão e a vitória segue (stageClear → final)
+    if (run.secret === 'won') { g.player.respawnT = 0.5; return; }
     G.state = 'over';
     setPlayButtons(false);
     // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
@@ -4761,7 +4789,15 @@ body.in-play #toasts { opacity: 0; }
       G.state = 'play';
     },
     killBoss() { const g = G.game; const b = g && g.boss; if (b && b.state === 'fight') G.hitBoss(b, (b.hp + 1) / Math.max(0.01, b.dmgMul != null ? b.dmgMul : 1)); },
-    hurtBoss(frac) { const g = G.game; if (g && g.boss && g.boss.state === 'fight') G.hitBoss(g.boss, g.boss.maxHp * frac); },
+    // frac do HP máximo, sem o multiplicador de dano (tonto/BRECHA) — como o killBoss
+    hurtBoss(frac) { const g = G.game, b = g && g.boss; if (b && b.state === 'fight') G.hitBoss(b, (b.maxHp * frac) / Math.max(0.01, b.dmgMul != null ? b.dmgMul : 1)); },
+    // HP logo abaixo do limiar do próximo turno (um turno por chamada); null sem chefão ou já no último turno
+    nextPhase() {
+      const g = G.game, b = g && g.boss, ph = b && b.phases && b.phases[b.phase + 1];
+      if (!b || b.state !== 'fight' || !ph) return null;
+      b.hp = Math.max(1, Math.min(b.hp, b.maxHp * ph.at - Math.max(1, b.maxHp * 0.002)));
+      return b.phase + 1;
+    },
     spawnBoss(id) {
       const g = G.game; if (!g) return;
       for (const e of g.enemies) e.dead = true;
@@ -13690,7 +13726,7 @@ body.in-play #toasts { opacity: 0; }
     motoqueiro: ['MOTOBOY DA PICANHA', 'passa atirando e nunca entrega'],
     drone: ['DRONE DA LIVE', 'o REC piscou? Saia da mira'],
     fiscal: ['FISCAL DA RECEITA', 'CPF na nota? A malha fina tem furo'],
-    maquininha: ['MAQUININHA DA TAXA', 'cada Pix, uma taxinha'],
+    maquininha: ['MAQUININHA DA TAXA', 'cada Pix, uma taxinha... um dia!'],
   };
   // Uma etiqueta por vez: várias espécies novas entrando juntas (fases 3 e 4 pelo menu) se
   // cobriam umas às outras. A espécie que ficou na fila se apresenta num inimigo dela que ainda
@@ -14736,8 +14772,8 @@ body.in-play #toasts { opacity: 0; }
     onDeath(e) {
       const d = e.data;
       if (d.stolen > 0) {
-        const back = Math.round(d.stolen * 1.5);
-        G.dropPix(e.x, e.y, back);
+        // sem a PRESSÃO (o MODO CPI ainda soma ×1,25): o texto mostra o que cai de fato
+        const back = G.dropPix(e.x, e.y, Math.round(d.stolen * 1.5), { noPress: true });
         G.text(e.x, e.y - 24, 'RESTITUIÇÃO! +R$ ' + back, { color: G.C.greenL, size: 13, life: 1.6, vy: -24 });
         sfx('pix_big');
       }
@@ -20695,13 +20731,20 @@ body.in-play #toasts { opacity: 0; }
     return t;
   }
   // o rig liga (fio cortável). 1ª live da partida (1º mandato) = demonstração: 2,5 s sem tiro
+  const FIO_HINT = 'CORTE OS FIOS DA LIVE!';
   function rigOn(b) {
     const d = b.data;
     sfx('tink');
     if (d.demo && !d.demoOn) {
       d.demoOn = true; d.demoT = FI.DEMO;
       say(b, 'PERAÍ, TÔ GRAVANDO!', 2.2); d.pose = 'point'; d.poseT = FI.DEMO;
-      K.mechHint('erk_fio', G.W / 2, G.H * 0.5, 'CORTE OS FIOS DA LIVE!');
+      K.mechHint('erk_fio', G.W / 2, G.H * 0.5, FIO_HINT);
+    } else if (d.fioHint) {
+      // a dica que a participação especial tirou da tela volta na 1ª live depois dela
+      d.fioHint = false;
+      const h = G.run && G.run._bsHints;
+      if (h) h.erk_fio = 0;
+      K.mechHint('erk_fio', G.W / 2, G.H * 0.5, FIO_HINT);
     }
   }
   function cutPhone(b, ph, seg) {
@@ -21307,6 +21350,9 @@ body.in-play #toasts { opacity: 0; }
     d.pose = 'hold'; d.poseT = 0;
     K.clearGoal(b);
     sfx('whoosh');
+    // a dica dos fios ainda na tela (a 1ª live acabou de ligar) sai com o rig: não fica embaixo do letreiro dele
+    const g = G.game;
+    if (g) for (const q of g.texts) if (q.str === FIO_HINT && !q.dead && q.t < q.life) { q.t = q.life; q.dead = true; d.fioHint = true; }
     G.text(W / 2, Math.max(H * 0.4, b.y + STUN_PILL_DY + 34), PAV_TXT.IN, { size: 14, color: '#8fc1ff', stroke: true, life: 1.2, vy: -10 }); // linha do 'FLOPOU!'
   }
   // fim da cena: ela volta a lutar (meio segundo de invulnerabilidade), a live do turno entra RIG_GAP s depois
@@ -21613,7 +21659,7 @@ body.in-play #toasts { opacity: 0; }
       d.S = { look: [0, 0] }; d.warmI = 0;
       // participação especial (garantida: pavForce na 1ª troca de turno; rigHold segura a live durante a cena)
       d.pav = null; d.pavForce = false; d.pavForceT = 0; d.pavDone = false; d.pavFlinchT = 0; d.pavHoldT = 0; d.pavDmg = 0;
-      d.rigHold = false; d.lowerT = 0;
+      d.rigHold = false; d.lowerT = 0; d.fioHint = false;
       d.pl = 0; d.pR = 0; d.p5 = false;
       K.mechInit(b, 'fio');
       b.mech.pav = 0; // 1 quando a cena do Pavanatto termina
@@ -22428,37 +22474,56 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data, W = G.W, H = G.H, p = pl(), run = G.run || {};
     say(b, 'O ARCABOUÇO É SÓLIDO!', 1.6); d.pose = 'up'; d.poseT = 1.0;
     const hw = TX.ARC_W / 2, hh = TX.ARC_H / 2;
-    const cx = clamp(p.x, hw, W - hw), cy = clamp(p.y, 0.55 * H, H - 95);
-    const A = { gen: ++d.arcGen, st: 'tele', t: 0, x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh, side: 't', f: 0, v: 0, list: [], probe: null };
-    // o furo: nunca num lado encostado na borda da tela
+    // centrada no carro: todo lado que existe fica a ≥ hh (75) px dele; lado fora da tela fica sem régua.
+    // Carro bem acima (a ≥ hh do lado de cima de uma moldura em 0,55H): a moldura fica lá, sem prender.
+    const up = p.y < 0.55 * H - 2 * hh;
+    const cx = up ? clamp(p.x, hw, W - hw) : p.x, cy = up ? 0.55 * H : p.y;
+    const A = { gen: ++d.arcGen, st: 'tele', t: 0, x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh, side: 't', f: 0, v: 0, list: [], probe: null, labT: 0 };
+    // o furo: nunca num lado encostado na borda da tela (o de cima sempre está na tela), nem com o centro ou o
+    // rótulo embaixo do botão da DELAÇÃO: sorteia de novo e, no azar, varre os lados (fica a menor nota)
     const sides = ['t'];
     if (A.x0 >= 16) sides.push('l');
     if (A.x1 <= W - 16) sides.push('r');
     if (A.y1 <= H - 30) sides.push('b');
-    A.side = M.pick(sides);
-    const len = A.side === 't' || A.side === 'b' ? TX.ARC_W : TX.ARC_H;
-    A.f = M.rand(36, len - 36);
+    const Z = bombZone();
+    let best = 99, bs = 't', bf = 36;
+    const tryF = (s, f) => { A.side = s; A.f = f; const n = furoBad(A, Z); if (n < best) { best = n; bs = s; bf = f; } };
+    for (let k = 0; k < 24 && best; k++) { A.side = M.pick(sides); const r = furoRange(A); tryF(A.side, M.rand(r[0], r[1])); }
+    for (let i = 0; i < sides.length && best; i++) {
+      A.side = sides[i];
+      const r = furoRange(A);
+      for (let f = r[0]; f <= r[1] && best; f += 6) tryF(sides[i], f);
+    }
+    A.side = bs; A.f = bf;
     d.arc = A;
     sfx('charge');
     yield TX.ARC_TELE;
     if (d.arc !== A) return; // a rodada dos cofres (ou o tonto) desfez a moldura
     const v = L2() ? TX.ARC_SPD_L2 : TX.ARC_SPD, h = TX.FURO / 2, st = TX.ARC_STEP;
     A.v = realSpd(b, v);
-    const add = (q) => { if (q) { A.list.push(q); if (!A.probe) A.probe = q; } };
+    // régua só nascendo dentro da tela
+    const add = (x, y, a) => {
+      if (x < 0 || x > W || y < 0 || y > H) return;
+      const q = txShoot(x, y, a, v, REGUA);
+      if (q) { A.list.push(q); if (!A.probe) A.probe = q; }
+    };
     for (let x = A.x0; x <= A.x1 + 0.01; x += st) {
-      if (!(A.side === 't' && Math.abs(x - (A.x0 + A.f)) < h)) add(txShoot(x, A.y0, DOWN, v, REGUA));
-      if (!(A.side === 'b' && Math.abs(x - (A.x0 + A.f)) < h)) add(txShoot(x, A.y1, -DOWN, v, REGUA));
+      if (!(A.side === 't' && Math.abs(x - (A.x0 + A.f)) < h)) add(x, A.y0, DOWN);
+      if (!(A.side === 'b' && Math.abs(x - (A.x0 + A.f)) < h)) add(x, A.y1, -DOWN);
     }
     for (let y = A.y0 + st; y <= A.y1 - st + 0.01; y += st) {
-      if (!(A.side === 'l' && Math.abs(y - (A.y0 + A.f)) < h)) add(txShoot(A.x0, y, 0, v, REGUA));
-      if (!(A.side === 'r' && Math.abs(y - (A.y0 + A.f)) < h)) add(txShoot(A.x1, y, PI, v, REGUA));
+      if (!(A.side === 'l' && Math.abs(y - (A.y0 + A.f)) < h)) add(A.x0, y, 0);
+      if (!(A.side === 'r' && Math.abs(y - (A.y0 + A.f)) < h)) add(A.x1, y, PI);
     }
     A.st = 'live'; A.t = 0;
     sfx('enemy_shot2');
     if (!run._txFuro) {
       run._txFuro = 1;
-      const q = arcFuroXY(A, 0);
-      G.text(clamp(q[0] + q[2] * 44, 50, W - 50), q[1] + q[3] * 30, 'TEM FURO!', { size: 12, color: '#ffffff', stroke: true });
+      // 1ª vez: o 'TEM FURO!' entra no lugar do rótulo 'FURO!' (que fica escondido enquanto ele vive); furo num
+      // lado em pé: um pouco acima da seta (o texto é mais largo que o rótulo)
+      const L = furoLabXY(A, 0), dy = A.side === 'l' || A.side === 'r' ? 14 : 0;
+      G.text(L[0], L[1] - dy, 'TEM FURO!', { size: 12, color: '#ffffff', stroke: true, life: 0.9 });
+      A.labT = 0.9;
     }
     yield TX.ARC_LIFE;
     if (d.arc === A) d.arc = null;
@@ -22472,6 +22537,48 @@ body.in-play #toasts { opacity: 0; }
     else if (A.side === 'l') { o[0] = A.x0 + off; o[1] = A.y0 + A.f; o[2] = -1; o[3] = 0; }
     else { o[0] = A.x1 - off; o[1] = A.y0 + A.f; o[2] = 1; o[3] = 0; }
     return o;
+  }
+  // lugar do rótulo 'FURO!' (e do 'TEM FURO!' da 1ª vez): [x, y]
+  const LAB_XY = [0, 0];
+  function furoLabXY(A, off) {
+    const q = arcFuroXY(A, off);
+    LAB_XY[0] = clamp(q[0] + q[2] * 32, 24, G.W - 24); LAB_XY[1] = clamp(q[1] + q[3] * 24, 60, G.H - 10);
+    return LAB_XY;
+  }
+  // faixa do A.f no lado A.side: 36 px longe dos cantos e o centro do furo na tela, onde o carro alcança
+  function furoRange(A) {
+    const r = A.side === 't' || A.side === 'b'
+      ? [Math.max(36, 36 - A.x0), Math.min(TX.ARC_W - 36, G.W - 36 - A.x0)]
+      : [36, Math.min(TX.ARC_H - 36, G.H - 36 - A.y0)];
+    if (r[1] < r[0]) r[1] = r[0];
+    return r;
+  }
+  // botão da DELAÇÃO (DOM, opaco, canto de baixo à direita) em px do jogo, com 16 px de folga: [x0, y0, x1, y1]
+  const BOMB_Z = [0, 0, 0, 0];
+  function bombZone() {
+    const Z = BOMB_Z, m = 16, v = G.view;
+    const el = typeof document !== 'undefined' ? document.getElementById('btnBomb') : null;
+    const r = el && v && v.scale > 0 ? el.getBoundingClientRect() : null;
+    if (r && r.width > 0) {
+      Z[0] = (r.left - v.x) / v.scale - m; Z[1] = (r.top - v.y) / v.scale - m;
+      Z[2] = (r.right - v.x) / v.scale + m; Z[3] = (r.bottom - v.y) / v.scale + m;
+    } else { Z[0] = G.W - 84 - m; Z[1] = G.H - 90 - m; Z[2] = G.W + m; Z[3] = G.H + m; }
+    return Z;
+  }
+  const inZ = (Z, x, y) => x > Z[0] && x < Z[2] && y > Z[1] && y < Z[3];
+  // nota do furo (0 = livre): centro e rótulo embaixo do botão quando a moldura nasce (2 cada) e no fim do
+  // caminho, com o lado FURO_OFF px para dentro (1 cada)
+  const FURO_OFF = 70;
+  function furoBad(A, Z) {
+    let n = 0;
+    for (let i = 0; i < 2; i++) {
+      const off = i ? FURO_OFF : 0, w = i ? 1 : 2;
+      const q = arcFuroXY(A, off);
+      if (inZ(Z, q[0], q[1])) n += w;
+      const L = furoLabXY(A, off);
+      if (inZ(Z, L[0], L[1])) n += w;
+    }
+    return n;
   }
   function* txP2(b) {
     const d = b.data;
@@ -22527,7 +22634,11 @@ body.in-play #toasts { opacity: 0; }
     if (Z.list.length) d.zf.push(Z);
     sfx('charge');
     const run = G.run;
-    if (run && !run._txRombo) { run._txRombo = 1; G.text(W / 2, G.H * 0.44, 'TEM ROMBO NO ZERO!', { size: 13, color: '#ffd23f', stroke: true }); }
+    if (run && !run._txRombo) {
+      run._txRombo = 1;
+      // embaixo do "00", longe dos rótulos ROMBO de baixo (cy + ry + 11) e subindo devagar: some antes de o "00" chegar
+      G.text(W / 2, Math.min(G.H - 24, cy + ry + 36), 'TEM ROMBO NO ZERO!', { size: 13, color: '#ffd23f', stroke: true, life: 1.0, vy: -8 });
+    }
   }
   function* txZeros(b) {
     const d = b.data;
@@ -22545,6 +22656,9 @@ body.in-play #toasts { opacity: 0; }
     const d = b.data;
     d.mv = swayMv(2);
     yield 0.8;
+    // o 1º "00" espera o letreiro do turno sair (ele cobria os ROMBOs de cima)
+    const t0 = K.clk(b);
+    yield () => !(G.game && G.game.banner) || K.clk(b) - t0 > 2;
     for (;;) {
       yield* txZeros(b);
       yield pW(L2() ? TX.ZERO_EVERY_L2 : TX.ZERO_EVERY, d.pl);
@@ -23025,11 +23139,15 @@ body.in-play #toasts { opacity: 0; }
       if (A.side === 'l') { c.moveTo(x0, y1); c.lineTo(x0, fy + h); c.moveTo(x0, fy - h); c.lineTo(x0, y0); } else { c.moveTo(x0, y1); c.lineTo(x0, y0); }
       c.stroke();
       c.restore();
-      K.txt(c, 'ARCABOUÇO', (x0 + x1) / 2, A.side === 't' ? y1 + 11 : y0 - 11, 10, '#ffd23f', { stroke: 3 });
+      // (furo em cima: o nome vai embaixo da moldura, ou logo dentro dela se embaixo sair da tela)
+      const ly = A.side !== 't' ? y0 - 11 : y1 + 11 <= G.H - 12 ? y1 + 11 : y0 + 13;
+      K.txt(c, 'ARCABOUÇO', clamp((x0 + x1) / 2, 50, G.W - 50), ly, 10, '#ffd23f', { stroke: 3 });
     }
-    const q = arcFuroXY(A, A.st === 'live' ? Math.min(A.t * A.v, 70) : 0);
+    const off = A.st === 'live' ? Math.min(A.t * A.v, FURO_OFF) : 0, q = arcFuroXY(A, off);
     arrow(c, q[0] - q[2] * 6, q[1] - q[3] * 6, q[2], q[3]);
-    K.txt(c, 'FURO!', clamp(q[0] + q[2] * 32, 24, G.W - 24), clamp(q[1] + q[3] * 24, 60, G.H - 10), 10, '#ffffff', { stroke: 3 });
+    if (A.st === 'live' && A.t < A.labT) return; // o 'TEM FURO!' da 1ª vez está no lugar do rótulo
+    const L = furoLabXY(A, off);
+    K.txt(c, 'FURO!', L[0], L[1], 10, '#ffffff', { stroke: 3 });
   }
   function drawZerosOver(c, b, t) {
     if (((t * 8) | 0) % 2) return;
@@ -23222,6 +23340,8 @@ body.in-play #toasts { opacity: 0; }
         b.dmgMul = Math.min(4, b.dmgMul * (d.p5Mul || 1));
         if (!st && !d.armorTag) b.hudTag = d.p5Mul > 1 ? P5.TAG2 : P5.TAG;
       }
+      // 5º turno com ALÍQUOTA: a etiqueta da barra alterna com a do ÚLTIMO RECURSO / SEM SAÍDA a cada 1,2 s
+      if (d.p5 && d.armorTag && !st && ((b.ft / 1.2) | 0) % 2) b.hudTag = d.p5Mul > 1 ? P5.TAG2 : P5.TAG;
       b.hitboxes = HB;
       if (b.hp / b.maxHp < 0.25 && Math.random() < dt * 4 * decoK()) G.part({ x: b.x + M.rand(-24, 24), y: b.y + 62, vx: M.rand(-10, 10), vy: -30, type: 'smoke', size: 4, life: 0.7, color: 'rgba(80,80,90,0.4)', drag: 0.95 });
       txGoal(b);
@@ -23425,8 +23545,7 @@ body.in-play #toasts { opacity: 0; }
 
   // Falas (≤ 28 caracteres; só slogans e memes públicos)
   const TAUNTS = ['COMPANHEIRO!', 'FAZ O L!', 'O AMOR VENCEU!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!', 'O BRASIL VOLTOU!', 'PICANHA E CERVEJINHA!'];
-  const TAUNTS2 = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'O AMOR VENCEU!', 'VOU TAXAR!'];
-  // com a Janjinha em cena: só slogans de governo (SPEC5 §1.1: nada de piada de casal; o "companheiro" fica de fora)
+  // 2ª vida (a da Janjinha, antes, durante e depois dela): só slogans de governo (SPEC5 §1.1: nada de piada de casal)
   const TAUNTS_J = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!'];
   const TAUNTS3 = ['QUINTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'VOU TAXAR!'];
 
@@ -24441,11 +24560,11 @@ body.in-play #toasts { opacity: 0; }
     co(b, chatter(b, d));
     co(b, cpiCo(b, d));
   }
-  // provocações aleatórias de vez em quando (com a Janjinha em cena, só slogans de governo)
+  // provocações aleatórias de vez em quando (na 2ª vida inteira, só slogans de governo)
   function* chatter(b, d) {
     yield M.rand(7, 9);
     for (;;) {
-      if (!(b.sayT > 0)) say(b, M.pick(d.life === 1 ? TAUNTS : d.life === 3 ? TAUNTS3 : jUp(b) ? TAUNTS_J : TAUNTS2), 2);
+      if (!(b.sayT > 0)) say(b, M.pick(d.life === 1 ? TAUNTS : d.life === 3 ? TAUNTS3 : TAUNTS_J), 2);
       yield M.rand(7.5, 10.5);
     }
   }
@@ -25576,7 +25695,9 @@ body.in-play #toasts { opacity: 0; }
       if (d.reviving) return true;              // nunca morre no meio da cena
       if (!d.revived) { d.revX = b.x; startRevive(b, g, 2); return true; }
       // 2ª vez sem nenhum recurso numa partida começada na fase 1 (ou ?quinto=1): LULE 5.0 — QUINTO MANDATO
-      if (d.life === 2 && G.quintoOk && G.quintoOk()) { d.revX = b.x; startRevive(b, g, 3); return true; }
+      // (só com o Zé de pé ou com vida sobrando: o tiro no ar depois da última vida não vale a luta secreta)
+      const p = g && g.player;
+      if (d.life === 2 && G.quintoOk && G.quintoOk() && p && (p.alive || G.run.lives > 0)) { d.revX = b.x; startRevive(b, g, 3); return true; }
       return false;                             // agora é de verdade
     },
     onDeath(b, g) {
@@ -25740,7 +25861,7 @@ body.in-play #toasts { opacity: 0; }
   const CHAT = ['O CERIMONIAL É COMIGO!', 'SORRI PRA SELFIE!', 'TEM MÓVEL NOVO NO ALVORADA!', 'É AGENDA DE TRABALHO!',
     'VOU REPRESENTAR O BRASIL!', 'MINISTRA SEM PASTA? EU?'];
   const CHAT_LOW = 'REMARCA O MEU VOO!';
-  const CARD_SAY = ['PASSA O CARTÃO!', 'SEM LIMITE!'];
+  const CARD_SAY = ['CARTÃO CORPORATIVO!', 'SEM LIMITE!'];
   const MALA_SAY = ['BAGAGEM OFICIAL!', 'MISSÃO OFICIAL!'];
   const CYCLE = ['cartao', 'malas', 'cartao', 'elon'];
   const CYCLE_LOW = ['cartao', 'sofa', 'malas', 'elon']; // abaixo de SOFA_AT
@@ -25892,6 +26013,8 @@ body.in-play #toasts { opacity: 0; }
     c.beginPath(); c.arc(-34, 14.5, 2.4, PI, TAU); c.moveTo(36.4, 14.5); c.arc(34, 14.5, 2.4, PI, TAU); c.stroke();
     c.strokeStyle = '#4a0616'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(0, 18); c.lineTo(0, 27); c.stroke();
+    // rótulo na saia da frente (as costas ficam atrás dela), logo acima da etiqueta MÓVEL NOVO
+    txt(c, 'SOFÁ DO ALVORADA', 0, 33.2, 4, '#ffd23f', { font: G.FONT_DISPLAY, weight: '400', max: 60 });
   }
   // etiqueta pendurada "MÓVEL NOVO" (sem preço). Origem = o furo do barbante.
   function paintTag(c, fl) {
@@ -25948,7 +26071,7 @@ body.in-play #toasts { opacity: 0; }
   const sPhone = (fl) => sprite('phone' + (fl ? 'F' : ''), B_PHONE, (x) => paintPhone(x, fl));
   const sMala = (k, fl) => sprite('mala' + k + (fl ? 'F' : '') + fontKey(), B_MALA, (x) => paintMala(x, k, fl));
   const sBack = (fl) => sprite('back' + (fl ? 'F' : ''), B_BACK, (x) => paintSofaBack(x, fl));
-  const sFront = (fl) => sprite('front' + (fl ? 'F' : ''), B_FRONT, (x) => paintSofaFront(x, fl));
+  const sFront = (fl) => sprite('front' + (fl ? 'F' : '') + fontKey(), B_FRONT, (x) => paintSofaFront(x, fl));
   const sTag = (fl) => sprite('tag' + (fl ? 'F' : '') + fontKey(), B_TAG, (x) => paintTag(x, fl));
   const sJet = () => sprite('jet' + fontKey(), B_JET, paintJet);
   const sPost = () => sprite('post', B_POST, paintPost);
@@ -26374,8 +26497,9 @@ body.in-play #toasts { opacity: 0; }
       G.confetti(e.x, e.y, 14);
       sfx('stamp'); sfx('boss_hit');
       if (b) {
-        G.say(b, 'VOLTA, JANJINHA!', 2.2);
+        G.say(b, 'E O MEU CERIMONIAL?!', 2.2);
         G.text(b.x, b.y + 90, 'CERIMONIAL DESFEITO!', { size: 13, color: '#ffd23f', stroke: true });
+        if (b.data) b.data.jKoSaid = true; // já falou e escreveu: o lule.js não repete a reclamação
       }
     } else {
       jj.left = true;
@@ -26813,7 +26937,7 @@ body.in-play #toasts { opacity: 0; }
     'Receita estuda taxar o vento estocado da Dilmãe',
     'Taxad garante: não vai taxar o Pix. Ainda.',
     'Impostômetro bate recorde. De novo. E de novo.',
-    'Blusinha de R$ 30 chega custando R$ 60. A taxa veio de navio',
+    'Blusinha de R$ 30 chega custando R$ 60. A taxa veio de jatinho',
     'Arcabouço fiscal passa na vistoria. Com furo e tudo',
     'Déficit zero é alcançado na calculadora do ministério',
     'Janjinha embarca em missão oficial. Volta em breve',
@@ -26829,7 +26953,7 @@ body.in-play #toasts { opacity: 0; }
     'Melhoria de verdade, não promessa de campanha.',
     'Nota fiscal? Aqui tem, viu, companheiro?',
     'Parcelo em 12x sem juros. Mentira: é à vista.',
-    'Preço com imposto incluso. O Taxad mandou lembranças.',
+    'Nota fiscal com IOF. Cortesia do Taxad.',
   ];
   const BUY_QUIPS = [
     'Negócio fechado! Sem toma lá, dá cá.',
@@ -26929,7 +27053,7 @@ body.in-play #toasts { opacity: 0; }
     ['Dilmãe', 'estocando vento'],
     ['Erika Viralton', 'ao vivo, seguindo o fio'],
     ['Lucas Pavanatto', 'o mais votado, com a placa na mão'],
-    ['Fernando Taxad', 'calculando a sua parte'],
+    ['Fernando Taxad', 'com a calculadora sempre ligada'],
     ['Lule', 'com picanha (prometida)'],
     ['Janjinha', 'em missão oficial'],
     ['Leão da Receita', 'mordendo a sua parte (e a do Lule)'],
@@ -27520,9 +27644,17 @@ body.in-play #toasts { opacity: 0; }
       '<div class="mode-seg" role="radiogroup" aria-describedby="modeLine">' + b('normal', 'NORMAL') + b('cpi', 'MODO CPI') + '</div>' +
       '<p class="mode-line" id="modeLine" aria-live="polite">' + esc(MODE_LINE[m]) + '</p></div>';
   }
-  // selo da faixa do santinho: nota do modo escolhido, cadeado, ou NOVA! (a fase liberada por último)
-  function santBadge(r, i, open_, unlocked) {
-    return r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : i === unlocked - 1 ? '<i class="mini-new">NOVA!</i>' : '';
+  // selo da faixa do santinho: nota do modo escolhido, cadeado, ou NOVA! (fase aberta ainda não jogada)
+  function santBadge(r, i, open_, unlocked, boss) {
+    return r ? '<i class="mini-rank r-' + r + '">' + r + '</i>' : !open_ ? '<i class="lock-ico"></i>' : santNew(i, unlocked, boss) ? '<i class="mini-new">NOVA!</i>' : '';
+  }
+  // NOVA!: chefão nunca vencido nem visto e sem nota em nenhum modo. A liberada por último só conta se
+  // veio de vencer a anterior: no save de 4 fases migrado a Fazenda é a nova e o Planalto já estava aberto.
+  function santNew(i, unlocked, boss) {
+    const ach = G.save.achievements || {}, met = uiSave().met || {};
+    const done = (k, b) => !!(ach[b] || ranksOf('normal')[k] || ranksOf('cpi')[k]); // fase vencida
+    if (done(i, boss) || met[boss]) return false;
+    return i < unlocked - 1 || i === 0 || done(i - 1, stageInfo(i - 1).boss);
   }
   function showStages() {
     const n = nStages();
@@ -27539,7 +27671,7 @@ body.in-play #toasts { opacity: 0; }
       cards +=
         '<button type="button" class="sant' + (last ? ' last' : '') + (wide ? ' final' : '') + (open_ ? '' : ' locked') + '" data-i="' + i + '" style="--c:' + s.look.c + ';--c2:' + s.look.c2 + ';--i:' + i + '"' +
         ' aria-label="' + esc('FASE ' + (i + 1) + ': ' + s.name + ' · ' + castName(s.boss)) + '">' +
-        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + santBadge(r, i, open_, unlocked) + '</span>' +
+        '<span class="sant-band"><b>' + (last ? 'FASE FINAL' : 'FASE ' + (i + 1)) + '</b>' + santBadge(r, i, open_, unlocked, s.boss) + '</span>' +
         '<span class="sant-main">' +
         '<span class="sant-photo"><canvas data-boss="' + s.boss + '"></canvas><span class="sant-num"><small>Nº</small>171</span></span>' +
         '<span class="sant-txt">' +
@@ -27575,7 +27707,7 @@ body.in-play #toasts { opacity: 0; }
         if (!band) return;
         const old = q(band, 'i'); // o selo é o único <i> da faixa
         if (old) old.remove();
-        const h = santBadge(rk[i], i, i < unlocked, unlocked);
+        const h = santBadge(rk[i], i, i < unlocked, unlocked, stageInfo(i).boss);
         if (h) band.insertAdjacentHTML('beforeend', h);
       });
     };
@@ -27882,7 +28014,7 @@ body.in-play #toasts { opacity: 0; }
       { sep: 'PIX' },
       { k: 'PIX GANHO NA FASE', v: stats.pixStage, money: 1, cls: 'strong pix' },
       { k: '(bônus da nota ' + rank + ')', v: stats.pixBonus, money: 1, cls: 'small' },
-      (gold ? { k: '(Carimbo de Ouro)', v: goldPix, money: 1, cls: 'small rc-goldrow' } : null),
+      (gold ? { k: '(carimbo de ouro)', v: goldPix, money: 1, cls: 'small rc-goldrow' } : null),
     ];
     let html = '';
     for (const r of rows) {
@@ -28314,8 +28446,12 @@ body.in-play #toasts { opacity: 0; }
     const fin = once(done);
     const ST = G.STORY || {};
     const panels = (ST.ending || []).slice();
-    // venceu o LULE 5.0: o quadro extra entra antes do último quadro do final
-    if (info.secret === 'won' && ST.endingQuinto && ST.endingQuinto.length) panels.splice(Math.max(0, panels.length - 1), 0, ...ST.endingQuinto);
+    // venceu o LULE 5.0: o quadro extra entra logo depois da fatura entregue (antes do Zé ir dormir)
+    // e o último quadro troca o "quinto mandato" pelo "sexto"
+    if (info.secret === 'won') {
+      if (ST.endingQuintoLast && ST.endingQuintoLast.length && panels.length) panels.splice(panels.length - 1, 1, ...ST.endingQuintoLast);
+      if (ST.endingQuinto && ST.endingQuinto.length) panels.splice(Math.min(1, panels.length), 0, ...ST.endingQuinto);
+    }
     storyScreen(panels, { cls: 'ending' }, () => creditsRoll(info, fin));
   }
   function creditsHTML(roll) {
