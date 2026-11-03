@@ -1044,17 +1044,19 @@
   };
   // Espalha N moedas de Pix. PRESSÃO: amount ×(1 + 0,6 R) (o.noPress: sem a PRESSÃO), arredondado na sorte.
   // MODO CPI: ×1,25 sempre (é prêmio do modo, não da PRESSÃO: vale também com noPress)
+  // Devolve o valor sorteado (o que cai de fato), para o texto mostrar o mesmo número.
   G.dropPix = function (x, y, amount, o) {
     let a = +amount || 0;
     if (!(o && o.noPress)) a *= 1 + PC().PIX * G.press.R;
     if (cpiRun()) a *= MODE_PIX;
-    const fa = Math.floor(a);
-    let left = fa + (Math.random() < a - fa ? 1 : 0);
+    const fa = Math.floor(a), n = fa + (Math.random() < a - fa ? 1 : 0);
+    let left = n;
     while (left > 0) {
       if (left >= 25 && M.chance(0.5)) { G.drop('mala', x, y, o); left -= 25; }
       else if (left >= 5) { G.drop('pix5', x, y, o); left -= 5; }
       else { G.drop('pix', x, y, o); left -= 1; }
     }
+    return n;
   };
 
   // ===================== Efeitos =====================
@@ -2389,6 +2391,16 @@
   // A faixa de cima (votos, Pix, vidas, aprovação) vai para um canvas guardado e só é redesenhada
   // quando algum valor muda (no máximo ~15x/s para o placar). A barra do chefão e a arma são diretas.
   const HUD_BAND_H = 48;
+  // etiqueta da barra do chefão em tom de vermelho (#rrggbb)? guardado por cor
+  const tagRedMemo = {};
+  function tagRed(c) {
+    if (!c) return false;
+    if (tagRedMemo[c] == null) {
+      const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+      tagRedMemo[c] = !!m && parseInt(m[1], 16) > 180 && parseInt(m[2], 16) < 110 && parseInt(m[3], 16) < 130;
+    }
+    return tagRedMemo[c];
+  }
   const hudCache = { c: null, x: null, k: 0, t: -1e9, score: -1, pix: -1, lives: -1, apr: -1, plv: -1, pr: -1, mode: '' };
   function paintHudBand(g, run, k) {
     const W = G.W, hc = hudCache;
@@ -2507,8 +2519,14 @@
       const tag = b.hudTag;
       if (tag && tag.text && b.state === 'fight') {
         ctx.save();
-        ctx.globalAlpha = 0.65 + 0.35 * Math.sin(g.t * 10);
         ctx.textAlign = 'center'; ctx.font = '10px ' + G.FONT_DISPLAY;
+        // vermelha (ÚLTIMO RECURSO / SEM SAÍDA) some no vermelho escuro da barra: tarja escura atrás e piscar mais raso
+        const red = tagRed(tag.color);
+        if (red) {
+          const tw = ctx.measureText(tag.text).width + 10;
+          ctx.fillStyle = 'rgba(8,12,22,0.92)'; roundRect(bx + bw / 2 - tw / 2, by - 3, tw, 12, 4); ctx.fill();
+        }
+        ctx.globalAlpha = red ? 0.85 + 0.15 * Math.sin(g.t * 10) : 0.65 + 0.35 * Math.sin(g.t * 10);
         ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(8,12,22,0.9)';
         ctx.strokeText(tag.text, bx + bw / 2, by + 7);
         ctx.fillStyle = tag.color || '#ffd23f';
@@ -2728,6 +2746,8 @@
     if (G.state === 'over') return;
     // perdeu na luta secreta (LULE 5.0): sem tela de recurso, a partida conta como vencida
     if (run.secret === 'on') { run.secret = 'lost'; G.unlock('lule'); G.finishGame(); return; }
+    // o tiro no ar derrubou o LULE 5.0 depois da última vida: o carro fica no chão e a vitória segue (stageClear → final)
+    if (run.secret === 'won') { g.player.respawnT = 0.5; return; }
     G.state = 'over';
     setPlayButtons(false);
     // o dedo que ficou na tela continua valendo: depois do recurso, pilota quando o carro terminar de entrar
@@ -2914,7 +2934,15 @@
       G.state = 'play';
     },
     killBoss() { const g = G.game; const b = g && g.boss; if (b && b.state === 'fight') G.hitBoss(b, (b.hp + 1) / Math.max(0.01, b.dmgMul != null ? b.dmgMul : 1)); },
-    hurtBoss(frac) { const g = G.game; if (g && g.boss && g.boss.state === 'fight') G.hitBoss(g.boss, g.boss.maxHp * frac); },
+    // frac do HP máximo, sem o multiplicador de dano (tonto/BRECHA) — como o killBoss
+    hurtBoss(frac) { const g = G.game, b = g && g.boss; if (b && b.state === 'fight') G.hitBoss(b, (b.maxHp * frac) / Math.max(0.01, b.dmgMul != null ? b.dmgMul : 1)); },
+    // HP logo abaixo do limiar do próximo turno (um turno por chamada); null sem chefão ou já no último turno
+    nextPhase() {
+      const g = G.game, b = g && g.boss, ph = b && b.phases && b.phases[b.phase + 1];
+      if (!b || b.state !== 'fight' || !ph) return null;
+      b.hp = Math.max(1, Math.min(b.hp, b.maxHp * ph.at - Math.max(1, b.maxHp * 0.002)));
+      return b.phase + 1;
+    },
     spawnBoss(id) {
       const g = G.game; if (!g) return;
       for (const e of g.enemies) e.dead = true;

@@ -895,6 +895,8 @@ stage(i, loop) give(type, wtype) weapon(w, lv) stats() mech() qualityMeter() mod
 `{ id, state, phase, goal, mech, hudTag, stunT }` for the current boss (null without one). Read the PNGs you produce to check
 your visuals. Your module must finish with **zero entries in `G.errors`** and no page errors. Other modules may be
 half-written while you work: test with `mods=` to isolate.
+`hurtBoss(frac)` deals `frac × maxHp` with `b.dmgMul` (stun/BRECHA) divided out, like `killBoss()`: the same frac always removes the same HP.
+`nextPhase()` puts the boss's HP just under the next turno's threshold (`phases[phase + 1].at`): one turno per call; returns that index, or null on the last turno / without a fight.
 
 ## 12. Modos (NORMAL / MODO CPI)
 

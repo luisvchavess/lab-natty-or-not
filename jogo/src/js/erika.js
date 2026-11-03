@@ -615,13 +615,20 @@
     return t;
   }
   // o rig liga (fio cortável). 1ª live da partida (1º mandato) = demonstração: 2,5 s sem tiro
+  const FIO_HINT = 'CORTE OS FIOS DA LIVE!';
   function rigOn(b) {
     const d = b.data;
     sfx('tink');
     if (d.demo && !d.demoOn) {
       d.demoOn = true; d.demoT = FI.DEMO;
       say(b, 'PERAÍ, TÔ GRAVANDO!', 2.2); d.pose = 'point'; d.poseT = FI.DEMO;
-      K.mechHint('erk_fio', G.W / 2, G.H * 0.5, 'CORTE OS FIOS DA LIVE!');
+      K.mechHint('erk_fio', G.W / 2, G.H * 0.5, FIO_HINT);
+    } else if (d.fioHint) {
+      // a dica que a participação especial tirou da tela volta na 1ª live depois dela
+      d.fioHint = false;
+      const h = G.run && G.run._bsHints;
+      if (h) h.erk_fio = 0;
+      K.mechHint('erk_fio', G.W / 2, G.H * 0.5, FIO_HINT);
     }
   }
   function cutPhone(b, ph, seg) {
@@ -1227,6 +1234,9 @@
     d.pose = 'hold'; d.poseT = 0;
     K.clearGoal(b);
     sfx('whoosh');
+    // a dica dos fios ainda na tela (a 1ª live acabou de ligar) sai com o rig: não fica embaixo do letreiro dele
+    const g = G.game;
+    if (g) for (const q of g.texts) if (q.str === FIO_HINT && !q.dead && q.t < q.life) { q.t = q.life; q.dead = true; d.fioHint = true; }
     G.text(W / 2, Math.max(H * 0.4, b.y + STUN_PILL_DY + 34), PAV_TXT.IN, { size: 14, color: '#8fc1ff', stroke: true, life: 1.2, vy: -10 }); // linha do 'FLOPOU!'
   }
   // fim da cena: ela volta a lutar (meio segundo de invulnerabilidade), a live do turno entra RIG_GAP s depois
@@ -1533,7 +1543,7 @@
       d.S = { look: [0, 0] }; d.warmI = 0;
       // participação especial (garantida: pavForce na 1ª troca de turno; rigHold segura a live durante a cena)
       d.pav = null; d.pavForce = false; d.pavForceT = 0; d.pavDone = false; d.pavFlinchT = 0; d.pavHoldT = 0; d.pavDmg = 0;
-      d.rigHold = false; d.lowerT = 0;
+      d.rigHold = false; d.lowerT = 0; d.fioHint = false;
       d.pl = 0; d.pR = 0; d.p5 = false;
       K.mechInit(b, 'fio');
       b.mech.pav = 0; // 1 quando a cena do Pavanatto termina

@@ -129,7 +129,7 @@
     // Rodada 5: Fazenda, Janjinha, PRESSÃO e o mandato sem recurso ('cofre' e 'cartao' são contadores dos módulos)
     { id: 'taxad',        name: 'Taxa Zero',            desc: 'Derrote Fernando Taxad' },
     { id: 'restituicao',  name: 'Restituição na Conta', desc: 'Ache o seu dinheiro em 10 cofres do Taxad', counter: 'cofre', goal: 10 },
-    { id: 'isento',       name: 'Isento!',              desc: 'Vença o Taxad sem errar nenhum cofre' },
+    { id: 'isento',       name: 'Isento!',              desc: 'Vença o Taxad acertando todos os cofres (no mínimo 4)' },
     { id: 'embarcou',     name: 'Embarque Imediato',    desc: 'Mande a Janjinha para uma viagem oficial' },
     { id: 'cartao',       name: 'Cartão Bloqueado',     desc: 'Faça o Leão bloquear o cartão corporativo' },
     { id: 'carimbo_ouro', name: 'Nota de Ouro',         desc: 'Ganhe 3 Carimbos de Ouro na mesma partida' },
@@ -171,9 +171,13 @@
       { scene: 'fusca',    text: 'Zé devolveu o Fusca para a Vó Dirce e foi dormir. Segunda-feira tem corrida às seis da manhã. Escala 7x0, como sempre.' },
       { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em quinto mandato." Zé: "Liga o motor, vó."' },
     ],
-    // Painel extra do final (ui.js mostra antes do último painel quando info.secret === 'won': venceu o Lule 5.0)
+    // Painel extra do final (ui.js mostra logo depois do 1º painel quando info.secret === 'won': venceu o Lule 5.0)
     endingQuinto: [
       { scene: 'planalto', text: 'Quinto mandato? Não desta vez. O Zé entregou a fatura, o recibo e a segunda via, tudo com firma reconhecida. O Lule 5.0 saiu prometendo picanha pro sexto.' },
+    ],
+    // Último painel quando venceu o Lule 5.0 (no lugar do último do ending: o quinto já foi barrado)
+    endingQuintoLast: [
+      { scene: 'urna',     text: 'Vó Dirce: "Zezinho, o rádio disse que o Lule já tá falando em sexto mandato." Zé: "Liga o motor, vó."' },
     ],
     // Diálogos por fase (id da fase). intro: antes da fase. Os diálogos de chefão ficam em STORY.boss.
     stages: {

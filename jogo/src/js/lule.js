@@ -79,8 +79,7 @@
 
   // Falas (≤ 28 caracteres; só slogans e memes públicos)
   const TAUNTS = ['COMPANHEIRO!', 'FAZ O L!', 'O AMOR VENCEU!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!', 'O BRASIL VOLTOU!', 'PICANHA E CERVEJINHA!'];
-  const TAUNTS2 = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'O AMOR VENCEU!', 'VOU TAXAR!'];
-  // com a Janjinha em cena: só slogans de governo (SPEC5 §1.1: nada de piada de casal; o "companheiro" fica de fora)
+  // 2ª vida (a da Janjinha, antes, durante e depois dela): só slogans de governo (SPEC5 §1.1: nada de piada de casal)
   const TAUNTS_J = ['QUARTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'VOU TAXAR!'];
   const TAUNTS3 = ['QUINTO MANDATO!', 'O BRASIL VOLTOU!', 'FAZ O L!', 'TÁ CHEGANDO A PICANHA!', 'COMPANHEIRO!', 'VOU TAXAR!'];
 
@@ -1095,11 +1094,11 @@
     co(b, chatter(b, d));
     co(b, cpiCo(b, d));
   }
-  // provocações aleatórias de vez em quando (com a Janjinha em cena, só slogans de governo)
+  // provocações aleatórias de vez em quando (na 2ª vida inteira, só slogans de governo)
   function* chatter(b, d) {
     yield M.rand(7, 9);
     for (;;) {
-      if (!(b.sayT > 0)) say(b, M.pick(d.life === 1 ? TAUNTS : d.life === 3 ? TAUNTS3 : jUp(b) ? TAUNTS_J : TAUNTS2), 2);
+      if (!(b.sayT > 0)) say(b, M.pick(d.life === 1 ? TAUNTS : d.life === 3 ? TAUNTS3 : TAUNTS_J), 2);
       yield M.rand(7.5, 10.5);
     }
   }
@@ -2230,7 +2229,9 @@
       if (d.reviving) return true;              // nunca morre no meio da cena
       if (!d.revived) { d.revX = b.x; startRevive(b, g, 2); return true; }
       // 2ª vez sem nenhum recurso numa partida começada na fase 1 (ou ?quinto=1): LULE 5.0 — QUINTO MANDATO
-      if (d.life === 2 && G.quintoOk && G.quintoOk()) { d.revX = b.x; startRevive(b, g, 3); return true; }
+      // (só com o Zé de pé ou com vida sobrando: o tiro no ar depois da última vida não vale a luta secreta)
+      const p = g && g.player;
+      if (d.life === 2 && G.quintoOk && G.quintoOk() && p && (p.alive || G.run.lives > 0)) { d.revX = b.x; startRevive(b, g, 3); return true; }
       return false;                             // agora é de verdade
     },
     onDeath(b, g) {
