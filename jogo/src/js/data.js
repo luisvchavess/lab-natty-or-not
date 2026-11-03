@@ -57,8 +57,53 @@
   // DIFÍCIL ou mais JUSTO para os dois (ex.: abrir um vão de uma parede de tiros) vai direto no valor do módulo.
   // Preços da Lojinha (G.UPGRADES), recursos, fases e padrões são iguais nos dois modos.
   // Campo que não bate com nada registrado aparece em G.tuneCheck().bad (os testes exigem []).
-  // Vazio = o NORMAL ainda é igual ao MODO CPI (antes do balanço).
-  G.TUNE_NORMAL = {};
+  // Preenchido no balanço da rodada 5 (SPEC5 §18.4: "Difícil, mas justo"); o que deixou os DOIS modos mais
+  // difíceis foi escrito direto nos módulos (vida dos chefões, cansaço da Dilmãe/Erika, cofre do Taxad, extends).
+  G.TUNE_NORMAL = {
+    // ---- core.js ----
+    // NORMAL: chefão com vida mais "elástica" pela PRESSÃO: ×0,50 (R 0) … ×1,00 (R 0,75) … ×1,17 (R 1).
+    // A arma no máximo não corta mais a luta pela metade (L5/L3 ≥ 0,75) e quem está apanhando pega chefão mais curto.
+    // (o MODO CPI fica em ×0,80 + 0,37·R, nunca abaixo desta curva)
+    'core.PRESS': { BHP0: 0.5, BHP1: 0.67 },
+    // NORMAL: 7 P do nível 1 ao 5 (CPI: 13) — com a morte zerando a barra, o bom jogador ficava no nível 3;
+    // 4 vidas por crédito e 4 s de invencibilidade na volta (mortes em cadeia logo depois de voltar)
+    'core.T': { POWER_NEED: [0, 1, 2, 2, 2], START_LIVES: 4, RESPAWN_INV: 4 },
+
+    // ---- enemies.js ----
+    // NORMAL: fases 2–5 um pouco mais calmas (nível da tabela menor: tiro, intervalo, vida dos comuns),
+    // PRESSÃO adensa menos (intervalo/1º tiro, sem o tiro a mais no leque em CRISE) e a revanche vem menos
+    'enemies.T': { LVL: [0, 0.8, 1.5, 1.9, 2.2], P_IVL: 0.15, P_FIRST: 0.15, P_FAN3: 0, PREV_CHANCE: 0.35 },
+
+    // ---- bosses.js ----
+    // NORMAL: em CRISE/CAOS os chefões 1–4 não ganham tiro a mais nem esperas menores (como o Lule, lule.PV)
+    'bosses.KIT': { PN3: 0, PW3: 1 },
+    // NORMAL: Centrão cansa antes (o casual chegava ao cansaço em 0/6 lutas)
+    'bosses.centrao': { fatStart: 110 },
+
+    // ---- erika.js ----
+    // NORMAL: tiros da Erika um pouco mais lentos e a armadura EM ALTA mais fraca
+    'erika.T': { SPD_K: 1.1 },
+    'erika.FI': { ARMOR: [1, 0.95, 0.93, 0.9, 0.86] },
+
+    // ---- taxad.js ----
+    // NORMAL: tiros do Taxad na velocidade escrita; cofres embaralham mais devagar (casual achava pouco)
+    'taxad.T': { SPD_K: 1 },
+    'taxad.CF': { SW: [0.66, 0.6, 0.54, 0.5, 0.46] },
+    // NORMAL: teclas/arcabouço com mais respiro (a régua matava muito na P2), '00' mais lento e espaçado,
+    // descanso maior no 5º turno
+    'taxad.TX': { KEY_EVERY: 2.3, KEY_ARC_K: 3, KEY_SPD: 130, P2_GAP1: 2.8, P2_GAP2: 2, ARC_TELE: 1.2,
+      ZERO_SPD: 65, ZERO_EVERY: 3.5, ZERO_DELAY: 1, P5_REST: 0.9 },
+
+    // ---- lule.js / janjinha.js ----
+    // NORMAL: cansaço da 2ª vida mais cedo e o tonto passa um pouco da troca de turno
+    'lule.T': { FAT2: 150, PHASE_STUN: 2.6 },
+    // NORMAL: o OLÉ paga mais (1º tonto mais longo, multiplicador maior)
+    'lule.LEAO': { STUN: [4.4, 2.8, 2.8], MUL: 3.15 },
+    // NORMAL: sem o tiro a mais / esperas menores em CRISE (lv 3–4)
+    'lule.PV': { N3: 0, W3: 1 },
+    // NORMAL: Janjinha com metade da vida, fica mais tempo parada e vai embora antes (a panela não a derruba)
+    'janjinha.JN': { HP: 1500, DWELL: [5, 6], LEAVE_T: 60, STUN_K: 2.5 },
+  };
 
   // ---------- Conquistas ----------
   // counter/goal: liberada automaticamente quando G.count(counter) chega na meta.

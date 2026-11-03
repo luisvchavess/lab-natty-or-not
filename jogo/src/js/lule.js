@@ -44,14 +44,14 @@
   // em G.TUNE_NORMAL['lule.T'] etc. Tudo é lido na hora (nada de copiar um destes números no carregamento).
   const tune = G.tune || ((id, o) => o);
 
-  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,07 e o ×1,25 do 2º mandato;
+  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) e o ×1,25 do 2º mandato;
   // d.hpMul = b.maxHp / T.HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
   // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
   // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
   // CPI_* = o leque mirado extra do nível CPI! (cpiCo); QUINTO_LV = níveis a mais nas variantes do LULE 5.0;
   // QUINTO_SEG = duração de cada bloco do medley do QUINTO MANDATO; PHASE_STUN = teto do tonto numa troca de turno.
   const T = tune('lule.T', {
-    HP1: 7200, HP2: 5200, HP3: 3200,
+    HP1: 8000, HP2: 6800, HP3: 3200,      // balanço: HP1 7200 → 8000, HP2 5200 → 6800
     FAT1: 140, FAT2: 170, FAT3: 60, FAT_RAMP: 90, FAT_MAX: 0.75,
     CPI_EVERY: 3.2, CPI_N: 3, CPI_SPREAD: 0.4, CPI_SPD: 130,
     QUINTO_LV: 1, QUINTO_SEG: 12, PHASE_STUN: 2.0,

@@ -1578,8 +1578,53 @@ body.in-play #toasts { opacity: 0; }
   // DIFÍCIL ou mais JUSTO para os dois (ex.: abrir um vão de uma parede de tiros) vai direto no valor do módulo.
   // Preços da Lojinha (G.UPGRADES), recursos, fases e padrões são iguais nos dois modos.
   // Campo que não bate com nada registrado aparece em G.tuneCheck().bad (os testes exigem []).
-  // Vazio = o NORMAL ainda é igual ao MODO CPI (antes do balanço).
-  G.TUNE_NORMAL = {};
+  // Preenchido no balanço da rodada 5 (SPEC5 §18.4: "Difícil, mas justo"); o que deixou os DOIS modos mais
+  // difíceis foi escrito direto nos módulos (vida dos chefões, cansaço da Dilmãe/Erika, cofre do Taxad, extends).
+  G.TUNE_NORMAL = {
+    // ---- core.js ----
+    // NORMAL: chefão com vida mais "elástica" pela PRESSÃO: ×0,50 (R 0) … ×1,00 (R 0,75) … ×1,17 (R 1).
+    // A arma no máximo não corta mais a luta pela metade (L5/L3 ≥ 0,75) e quem está apanhando pega chefão mais curto.
+    // (o MODO CPI fica em ×0,80 + 0,37·R, nunca abaixo desta curva)
+    'core.PRESS': { BHP0: 0.5, BHP1: 0.67 },
+    // NORMAL: 7 P do nível 1 ao 5 (CPI: 13) — com a morte zerando a barra, o bom jogador ficava no nível 3;
+    // 4 vidas por crédito e 4 s de invencibilidade na volta (mortes em cadeia logo depois de voltar)
+    'core.T': { POWER_NEED: [0, 1, 2, 2, 2], START_LIVES: 4, RESPAWN_INV: 4 },
+
+    // ---- enemies.js ----
+    // NORMAL: fases 2–5 um pouco mais calmas (nível da tabela menor: tiro, intervalo, vida dos comuns),
+    // PRESSÃO adensa menos (intervalo/1º tiro, sem o tiro a mais no leque em CRISE) e a revanche vem menos
+    'enemies.T': { LVL: [0, 0.8, 1.5, 1.9, 2.2], P_IVL: 0.15, P_FIRST: 0.15, P_FAN3: 0, PREV_CHANCE: 0.35 },
+
+    // ---- bosses.js ----
+    // NORMAL: em CRISE/CAOS os chefões 1–4 não ganham tiro a mais nem esperas menores (como o Lule, lule.PV)
+    'bosses.KIT': { PN3: 0, PW3: 1 },
+    // NORMAL: Centrão cansa antes (o casual chegava ao cansaço em 0/6 lutas)
+    'bosses.centrao': { fatStart: 110 },
+
+    // ---- erika.js ----
+    // NORMAL: tiros da Erika um pouco mais lentos e a armadura EM ALTA mais fraca
+    'erika.T': { SPD_K: 1.1 },
+    'erika.FI': { ARMOR: [1, 0.95, 0.93, 0.9, 0.86] },
+
+    // ---- taxad.js ----
+    // NORMAL: tiros do Taxad na velocidade escrita; cofres embaralham mais devagar (casual achava pouco)
+    'taxad.T': { SPD_K: 1 },
+    'taxad.CF': { SW: [0.66, 0.6, 0.54, 0.5, 0.46] },
+    // NORMAL: teclas/arcabouço com mais respiro (a régua matava muito na P2), '00' mais lento e espaçado,
+    // descanso maior no 5º turno
+    'taxad.TX': { KEY_EVERY: 2.3, KEY_ARC_K: 3, KEY_SPD: 130, P2_GAP1: 2.8, P2_GAP2: 2, ARC_TELE: 1.2,
+      ZERO_SPD: 65, ZERO_EVERY: 3.5, ZERO_DELAY: 1, P5_REST: 0.9 },
+
+    // ---- lule.js / janjinha.js ----
+    // NORMAL: cansaço da 2ª vida mais cedo e o tonto passa um pouco da troca de turno
+    'lule.T': { FAT2: 150, PHASE_STUN: 2.6 },
+    // NORMAL: o OLÉ paga mais (1º tonto mais longo, multiplicador maior)
+    'lule.LEAO': { STUN: [4.4, 2.8, 2.8], MUL: 3.15 },
+    // NORMAL: sem o tiro a mais / esperas menores em CRISE (lv 3–4)
+    'lule.PV': { N3: 0, W3: 1 },
+    // NORMAL: Janjinha com metade da vida, fica mais tempo parada e vai embora antes (a panela não a derruba)
+    'janjinha.JN': { HP: 1500, DWELL: [5, 6], LEAVE_T: 60, STUN_K: 2.5 },
+  };
 
   // ---------- Conquistas ----------
   // counter/goal: liberada automaticamente quando G.count(counter) chega na meta.
@@ -2617,7 +2662,7 @@ body.in-play #toasts { opacity: 0; }
     COLORS: ['#9aa5b8', '#3ddc84', '#ffd23f', '#ff8c1a', '#ff2a4a', '#ff3dd8'],
     SPD: 0.22, SPD_CAP: 250,              // tiros
     EHP: 0.35, BIGHP: 0.5,                // inimigos comuns / grandes
-    BHP0: 0.80, BHP1: 0.27,               // vida do chefão, travada na chegada
+    BHP0: 0.80, BHP1: 0.37,               // vida do chefão, travada na chegada (BHP1 0,27 → 0,37: nunca abaixo do NORMAL)
     SCORE: 1, PIX: 0.6, BOSSPIX: 1, CLEARPIX: 1,
     STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
     GOLD_AVG: 0.5, GOLD_PIX: 400,
@@ -2642,7 +2687,7 @@ body.in-play #toasts { opacity: 0; }
   // nota, bônus do fim da fase) não entram: são iguais nos dois modos.
   const T = G.tune('core.T', {
     POWER_NEED: [0, 2, 3, 4, 4],          // P para subir do nível lv para lv+1 (G.powerNeed; 13 P do nível 1 ao 5)
-    EXTENDS: [1500000, 4500000, 9000000], // vidas extras pelos pontos da partida inteira (run.total)
+    EXTENDS: [1500000, 5000000, 9000000], // vidas extras pelos pontos da partida inteira (run.total; 2ª 4,5M → 5M)
     RESTORE_LIFE: 7,                      // s que o P "de volta" (o nível perdido na morte) fica na tela
     GRAZE_BOMB: 1.0,                      // carga da Delação de graça por raspão (100 = uma Delação)
     RESPAWN_INV: 3,                       // s de invencibilidade quando o Fusca volta depois de uma morte
@@ -3079,7 +3124,8 @@ body.in-play #toasts { opacity: 0; }
     const g = G.game; if (!g) return null;
     const def = G.Bosses.defs[id];
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
-    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,00 (R 0,75) … ×1,07 (R 1)
+    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,08 (R 0,75) … ×1,17 (R 1) no MODO CPI;
+    // o NORMAL (data.js) usa ×0,50 … ×1,00 … ×1,17
     const P = PC(), R = G.press.R;
     const hpMul = (g.loop > 1 ? T.L2_BHP : 1) * (P.BHP0 + P.BHP1 * R);
     const b = {
@@ -18684,10 +18730,10 @@ body.in-play #toasts { opacity: 0; }
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold],
     ['bs_cedula', COL.red], ['small', '#ff2a4a']];
   G.Bosses.define('centrao', {
-    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
+    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
     // spdK 1 = tiros na velocidade escrita (como antes, sem o campo); registrado com hp e fatStart ('bosses.centrao')
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140, spdK: 1,
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 8000, r: 46, homeY: 165, fatStart: 140, spdK: 1.15, // balanço: hp 5600 → 8000, spdK 1 → 1,15
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -19806,9 +19852,9 @@ body.in-play #toasts { opacity: 0; }
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange], ['small', '#ff2a4a']];
   G.Bosses.define('dilmae', {
-    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
+    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (155 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
-    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6000, r: 40, homeY: 168, spdK: 1.12, fatStart: 155,
+    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6900, r: 40, homeY: 168, spdK: 1.12, fatStart: 175, // balanço: hp 6000 → 6900, fatStart 155 → 175
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
@@ -20118,11 +20164,11 @@ body.in-play #toasts { opacity: 0; }
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
     P5_SPD_K: 1.2, P5_STEP: 0.12, P5_HEARTS: 5.0,
   });
-  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,07 na chegada). Rodada 4 era 4700 / 3400 (a arma no
+  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) na chegada). Rodada 4 era 4700 / 3400 (a arma no
   // máximo resolvia a luta em ~73 s); agora a luta boa no nv.5 fica em ~100–130 s com a cena do Pavanatto.
   // HP_L2 = base do 2º mandato (o core ainda põe ×1,25). FAT_START = cansaço (s de luta; já inclui os ~6,5 s da cena).
   // SPD_K = multiplicador dos tiros (def.spdK). O def lê estes valores na hora (getters hp / fatStart / spdK).
-  const T = tune('erika.T', { HP: 8400, HP_L2: 6100, FAT_START: 175, SPD_K: 1.15 });
+  const T = tune('erika.T', { HP: 9900, HP_L2: 6100, FAT_START: 205, SPD_K: 1.15 }); // balanço: HP 8400 → 9900, FAT_START 175 → 205
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).
@@ -21806,7 +21852,7 @@ body.in-play #toasts { opacity: 0; }
    FUSCA A JATO — taxad.js
    Chefão 4: FERNANDO TAXAD, "O Taxador-Geral" (paródia de Fernando Haddad, ex-titular da Fazenda, e do meme
    "Taxad"), no Ministério da Fazenda. Manha: ACHAR — "CADÊ O SEU DINHEIRO?": ele esconde o dinheiro do Zé (o saco
-   'SEU PIX') num de 3 cofres, embaralha e o Fusca encosta no cofre certo. Acertou = "RESTITUIÇÃO!" (tonto ×2,3);
+   'SEU PIX') num de 3 cofres, embaralha e o Fusca encosta no cofre certo. Acertou = "RESTITUIÇÃO!" (tonto ×2,1);
    errou ou demorou = ALÍQUOTA, uma armadura que acumula (×0,9 / ×0,8 / ×0,7). Cansaço sempre termina a luta.
    (+ retrato dos diálogos e estilos de tiro 'tx_'). Contrato: docs/ENGINE.md §5 e §5.1, SPEC5 §6.
    Usa G.BossKit (bosses.js), obrigatório: sem ele o módulo avisa e não registra o chefão.
@@ -21860,7 +21906,7 @@ body.in-play #toasts { opacity: 0; }
   // (vida, cansaço, velocidade), 'taxad.TX' (padrões), 'taxad.CF' (a manha dos cofres) e 'taxad.ROUND' (tiros
   // durante a rodada). O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada copiado no carregamento).
   const tune = G.tune || ((id, o) => o);
-  // HP a R = 0,75 (o core trava ×0,80…×1,07 pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
+  // HP a R = 0,75 (o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
   // FAT_START = cansaço (s de luta); SPD_K = multiplicador dos tiros. O def lê estes valores na hora (getters).
   const T = tune('taxad.T', { HP: 9000, HP_L2: 7200, FAT_START: 190, SPD_K: 1.15 });
   // Padrões (velocidades antes do spdK 1,15; esperas por pW, contagens por pN / pRing).
@@ -21904,7 +21950,7 @@ body.in-play #toasts { opacity: 0; }
     DRIFT: [0, 0, 0, 0, 18],
     PICK: [3.2, 3.0, 2.8, 2.6, 2.4],
     STUN: [3.5, 3.5, 4.0, 4.0, 5.0],
-    MUL: [2.3, 2.3, 2.3, 2.3, 2.5],
+    MUL: [2.1, 2.1, 2.1, 2.1, 2.3],       // balanço: 2,3/2,5 → 2,1/2,3 (o cofre pagava demais)
     NEXT: [10, 9, 9, 8, 6],
     ALIQ: [1, 0.9, 0.8, 0.7], REFUND: 14, SW_MIN: 0.30, PICK_MIN: 2.0,
     PICK_L2: 0.3, PICK_LV: 0.05, SW_L2: 0.85, SW_LV: 0.04, SWAPS_L2: 1, SWAPS_LV: 4, NEXT_L2: 0.9,
@@ -23353,14 +23399,14 @@ body.in-play #toasts { opacity: 0; }
   // em G.TUNE_NORMAL['lule.T'] etc. Tudo é lido na hora (nada de copiar um destes números no carregamento).
   const tune = G.tune || ((id, o) => o);
 
-  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,07 e o ×1,25 do 2º mandato;
+  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) e o ×1,25 do 2º mandato;
   // d.hpMul = b.maxHp / T.HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
   // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
   // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
   // CPI_* = o leque mirado extra do nível CPI! (cpiCo); QUINTO_LV = níveis a mais nas variantes do LULE 5.0;
   // QUINTO_SEG = duração de cada bloco do medley do QUINTO MANDATO; PHASE_STUN = teto do tonto numa troca de turno.
   const T = tune('lule.T', {
-    HP1: 7200, HP2: 5200, HP3: 3200,
+    HP1: 8000, HP2: 6800, HP3: 3200,      // balanço: HP1 7200 → 8000, HP2 5200 → 6800
     FAT1: 140, FAT2: 170, FAT3: 60, FAT_RAMP: 90, FAT_MAX: 0.75,
     CPI_EVERY: 3.2, CPI_N: 3, CPI_SPREAD: 0.4, CPI_SPD: 130,
     QUINTO_LV: 1, QUINTO_SEG: 12, PHASE_STUN: 2.0,

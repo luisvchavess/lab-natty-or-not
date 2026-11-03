@@ -2,7 +2,7 @@
    FUSCA A JATO — taxad.js
    Chefão 4: FERNANDO TAXAD, "O Taxador-Geral" (paródia de Fernando Haddad, ex-titular da Fazenda, e do meme
    "Taxad"), no Ministério da Fazenda. Manha: ACHAR — "CADÊ O SEU DINHEIRO?": ele esconde o dinheiro do Zé (o saco
-   'SEU PIX') num de 3 cofres, embaralha e o Fusca encosta no cofre certo. Acertou = "RESTITUIÇÃO!" (tonto ×2,3);
+   'SEU PIX') num de 3 cofres, embaralha e o Fusca encosta no cofre certo. Acertou = "RESTITUIÇÃO!" (tonto ×2,1);
    errou ou demorou = ALÍQUOTA, uma armadura que acumula (×0,9 / ×0,8 / ×0,7). Cansaço sempre termina a luta.
    (+ retrato dos diálogos e estilos de tiro 'tx_'). Contrato: docs/ENGINE.md §5 e §5.1, SPEC5 §6.
    Usa G.BossKit (bosses.js), obrigatório: sem ele o módulo avisa e não registra o chefão.
@@ -56,7 +56,7 @@
   // (vida, cansaço, velocidade), 'taxad.TX' (padrões), 'taxad.CF' (a manha dos cofres) e 'taxad.ROUND' (tiros
   // durante a rodada). O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada copiado no carregamento).
   const tune = G.tune || ((id, o) => o);
-  // HP a R = 0,75 (o core trava ×0,80…×1,07 pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
+  // HP a R = 0,75 (o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
   // FAT_START = cansaço (s de luta); SPD_K = multiplicador dos tiros. O def lê estes valores na hora (getters).
   const T = tune('taxad.T', { HP: 9000, HP_L2: 7200, FAT_START: 190, SPD_K: 1.15 });
   // Padrões (velocidades antes do spdK 1,15; esperas por pW, contagens por pN / pRing).
@@ -100,7 +100,7 @@
     DRIFT: [0, 0, 0, 0, 18],
     PICK: [3.2, 3.0, 2.8, 2.6, 2.4],
     STUN: [3.5, 3.5, 4.0, 4.0, 5.0],
-    MUL: [2.3, 2.3, 2.3, 2.3, 2.5],
+    MUL: [2.1, 2.1, 2.1, 2.1, 2.3],       // balanço: 2,3/2,5 → 2,1/2,3 (o cofre pagava demais)
     NEXT: [10, 9, 9, 8, 6],
     ALIQ: [1, 0.9, 0.8, 0.7], REFUND: 14, SW_MIN: 0.30, PICK_MIN: 2.0,
     PICK_L2: 0.3, PICK_LV: 0.05, SW_L2: 0.85, SW_LV: 0.04, SWAPS_L2: 1, SWAPS_LV: 4, NEXT_L2: 0.9,

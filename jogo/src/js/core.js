@@ -806,7 +806,7 @@
     COLORS: ['#9aa5b8', '#3ddc84', '#ffd23f', '#ff8c1a', '#ff2a4a', '#ff3dd8'],
     SPD: 0.22, SPD_CAP: 250,              // tiros
     EHP: 0.35, BIGHP: 0.5,                // inimigos comuns / grandes
-    BHP0: 0.80, BHP1: 0.27,               // vida do chefão, travada na chegada
+    BHP0: 0.80, BHP1: 0.37,               // vida do chefão, travada na chegada (BHP1 0,27 → 0,37: nunca abaixo do NORMAL)
     SCORE: 1, PIX: 0.6, BOSSPIX: 1, CLEARPIX: 1,
     STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
     GOLD_AVG: 0.5, GOLD_PIX: 400,
@@ -831,7 +831,7 @@
   // nota, bônus do fim da fase) não entram: são iguais nos dois modos.
   const T = G.tune('core.T', {
     POWER_NEED: [0, 2, 3, 4, 4],          // P para subir do nível lv para lv+1 (G.powerNeed; 13 P do nível 1 ao 5)
-    EXTENDS: [1500000, 4500000, 9000000], // vidas extras pelos pontos da partida inteira (run.total)
+    EXTENDS: [1500000, 5000000, 9000000], // vidas extras pelos pontos da partida inteira (run.total; 2ª 4,5M → 5M)
     RESTORE_LIFE: 7,                      // s que o P "de volta" (o nível perdido na morte) fica na tela
     GRAZE_BOMB: 1.0,                      // carga da Delação de graça por raspão (100 = uma Delação)
     RESPAWN_INV: 3,                       // s de invencibilidade quando o Fusca volta depois de uma morte
@@ -1268,7 +1268,8 @@
     const g = G.game; if (!g) return null;
     const def = G.Bosses.defs[id];
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
-    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,00 (R 0,75) … ×1,07 (R 1)
+    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,08 (R 0,75) … ×1,17 (R 1) no MODO CPI;
+    // o NORMAL (data.js) usa ×0,50 … ×1,00 … ×1,17
     const P = PC(), R = G.press.R;
     const hpMul = (g.loop > 1 ? T.L2_BHP : 1) * (P.BHP0 + P.BHP1 * R);
     const b = {

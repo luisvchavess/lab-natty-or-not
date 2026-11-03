@@ -75,11 +75,11 @@
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
     P5_SPD_K: 1.2, P5_STEP: 0.12, P5_HEARTS: 5.0,
   });
-  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,07 na chegada). Rodada 4 era 4700 / 3400 (a arma no
+  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) na chegada). Rodada 4 era 4700 / 3400 (a arma no
   // máximo resolvia a luta em ~73 s); agora a luta boa no nv.5 fica em ~100–130 s com a cena do Pavanatto.
   // HP_L2 = base do 2º mandato (o core ainda põe ×1,25). FAT_START = cansaço (s de luta; já inclui os ~6,5 s da cena).
   // SPD_K = multiplicador dos tiros (def.spdK). O def lê estes valores na hora (getters hp / fatStart / spdK).
-  const T = tune('erika.T', { HP: 8400, HP_L2: 6100, FAT_START: 175, SPD_K: 1.15 });
+  const T = tune('erika.T', { HP: 9900, HP_L2: 6100, FAT_START: 205, SPD_K: 1.15 }); // balanço: HP 8400 → 9900, FAT_START 175 → 205
 
   // ======================================================================
   // Visual (SPEC §5.2). Tudo em px relativo ao centro do chefão (b.x, b.y).

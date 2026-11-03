@@ -1707,10 +1707,10 @@
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold],
     ['bs_cedula', COL.red], ['small', '#ff2a4a']];
   G.Bosses.define('centrao', {
-    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
+    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
     // spdK 1 = tiros na velocidade escrita (como antes, sem o campo); registrado com hp e fatStart ('bosses.centrao')
-    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 5600, r: 46, homeY: 165, fatStart: 140, spdK: 1,
+    name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 8000, r: 46, homeY: 165, fatStart: 140, spdK: 1.15, // balanço: hp 5600 → 8000, spdK 1 → 1,15
     score: 120000, pix: 120, music: 'boss', defeatText: 'CASSADO!',
     phases: [
       { at: 1, name: 'Toma Lá, Dá Cá' },
@@ -2829,9 +2829,9 @@
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange], ['small', '#ff2a4a']];
   G.Bosses.define('dilmae', {
-    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,07 no spawn),
+    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (155 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
-    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6000, r: 40, homeY: 168, spdK: 1.12, fatStart: 155,
+    name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6900, r: 40, homeY: 168, spdK: 1.12, fatStart: 175, // balanço: hp 6000 → 6900, fatStart 155 → 175
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
     phases: [
       { at: 1, name: 'Saudação à Mandioca' },
