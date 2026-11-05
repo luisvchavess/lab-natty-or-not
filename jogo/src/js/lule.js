@@ -44,7 +44,7 @@
   // em G.TUNE_NORMAL['lule.T'] etc. Tudo é lido na hora (nada de copiar um destes números no carregamento).
   const tune = G.tune || ((id, o) => o);
 
-  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) e o ×1,25 do 2º mandato;
+  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) e o ×1,25 do 2º mandato;
   // d.hpMul = b.maxHp / T.HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
   // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
   // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
@@ -885,14 +885,18 @@
 
   // --- Carimbo gigante "TAXADO!": a sombra segue o Zé, trava e o carimbo desce ---
   // A colisão é um laser invisível (cápsula 124×64) — o desenho é todo nosso.
+  // STAMP (MODO CPI; o NORMAL vem de G.TUNE_NORMAL['lule.STAMP']): TRACK/WARN = s até a sombra travar / até a batida
+  // no Tudo Taxado (1ª vida); TRACK2/WARN2 = o mesmo nos carimbos rápidos da 2ª vida (Volta por Cima, Fim de Mandato);
+  // SPD = px/s com que a sombra persegue o Zé antes de travar; LIFE = s que a batida machuca. Lidos a cada carimbo.
+  const STAMP = tune('lule.STAMP', { TRACK: 0.75, WARN: 1.25, TRACK2: 0.55, WARN2: 1.1, SPD: 300, LIFE: 0.32 });
   function dropStamp(b, d, o) {
     if (!canShoot()) return;
     o = o || {};
     const p = pl();
-    const st = { x: M.clamp(p.x, 62, G.W - 62), y: M.clamp(p.y, 110, G.H - 40), t: 0, track: o.track != null ? o.track : 0.75, warn: o.warn || 1.25, slammed: false, cancel: false, rot: M.rand(-0.12, 0.12) };
+    const st = { x: M.clamp(p.x, 62, G.W - 62), y: M.clamp(p.y, 110, G.H - 40), t: 0, track: o.track != null ? o.track : STAMP.TRACK, warn: o.warn || STAMP.WARN, slammed: false, cancel: false, rot: M.rand(-0.12, 0.12) };
     st.end = st.warn + 1.7;
     st.laser = G.laser({
-      x: st.x - 30, y: st.y, ang: 0, len: 60, width: 76, warn: st.warn, life: 0.32, color: 'rgba(0,0,0,0)',
+      x: st.x - 30, y: st.y, ang: 0, len: 60, width: 76, warn: st.warn, life: STAMP.LIFE, color: 'rgba(0,0,0,0)',
       update(l) { if (laserGuard(l, b)) { st.cancel = true; return; } l.x = st.x - 30; l.y = st.y; l.ang = 0; },
     });
     if (!st.laser) return;
@@ -908,8 +912,8 @@
       st.t += dt;
       if (st.cancel && !st.slammed) { st.fade = (st.fade || 0) + dt; if (st.fade > 0.25) L.splice(i, 1); continue; }
       if (st.t < st.track && p.alive) {
-        st.x = M.approach(st.x, M.clamp(p.x, 62, G.W - 62), 300 * dt);
-        st.y = M.approach(st.y, M.clamp(p.y, 110, G.H - 40), 300 * dt);
+        st.x = M.approach(st.x, M.clamp(p.x, 62, G.W - 62), STAMP.SPD * dt);
+        st.y = M.approach(st.y, M.clamp(p.y, 110, G.H - 40), STAMP.SPD * dt);
       }
       if (!st.slammed && st.t >= st.warn) {
         st.slammed = true;
@@ -957,6 +961,9 @@
   // --- O "L" GIGANTE: dois lasers perpendiculares saindo do letreiro de neon (mão direita) ---
   // s = +1: o L gira no sentido horário e empurra o Zé para a ESQUERDA; s = -1: anti-horário, empurra para a DIREITA.
   // O laser "de trás" termina perto do centro da tela na altura do Zé: dá para fugir sempre para o lado certo.
+  // LSW.END_DX (MODO CPI 12; NORMAL em G.TUNE_NORMAL['lule.LSW']) = quantos px o laser de trás passa do centro da tela
+  // (na altura 0,80H) no fim da varredura; negativo = para antes do centro. Lido a cada L.
+  const LSW = tune('lule.LSW', { END_DX: 12 });
   function* lSweep(b, d, s, omega, delta, opts) {
     opts = opts || {};
     d.tx = G.W / 2; d.ty = HOME_Y;
@@ -969,7 +976,7 @@
     // (o Leão mordeu o Lule no meio do aviso: o tonto apagou o letreiro, então não tem L)
     if (!canShoot() || d.lsign !== sign) { if (d.lsign === sign) d.lsign = null; pose(b, 'idle', 0.1); return; }
     const h0 = handPos(b, 1);
-    const aEnd = Math.atan2(G.H * 0.8 - h0.y, G.W / 2 - s * 12 - h0.x);
+    const aEnd = Math.atan2(G.H * 0.8 - h0.y, G.W / 2 - s * LSW.END_DX - h0.x);
     const aA0 = aEnd - s * delta;                       // laser "de trás" (o que empurra)
     const aB0 = aA0 + s * DOWN;                         // o outro lado do L
     const warn = opts.warn || 1.2, life = delta / omega + 0.25;
@@ -1279,7 +1286,7 @@
       for (let i = 0; i < (jUp(b) ? 1 : 2); i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
         yield W(d, 0.7);
-        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
+        if (!lionBusy(d)) dropStamp(b, d, { track: STAMP.TRACK2, warn: STAMP.WARN2 }); // WARN2 − TRACK2 (0,55 s no CPI) entre a trava (contorno piscando) e a batida
         yield W(d, 1.7);
       }
       yield W(d, 0.8);
@@ -1351,7 +1358,7 @@
     co(b, (function* () {
       yield 1.8;
       for (;;) {
-        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // (com o Leão em cena, nada de carimbo)
+        if (!lionBusy(d)) dropStamp(b, d, { track: STAMP.TRACK2, warn: STAMP.WARN2 }); // (com o Leão em cena, nada de carimbo)
         yield W(d, 3.0);
       }
     })());

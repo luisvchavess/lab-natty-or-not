@@ -7,7 +7,7 @@ Shoot'em up vertical para celular, de paródia política. A eleição acabou, a 
 - **Arraste o dedo em qualquer lugar** da tela: o Fusca acompanha o movimento do dedo, sem ficar escondido embaixo dele.
 - **O tiro é automático.** O pontinho branco no meio do Fusca é o único lugar onde você leva dano.
 - **Raspão:** passar bem perto dos tiros dá pontos, sobe a aprovação e carrega uma Delação extra.
-- **Item P:** todo P deixa a arma mais forte (2, 3, 4 e 4 P para subir do nível 1 ao 5). Ele muda de cor a cada 3 segundos: a cor escolhe a arma. No nível máximo, cada P vale pontos, R$ 5 e mais PRESSÃO. Morreu? A arma perde um nível e a barra de força zera; o nível perdido cai na tela como um P "de volta": pegue antes que ele suma (7 segundos, pisca no fim).
+- **Item P:** todo P deixa a arma mais forte (1, 2, 2 e 2 P para subir do nível 1 ao 5; no MODO CPI, 2, 3, 4 e 4). Ele muda de cor a cada 3 segundos: a cor escolhe a arma. No nível máximo, cada P vale pontos, R$ 5 e mais PRESSÃO. Morreu? A arma perde um nível e a barra de força zera; o nível perdido cai na tela como um P "de volta": pegue antes que ele suma (7 segundos, pisca no fim).
   - **VOTO** (verde): tiro reto e forte; cada nível põe mais um tiro.
   - **BOCA DE URNA** (amarelo): leque largo com um feixe reto no meio que engrossa a cada nível.
   - **PANELAÇO** (prata): panelas teleguiadas.
@@ -18,7 +18,7 @@ Shoot'em up vertical para celular, de paródia política. A eleição acabou, a 
 - **Aprovação:** derrubar políticos em sequência sobe o multiplicador de votos (placar). Levar tiro derruba.
 - **Pix:** o dinheiro que cai dos políticos fica com você entre partidas (é gravado também quando o app vai para o fundo). Gaste na **Lojinha do Zé** em melhorias permanentes (o Gatilho Turbinado, por exemplo, dá +10% de cadência por nível em todas as armas). O que você compra na parada entre fases já vale na partida em andamento.
 - **Nota da fase:** S (sem morrer, no máximo 1 Delação), A (sem morrer, ou só 1 vida perdida com no máximo 1 Delação), B (poucas mortes; a régua sobe a cada fase) ou C. Nota boa paga mais Pix, as fases finais pagam mais e a PRESSÃO média multiplica o prêmio. Nota S com PRESSÃO alta ganha o **CARIMBO DE OURO** (Pix extra).
-- **Vidas extras** aos 1,5 milhão, 4,5 milhões e 9 milhões de pontos.
+- **Vidas extras** aos 1,5 milhão, 5 milhões e 9 milhões de pontos.
 - **Recurso:** perdeu todas as vidas? Entre com recurso e continue de onde parou (o placar zera e as vidas extras por pontos não se repetem). São 2 recursos por partida, +1 por nível dos Embargos de Declaração da Lojinha.
 - **Pausa:** ao voltar, o jogo espera um segundo ("PRONTO? VAI!") para você pôr o dedo na tela. Com o celular deitado, o jogo fica pausado e pede para girar.
 
@@ -34,7 +34,7 @@ No computador: setas/WASD movem, Shift deixa lento, X ou espaço solta a Delaç�
 
 Venceu? Libera o **2º Mandato**, uma volta mais difícil que paga mais Pix.
 
-**MODO CPI:** a dificuldade bônus, escolhida desde a primeira partida no alto da tela FASES (NORMAL ou MODO CPI): chefão mais forte e mais bala, mas pontos ×1,5 e Pix ×1,25, com recorde e notas próprios e a conquista CPI Encerrada.
+**Modos:** NORMAL (o padrão, "Difícil, mas justo") ou **MODO CPI**, a dificuldade bônus, escolhida desde a primeira partida no alto da tela FASES: chefões com mais vida, tiros mais rápidos e mais densos, 3 vidas por crédito (5 no NORMAL) e mais P para subir de nível, mas pontos ×1,5 e Pix ×1,25, com recorde e notas próprios e a conquista CPI Encerrada.
 
 **Segredo:** vença a segunda vida do Lule sem ter entrado com nenhum recurso desde a fase 1 e ele volta mais uma vez: **LULE 5.0 — QUINTO MANDATO**.
 

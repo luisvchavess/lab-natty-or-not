@@ -62,7 +62,7 @@ G.quality      // 'high' | 'mid' | 'low' — current graphics tier (read it whil
 G.setQuality(q)// 'auto' | 'high' | 'mid' | 'low' (UI setting "Qualidade"). Persists in G.save.settings.quality.
 G.bossBoxes(b) // b.hitboxes, or a reused default [{dx:0,dy:0,r:b.r}] (never allocate one per bullet)
 G.rankFor(hits, bombs, stageIdx)  // stage rank 'S'|'A'|'B'|'C' (see §9); ui.js builds its boletim tips from it
-G.powerNeed(lv)                   // how many P items to go from level lv to lv+1 (2, 3, 4, 4: 13 P to reach L5; core.T.POWER_NEED)
+G.powerNeed(lv)                   // how many P items to go from level lv to lv+1 (MODO CPI 2, 3, 4, 4: 13 P to reach L5; NORMAL 1, 2, 2, 2: 7 P; core.T.POWER_NEED)
 G.tune(id, obj[, keys]) / G.applyMode(mode) / G.tuneMode() / G.tuneCheck() / G.TUNE_NORMAL   // difficulty registry (§12)
 G.mode()       // 'normal' | 'cpi': run.mode during a run (G.startRun → G.toMenu), else the selected mode (§12)
 G.setMode(m)   // stage-select toggle: writes G.save.settings.mode, saves, applies the mode to menus (clears the ?cpi= force)
@@ -243,7 +243,7 @@ Enemy fields: `x y vx vy r hp maxHp t flash dead score pix drop big data invuln 
 
 ```js
 G.Bosses.define('dilmae', {
-  name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 6000, r: 40, homeY: 168, spdK: 1.12, fatStart: 155,
+  name: 'DILMÃE', title: 'A Estocadora de Vento', hp: 6900, r: 40, homeY: 168, spdK: 1.12, fatStart: 175,
   score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
   phases: [ { at: 1, name: 'Saudação à Mandioca' }, { at: 0.76, name: 'Vento Estocado' }, { at: 0.52, name: 'Meta Dobrada' },
             { at: 0.30, name: 'Pedalada Fiscal' }, { at: 0.13, name: 'Meta Infinita', last: true } ],
@@ -275,7 +275,8 @@ see §5.1).
   Lule 5.0).
 - `g.bossHits`: real deaths (not shield breaks) during the current boss fight. 0 at the boss's death → **SEM ARRANHÃO!**
   (+100.000 × mult, R$ 100). A boss beaten while PRESSÃO is CPI! unlocks `'cpi'`. Boss HP is latched at spawn with
-  PRESSÃO: `def.hp × (loop > 1 ? 1,25 : 1) × (0,80 + 0,27 R)` (×1,00 at R = 0,75; `b.press0` = that R).
+  PRESSÃO: `def.hp × (loop > 1 ? L2_BHP 1,25 : 1) × (BHP0 + BHP1 × R)` (`b.press0` = that R). MODO CPI: `0,95 + 0,22 R`
+  (×0,95 at R 0, ×1,12 at R 0,75, ×1,17 at R 1); NORMAL: `0,50 + 0,67 R` (×0,50 … ×1,00 at R 0,75 … ×1,17), never above CPI.
 - `G.bomb()` is refused (sfx `denied`, no bomb spent) while the boss is `dying`/`leaving`, after the stage script ended,
   and during a cinematic where the boss is in `fight` with `b.invuln && b.harmless` (or `b.data.reviving`), e.g. Lule's revival.
 - `G.setBossPhases(b, phases, hpFrac)` replaces phases and sets hp (for revivals). `b.dmgMul` = armor. `b.invuln` for invulnerable moments (shots "tink").
@@ -285,8 +286,8 @@ see §5.1).
   (`14 + 12 × level`, no travel time; pierces the column: the nearest target takes full damage, the ones behind 60%,
   `big` enemies always full). Bomb = 4.5% boss hp (max 220). `G.upg('turbo')` adds +10% fire rate per level for every
   weapon (interval ÷ (1 + 0.1 × level); the beam's dps × the same factor), cafezinho ×1.5.
-- Lule (final boss): HP 7200 (1st life) + 5200 (2nd life) + 3200 (LULE 5.0, the secret 3rd life) (`HP1`/`HP2`/`HP3` in
-  lule.js). Anti-stalemate fatigue per life: starts at `FAT1` 140 s / `FAT2` 170 s (from the start of life 2) / `FAT3` 60 s
+- Lule (final boss): HP 8000 (1st life) + 6800 (2nd life) + 3200 (LULE 5.0, the secret 3rd life) (`HP1`/`HP2`/`HP3` in
+  lule.js). Anti-stalemate fatigue per life: starts at `FAT1` 140 s / `FAT2` 170 s (from the start of life 2; NORMAL 105 s) / `FAT3` 60 s
   and ramps to ×1,75 damage taken over `FAT_RAMP` 90 s. In the Companheirada phase each companheiro the player knocks
   down passes 11 HP to Lule (G.hitBoss, so fatigue applies). The other bosses also tire after a long fight (bosses.js
   `fatigue()`, from `def.fatStart`, `FAT_FULL` 90 s to the maximum `FAT_MAX` 0,75, i.e. ×1,75). Bosses with costly vector
@@ -302,8 +303,8 @@ ignoring it has a cost. It is strongly rewarded, **never a hard lock**: fatigue 
 |---|---|---|---|---|
 | `centrao` | **PEGAR** | touch the parachuting EMENDA briefcase | "BASE DO ZÉ", ×2,2 for 3,5–4 s | the emenda lands: +2% HP |
 | `dilmae` | **FICAR** | keep the white dot inside the drifting META ring until it fills | "RECALCULANDO...", ×2,2 for 3 s (3,5 s in the last turno) | "META ABERTA" armour ×0,8 |
-| `erika` | **CORTAR** | fly through every cable ("fio") of her live before it regrows | "CAIU A LIVE! FLOPOU!", ×2,4 for 4–4,5 s (1º Mandato: rigs of 2/2/3/3/3 phones, regrow ×2,5, stun 5–5,6 s, 3 s pause after a stun, an uncut phone hops toward Zé after 4,5 s with "NOVO ÂNGULO!", HP 8400; 2º Mandato keeps the full rigs (4 phones in the last turno), HP 6100 base) | "EM ALTA" armour ×0,7–0,9 + VIRALIZOU heart bursts |
-| `taxad` | **ACHAR** | touch the cofre that holds Zé's money after the shuffle | "RESTITUIÇÃO!", ×2,3 for 3,5–5 s ("RESTITUIÇÃO EM DOBRO!" ×2,5 in the last turno) | ALÍQUOTA armour ×0,9/0,8/0,7 (a right pick resets it) |
+| `erika` | **CORTAR** | fly through every cable ("fio") of her live before it regrows | "CAIU A LIVE! FLOPOU!", ×2,4 for 4–4,5 s (1º Mandato: rigs of 2/2/3/3/3 phones, regrow ×2,5, stun 5–5,6 s, 3 s pause after a stun, an uncut phone hops toward Zé after 4,5 s with "NOVO ÂNGULO!", HP 9900; 2º Mandato keeps the full rigs (4 phones in the last turno), HP 6100 base) | "EM ALTA" armour ×0,7–0,9 + VIRALIZOU heart bursts |
+| `taxad` | **ACHAR** | touch the cofre that holds Zé's money after the shuffle | "RESTITUIÇÃO!", ×2,1 for 3,5–5 s ("RESTITUIÇÃO EM DOBRO!" ×2,3 in the last turno) | ALÍQUOTA armour ×0,9/0,8/0,7 (a right pick resets it) |
 | `lule` | **OLÉ** | stay under Lule while the Leão da Receita aims, then sidestep | "TAXARAM O TAXADOR!", ×2,3 for 3,4 s (2,8 s in life 2); the Leão stays at x ≤ W−110, left of the DELAÇÃO button | the lion bites Zé's Pix (never a life) |
 
 Verb ramp: a slow object falls to you (PEGAR) < hold a spot (FICAR) < cross moving cables (CORTAR) < track a shuffle and
@@ -467,7 +468,7 @@ the mid-boss arrives, 1 when the boss arrives) and `g.landmark` (`'itamaraty'` r
 `'impostometro'` on the Fazenda with `mark(0.55, 'impostometro')`, when the Impostômetro mid-boss arrives). The same
 moment also calls the optional `G.BG.landmark(id, g)`. `g.impZero = true` after the Impostômetro mid-boss is beaten.
 `G.run` also has `pp` (P items collected toward the next level; a death resets it to 0), `total` (points of the whole
-run, not reset by a continue) and `extGiven` (score extends already given: 1,5M / 4,5M / 9M, once per run).
+run, not reset by a continue) and `extGiven` (score extends already given: 1,5M / 5M / 9M, once per run).
 PRESSÃO per stage: `g.pressSum` / `g.pressT` (R̄ = time-average of R over the stage's active play frames; it pays the
 grade Pix and decides the CARIMBO DE OURO).
 
@@ -626,7 +627,7 @@ Cast (keep these traits consistent everywhere — in-game sprite, portrait, stor
   he raises the placard and they bounce back into her (`PV.DMG` = 2,5% max HP in total through `G.hitBoss`, a 0,8 s
   flinch, not a stun; from 0,76 it cannot cross 0,52) → "ZÉ, CORTA OS FIOS DELA!" → "FIM DA 6x1? VIRA 0x7!" → he leaves
   and she resumes with "VOU ABRIR UM FIO SOBRE ELE!" (`b.invulnT = 0.5`, `b.mech.pav = 1`, the new turno's rig 1 s later).
-  `fatStart` 175 already includes the scene (≈ 6,5 s). State: `d.pav` (scene object | null), `d.pavForce`, `d.pavForceT`,
+  `fatStart` 205 (NORMAL 160) already includes the scene (≈ 6,5 s). State: `d.pav` (scene object | null), `d.pavForce`, `d.pavForceT`,
   `d.pavDone`, `d.pavFlinchT`, `d.pavHoldT`, `d.pavDmg`, `d.rigHold`; `drawErika`'s state gets `S.face` (1, or −1 when she
   turns left to point her phone at him). The joke is only about votes (pride and jealousy, never doubts about the
   election) and the 6x1 policy; nothing from the two deputies' personal dispute. He is a standard chibi (young man,
@@ -686,13 +687,14 @@ Cast (keep these traits consistent everywhere — in-game sprite, portrait, stor
   last is the desperation turno (ÚLTIMO RECURSO, §5).
 - Reward: Pix drops everywhere, carriers drop power items regularly (≈ 1 per 20–25 s in stages, plus before bosses),
   occasional bomb/shield/cafe/life items (2 life items per run: Esplanada and Fazenda).
-- Power: EVERY P item adds progress (2, 3, 4 and 4 items for levels 2..5: 13 P to L5, which arrives during stage 3); its
+- Power: EVERY P item adds progress (MODO CPI: 2, 3, 4 and 4 items for levels 2..5, 13 P to L5, which arrives during
+  stage 3; NORMAL: 1, 2, 2 and 2, 7 P); its
   colour picks the weapon. A death costs 1 level and resets the P progress (`run.pp = 0`); the lost level drops as a
   non-cycling "restore" P (+1 level when caught) that vanishes after 7 s (it blinks for its last 2 s). At L5 every
   normal P pays 5000 × mult, R$ 5 and +0,03 PRESSÃO heat (`'MÁXIMO! +PRESSÃO'`). The magnet upgrade and the
   top-of-screen auto-collect never pull P items (the colour is the player's choice); at stage clear leftover P items
   count for the current weapon. L5 DPS is unchanged from round 4: PRESSÃO is what keeps the maxed weapon honest.
-- Lives: 3 + Plano de Saúde (max +2), max 9; score extends at 1,5M / 4,5M / 9M. Bombs: base 2 + upgrade, carry up to 6,
+- Lives: 3 (NORMAL: `START_LIVES` from G.TUNE_NORMAL, §12.4) + Plano de Saúde (max +2), max 9; score extends at 1,5M / 5M / 9M. Bombs: base 2 + upgrade, carry up to 6,
   a respawn refills to base; graze charges 1,0 per graze (100 grazes per free bomb); boss damage `min(220, 4,5% maxHp)`.
 - Continues ("Entrar com recurso"): `maxContinues = 2 + G.upg('recurso')` (Embargos de Declaração, max 4). A continue
   resets heat and score (`run.total` stays, so extends never repeat); the boletim marks `'COM RECURSO'`.
@@ -716,7 +718,7 @@ const PRESS = {
   L2_BASE: 0.15, L2_FLOOR: 0.25,        // 2º Mandato
   LV: [0.15, 0.30, 0.50, 0.70, 0.85],   // level thresholds → lv 0..5
   NAMES: ['CALMARIA', 'BURBURINHO', 'TENSÃO', 'CRISE', 'CAOS', 'CPI!'],
-  SPD: 0.22, SPD_CAP: 250, EHP: 0.35, BIGHP: 0.5, BHP0: 0.80, BHP1: 0.27,
+  SPD: 0.22, SPD_CAP: 250, EHP: 0.35, BIGHP: 0.5, BHP0: 0.95, BHP1: 0.22,
   SCORE: 1, PIX: 0.6, BOSSPIX: 1, CLEARPIX: 1, STUN: 0.3, GOLD_AVG: 0.5, GOLD_PIX: 400,
 };
 ```
@@ -729,7 +731,7 @@ const PRESS = {
   CPI! needs L5 and full heat (~4–5 min alive). `lv` = thresholds ≤ R (0,02 hysteresis on the way down).
 - What it scales: bullet speed ×(1 + 0,22 R) (cap 250 px/s, `noPress` opts out); enemy fire rate and fan/ring density
   (enemies.js); a generic revenge bullet at lv ≥ 3 (a 3-fan at lv 5); enemy HP ×(1 + 0,35 R) / big ×(1 + 0,5 R); boss HP
-  latched at spawn ×0,80…×1,07; boss pattern variants latched per turno (lv ≥ 3: +1 bullet per aimed fan/stream/arm and
+  latched at spawn ×0,95…×1,17 (NORMAL ×0,50…×1,17); boss pattern variants latched per turno (lv ≥ 3: +1 bullet per aimed fan/stream/arm and
   waits ×0,9; lv 5: +1 more, waits ×0,82 and `cpiCo`) — telegraphs and warnings are never shortened; stage pacing
   (drizzles faster, swarms +1 at lv ≥ 4).
 - What it pays: score ×(1 + R); kill Pix ×(1 + 0,6 R); boss Pix ×(1 + R); grade Pix ×(1 + R̄); stuns +0,3 R; the L5
@@ -742,17 +744,18 @@ const PRESS = {
 ### 9.2 Boss balance
 
 Each boss tunes only through the tunables block at the top of its section, in this order: boss HP → fatStart → stun →
-cadence → PRESS weights → prices. HP is quoted at R = 0,75 (latch ×1,00); the 2º Mandato keeps the core ×1,25 on top.
+cadence → PRESS weights → prices. HP is the def value (MODO CPI); the spawn latch multiplies it by ×1,08 at R = 0,75 in
+MODO CPI and ×1,00 in NORMAL (§5); the 2º Mandato keeps the core ×1,25 on top. NORMAL overrides are in §12.4.
 
 | boss | HP | fatStart (s) | turnos (`at` → name; last = ÚLTIMO RECURSO) | stun (s) × mul | ignore cost |
 |---|---|---|---|---|---|
-| Centrão | 5600 | 140 | 1 Toma Lá, Dá Cá · 0.76 Muda de Lado · 0.52 Fisiologismo · 0.30 Base Aliada · 0.13 Fundão Eleitoral | 3,5–4,0 × 2,2 (cap 5, P4/P5 extend) | +2% HP per missed emenda |
-| Dilmãe | 6000 (spdK 1,12) | 155 | 1 Saudação à Mandioca · 0.76 Vento Estocado · 0.52 Meta Dobrada · 0.30 Pedalada Fiscal · 0.13 Meta Infinita | 3,0 (P3 L3 4,0; P5 3,5; flinch 1,2 ×1,6) × 2,2 / 2,3 | META ABERTA ×0,8 |
-| Erika | 8400 (L2 base 6100, spdK 1,15) | 175 (incl. the 6,5 s Pavanatto scene) | 1 Segue o Fio · 0.76 Fim da Escala 6x1 · 0.52 O PSOL Vai ao STF · 0.30 Trending Topic · 0.13 Live de 24 Horas | 4,0–4,5 × 2,4 | EM ALTA ×0,7–0,9 + VIRALIZOU |
-| Taxad | 9000 (L2 base 7200, spdK 1,15) | 190 | 1 Taxa das Blusinhas · 0.76 Arcabouço Fiscal · 0.52 Déficit Zero · 0.30 Não Vai Taxar o Pix · 0.13 Imposto Sobre Tudo | 3,5–5,0 × 2,3 / 2,5 | ALÍQUOTA ×0,9/0,8/0,7 |
-| Lule, life 1 | 7200 | 140 | 1 Picanha e Cervejinha · 0.74 Tudo Taxado · 0.48 Faz o L · 0.22 Companheirada · 0.12 Discurso Sem Fim | 3,4 × 2,3 | −R$ 5–40 Pix per bite |
+| Centrão | 8000 (spdK 1,15) | 140 | 1 Toma Lá, Dá Cá · 0.76 Muda de Lado · 0.52 Fisiologismo · 0.30 Base Aliada · 0.13 Fundão Eleitoral | 3,5–4,0 × 2,2 (cap 5, P4/P5 extend) | +2% HP per missed emenda |
+| Dilmãe | 6900 (spdK 1,12) | 175 | 1 Saudação à Mandioca · 0.76 Vento Estocado · 0.52 Meta Dobrada · 0.30 Pedalada Fiscal · 0.13 Meta Infinita | 3,0 (P3 L3 4,0; P5 3,5; flinch 1,2 ×1,6) × 2,2 / 2,3 | META ABERTA ×0,8 |
+| Erika | 9900 (L2 base 6100, spdK 1,15) | 205 (incl. the 6,5 s Pavanatto scene) | 1 Segue o Fio · 0.76 Fim da Escala 6x1 · 0.52 O PSOL Vai ao STF · 0.30 Trending Topic · 0.13 Live de 24 Horas | 4,0–4,5 × 2,4 | EM ALTA ×0,7–0,9 + VIRALIZOU |
+| Taxad | 9000 (L2 base 7200, spdK 1,15) | 190 | 1 Taxa das Blusinhas · 0.76 Arcabouço Fiscal · 0.52 Déficit Zero · 0.30 Não Vai Taxar o Pix · 0.13 Imposto Sobre Tudo | 3,5–5,0 × 2,1 / 2,3 | ALÍQUOTA ×0,9/0,8/0,7 |
+| Lule, life 1 | 8000 | 140 | 1 Picanha e Cervejinha · 0.74 Tudo Taxado · 0.48 Faz o L · 0.22 Companheirada · 0.12 Discurso Sem Fim | 3,4 × 2,3 | −R$ 5–40 Pix per bite |
 | Janjinha (co-boss) | 3000 × Lule's `d.hpMul` | own clock: tires 40→70 s, leaves at 75 s | (no core turnos) | freezes ×1,5 while Lule is stunned | the CERIMONIAL rope on Lule |
-| Lule, life 2 | 5200 | 170 (from the start of life 2) | 1 Volta por Cima (with Janjinha) · 0.62 Picanha Infinita · 0.32 A Última Picanha · 0.12 Fim de Mandato | 2,8 × 2,3 | −R$ 5–40 Pix per bite |
+| Lule, life 2 | 6800 | 170 (from the start of life 2) | 1 Volta por Cima (with Janjinha) · 0.62 Picanha Infinita · 0.32 A Última Picanha · 0.12 Fim de Mandato | 2,8 × 2,3 | −R$ 5–40 Pix per bite |
 | LULE 5.0 (secret) | 3200 | 60 | 1 Quinto Mandato | 2,8 × 2,3 | — |
 
 Fatigue everywhere reaches ×1,75 damage taken 90 s after fatStart. Anti-stall in the last turno: after 30 s, ×1,5
@@ -900,8 +903,9 @@ half-written while you work: test with `mods=` to isolate.
 
 ## 12. Modos (NORMAL / MODO CPI)
 
-Two difficulties, same game. **MODO CPI** (the bonus, selectable from the first launch) plays the round-5 numbers exactly
-as written in the modules. **NORMAL** (the default) is the same game after the balance pass: hard, but fair. Same stages,
+Two difficulties, same game. **MODO CPI** (the bonus, selectable from the first launch) plays the numbers exactly as
+written in the modules: the round-5 numbers plus the balance pass's base changes (§12.4). **NORMAL** (the default) is the
+same game with `G.TUNE_NORMAL` on top: hard, but fair. Same stages,
 patterns, content, continues, upgrades and prices in both; only registered numbers differ, plus the CPI rewards below.
 Unlocked stages and achievements are shared; ranks and the best score are per mode.
 
@@ -913,12 +917,12 @@ G.applyMode(mode)        // 'cpi' → every block back to its CPI values; 'norma
                          //   Arrays and nested plain objects are changed IN PLACE (references stay valid).
 G.tuneMode()             // the mode last applied ('normal' before any apply)
 G.tuneCheck()            // { ids: [...registered], bad: [...G.TUNE_NORMAL keys that match nothing] }  (tests: bad must be [])
-G.TUNE_NORMAL            // data.js: { '<id>': { FIELD: value, ... } }; {} until the balance pass
+G.TUNE_NORMAL            // data.js: { '<id>': { FIELD: value, ... } }; the NORMAL overrides (§12.4)
 G.debug.tunes([id])      // tests: { id: { FIELD: current value } } for every registered block (or one): dump it after
                          //   G.applyMode('cpi') and after G.applyMode('normal') and diff against the old literals
 ```
 Equivalence test (each module): with `G.TUNE_NORMAL = {}`, `G.debug.tunes()` after `applyMode('cpi')` and after
-`applyMode('normal')` equals the literals at commit a405648. Override test: set `G.TUNE_NORMAL` before the run (e.g. a
+`applyMode('normal')` equals the literals at commit a405648, except the base changes listed in §12.4. Override test: set `G.TUNE_NORMAL` before the run (e.g. a
 `page.addInitScript` that defines a `TUNE_NORMAL` property on `window.G` whose setter ignores data.js's `{}`), or assign it
 and call `G.applyMode('normal')` before the boss spawns; the change shows in a NORMAL run and not with `cpi=1`.
 Who applies: `G.boot` (after every module registered: menus and the Como Jogar demos), `G.startRun` (**before anything of
@@ -927,7 +931,7 @@ stage-select toggle). Continues and the next stages keep `run.mode`; a 2º Manda
 
 Rules for every module that registers numbers:
 1. Ids are `'<module>.<BLOCK>'` (`'taxad.TX'`, `'erika.FI'`, `'bosses.P5'`, `'core.PRESS'`). Loose scalar consts become one
-   object per module: `const T = G.tune('erika.T', { HP: 8400, HP_L2: 6100, FAT_START: 175 })`, every reader uses `T.HP`.
+   object per module: `const T = G.tune('erika.T', { HP: 9900, HP_L2: 6100, FAT_START: 205, SPD_K: 1.15 })`, every reader uses `T.HP`.
 2. **Only runtime reads.** No top-level `const X = TX.A * 2`, no `def.hp = HP` copied at load and then read at spawn:
    register the def's fields (`G.tune('erika.def', def, ['hp', 'fatStart'])`) or compute from `T` at spawn. A value copied
    at load time silently ignores the mode: that is the one bug to avoid.
@@ -937,7 +941,8 @@ Rules for every module that registers numbers:
    timings), stage drizzle/ex caps. **Not**: colours, drawing geometry, text, hitbox shapes, phase thresholds (the ladder
    stays the same), prices (`G.UPGRADES` is shared economy; the balance pass edits it directly), rewards.
 4. Fallback for isolated `mods=` runs: `const tune = G.tune || ((id, o) => o);`.
-5. Behaviour is **identical** to the round-5 game in MODO CPI and in NORMAL while `G.TUNE_NORMAL` is empty.
+5. With an empty `G.TUNE_NORMAL`, NORMAL is identical to MODO CPI. MODO CPI is the round-5 game plus the balance pass's
+   base changes (§12.4), which made it harder or fairer in both modes.
 6. Hand edits of a registered block in a test are reset by the next `G.applyMode` (every `G.startRun`): tune through
    `G.TUNE_NORMAL` + `G.applyMode('normal')`, or replace `G.PRESS` whole (it stays in force; missing keys follow the mode).
 
@@ -951,9 +956,9 @@ Core (core.js):
 | id | fields |
 |---|---|
 | `core.PRESS` | the `G.PRESS` block (§9.1) minus `NAMES` and `COLORS`: `W TURBO HEAT_T HEAT_KILL HEAT_BIG HEAT_PHASE HEAT_MAXP HEAT_MAX DEATH_KEEP BOMB UP DOWN L2_BASE L2_FLOOR LV SPD SPD_CAP EHP BIGHP BHP0 BHP1 SCORE PIX BOSSPIX CLEARPIX STUN GOLD_AVG GOLD_PIX` |
-| `core.T` | `POWER_NEED` [0, 2, 3, 4, 4] (G.powerNeed) · `EXTENDS` [1,5M, 4,5M, 9M] · `RESTORE_LIFE` 7 (s the restore P stays) · `GRAZE_BOMB` 1,0 (Delação charge per graze, 100 = one) · `RESPAWN_INV` 3 (s of invulnerability after a death) · `START_LIVES` 3 · `START_BOMBS` 2 (+ upgrades) · `L2_DIFF` 1,15 (2º Mandato bullet speed) · `L2_EHP` 1,3 (2º Mandato enemy HP) · `L2_BHP` 1,25 (2º Mandato boss HP) |
+| `core.T` | `POWER_NEED` [0, 2, 3, 4, 4] (G.powerNeed) · `EXTENDS` [1,5M, 5M, 9M] · `RESTORE_LIFE` 7 (s the restore P stays) · `GRAZE_BOMB` 1,0 (Delação charge per graze, 100 = one) · `RESPAWN_INV` 3 (s of invulnerability after a death) · `START_LIVES` 3 · `START_BOMBS` 2 (+ upgrades) · `L2_DIFF` 1,15 (2º Mandato bullet speed) · `L2_EHP` 1,3 (2º Mandato enemy HP) · `L2_BHP` 1,25 (2º Mandato boss HP) |
 
-33 ids in all (`G.tuneCheck().ids` in the browser lists them; `G.debug.tunes(id)` dumps one). `NAME[n]` is an array of n
+35 ids in all (`G.tuneCheck().ids` in the browser lists them; `G.debug.tunes(id)` dumps one). `NAME[n]` is an array of n
 values and `NAME{a, b}` a nested object (both are changed in place; an override replaces the whole array, or only the
 nested keys it names). Every value in the code is the MODO CPI value.
 
@@ -966,7 +971,7 @@ Chefões 1–2 and the shared kit (bosses.js):
 | `bosses.centrao` | `hp fatStart spdK` — fields of the Centrão def, read at spawn |
 | `bosses.EM` | `APEX_Y FALL FALL_L2 FALL_TUT CATCH_R SWAY SWAY_HZ STUN[5] MUL HEAL CD TRAITOR_DMG FALL_P4 FALL_P4_L2 TUT_MAX RACE_DY P5_ORBIT P5_ARMS P5_STEP P5_SPD P5_TURN P5_FAN P5_FAN_SPD P5_EM P5_EM0` — Centrão's PEGAR A EMENDA |
 | `bosses.dilmae` | `hp fatStart spdK` — fields of the Dilmãe def, read at spawn |
-| `bosses.MT` | `R0 R_MIN R_K NEED NEED_L2 LIFE STUN MUL OPEN GAP_OK GAP_FAIL FIRST P4_SPD P4_JUMP P4_EVERY R0_L2 DEMO P2_R P2_NEED STUN_L3 MUL_L3 P4_R P4_LIFE LVL[3] P5_STUN P5_MUL P5_GAP P5_FLIP P5_WARN P5_FAN P5_FAN_SPD P5_FAN_SPR P5_RING P5_RING_T P5_RING_SPD` — Dilmãe's FICAR NA META (`LVL` = `{ r, need, life, ax, ay, gap? }` per level) |
+| `bosses.MT` | `R0 R_MIN R_K NEED NEED_L2 LIFE STUN MUL OPEN GAP_OK GAP_FAIL FIRST P4_SPD P4_JUMP P4_EVERY R0_L2 DEMO P2_R P2_NEED STUN_L3 MUL_L3 P4_R P4_LIFE LVL[3] P5_STUN P5_MUL P5_GAP P5_FLIP P5_WARN P5_FAN P5_FAN_SPD P5_FAN_SPR P5_RING P5_RING_T P5_RING_SPD P3_SEED_EVERY P3_SEED_SPD` — Dilmãe's FICAR NA META (`LVL` = `{ r, need, life, ax, ay, gap? }` per level) and the 3º turno aimed seed fan (`P3_SEED_EVERY` s between fans, `P3_SEED_SPD` px/s) |
 
 Erika (erika.js) and Taxad (taxad.js). Their def `hp` / `fatStart` / `spdK` are get/set properties over `<boss>.T`:
 tune `erika.T` / `taxad.T`, never the def.
@@ -993,6 +998,8 @@ The finale (lule.js, janjinha.js). Lule keeps his own PRESSÃO variants and 5th 
 | `lule.P5` | `LIMIT MUL` |
 | `lule.LEAO` | `FIRST GAP[10] ENTER STALK STALK_MAX AIM TRACK SPD CLAMP STUN[3] MUL RISE LAST_T STALK_L2 AIM_L2 SPD_L2 GAP_L2 STUN_L2` — the OLÉ lion (`STALK_L2` / `SPD_L2` are values, `AIM_L2` is subtracted, `GAP_L2` / `STUN_L2` multiply) |
 | `lule.COMP` | `HP GIVE BACK FIRE[2] FIRE_L2 SPD` — the companions |
+| `lule.STAMP` | `TRACK WARN TRACK2 WARN2 SPD LIFE` — the TAXADO! stamp: s until the shadow locks / until it slams in Tudo Taxado (`TRACK` `WARN`) and in the fast 2nd-life stamps of Volta por Cima and Fim de Mandato (`TRACK2` `WARN2`), the px/s the shadow chases the car at before locking, and the s the slam hurts (the drawing keeps its own timing) |
+| `lule.LSW` | `END_DX` — how many px past the screen centre (at 0,80H) the back laser of the giant L stops; negative = it stops before the centre |
 | `janjinha.JN` | `HP SHIELD DWELL[2] OUT OFF IN ENTER FAT FAT_FULL LEAVE_T STUN_K CARD_N CARD_N_L2 CARD_SPD CARD_SPREAD CARD_TELL MALA_N MALA_SPD MALA_Y MALA_RING MALA_RING_SPD GRAWLIX_N GRAWLIX_SPD ROCKET_WARN ROCKET_WARN_L2 ROCKET_SPD ROCKET_SEP SOFA_N SOFA_SPD GAP GAP_L2 LION_DMG CARD_BACK` (`HP` × Lule's `d.hpMul`) |
 | `janjinha.JX` | `GRAWLIX_SPREAD SOFA_SPREAD SOFA_GAP MALA_X[2] ROCKET_SEP2 CHAT[2] FIRST ARRIVE GAP_LOW ROCKET_AT ROCKET_END SOFA_FANS PN3 PN5` — gameplay timings |
 
@@ -1015,7 +1022,8 @@ Not registered on purpose (the same in both modes; `G.tuneCheck().bad` reports a
 tags, drawing geometry and layout (`erika.PV` X/Y, Janjinha `Y STOPS JET_* ROCKET_Y ROPE_*`, the Impostômetro panel, Lule's
 `XR`), hitboxes and radii, phase thresholds and attack ladders (`SOFA_AT`), fairness spacing (`MALHA_DX`, `DIG_MIN_DX`),
 rewards (`SCORE` / `PIX` fields, `RANK_B`), `scrollSpeed`, the wave-script literals in stages.js and the per-attack
-literals inside the boss phase functions (they go through the registered PRESSÃO variants and `spdK`).
+literals inside the boss phase functions (they go through the registered PRESSÃO variants and `spdK`; the exceptions are
+Lule's stamp and giant-L timings, `lule.STAMP` / `lule.LSW`, and Dilmãe's 3º turno seed fan, `bosses.MT` `P3_SEED_*`).
 
 ### 12.3 Selection, signs and rewards
 - `G.save.settings.mode`: `'normal'` (default) | `'cpi'` (saveV stays 5). URL `cpi=1` / `cpi=0` forces a mode for the
@@ -1034,3 +1042,26 @@ literals inside the boss phase functions (they go through the registered PRESSÃ
   (both may show, CPI first).
 - Achievement 27, `cpi_mandato` 'CPI Encerrada' ('Vença o 1º Mandato no MODO CPI.'): `G.finishGame` unlocks it when
   `run.mode === 'cpi'`, `run.loop === 1` and the run started at stage 1 (continues allowed).
+
+### 12.4 What NORMAL changes, and the base changes
+**Base changes of the balance pass** (harder or fairer, so they are in the module values and both modes have them;
+MODO CPI = the round-5 numbers plus these): Centrão `hp` 5600 → 8000 and `spdK` 1 → 1,15; Dilmãe `hp` 6000 → 6900 and
+`fatStart` 155 → 175; Erika `HP` 8400 → 9900 and `FAT_START` 175 → 205; Lule `HP1` 7200 → 8000 and `HP2` 5200 → 6800;
+Taxad cofre `MUL` [2,3 ×4, 2,5] → [2,1 ×4, 2,3]; `core.PRESS` BHP0/BHP1 0,80/0,27 → 0,95/0,22 (CPI boss HP never below NORMAL at any R); `core.T.EXTENDS[1]` 4,5M → 5M; Taxad's 2nd
+turno arcabouço keeps every gap ≥ 75 px from the car (or leaves that side out) and never puts the FURO under the DELAÇÃO
+button. `lule.STAMP`, `lule.LSW` and `bosses.MT.P3_SEED_*` were registered with the old literals as their CPI values.
+
+**NORMAL** (`G.TUNE_NORMAL` in data.js; every value is easier than or equal to MODO CPI): boss HP follows PRESSÃO more
+steeply (`BHP0` 0,50, `BHP1` 0,67: ×0,50 at R 0, ×1,00 at R 0,75, the same ×1,17 as CPI at R 1) and bullets do not speed up
+with PRESSÃO (`SPD` 0); 7 P to reach L5 (`POWER_NEED` [0, 1, 2, 2, 2]), 5 lives per credit (`START_LIVES`; CPI 3) and 4 s of
+respawn invulnerability (CPI 3); stages 2–5 use a lower enemy level (`LVL` [0, 0,5, 1,2, 1,5, 1,8]), PRESSÃO barely
+densifies them (`P_IVL` / `P_FIRST` 0,05, no CRISE extra bullet) and the lv ≥ 3 revenge bullet comes 35% of the time (CPI 50%); bosses 1–4
+and Lule get no extra bullet or shorter waits at CRISE/CAOS (`bosses.KIT` / `lule.PV`); bullets at the written speed for
+Dilmãe, Erika and Taxad (Centrão ×1,05); earlier fatigue (Centrão 110 s, Dilmãe 150, Erika 160, Taxad 160, Lule's 2nd life
+105); Dilmãe's 3º turno seed fan every 1,8 s at 130 px/s; Erika's EM ALTA armour weaker (`ARMOR`); Taxad's cofres shuffle
+slower (`SW`) and his keys, arcabouço, '00' and 5th-turno rest give more room (`taxad.TX`); Lule's OLÉ pays more
+(`lule.LEAO`), a stun cut by a turno change keeps up to 2,6 s (`PHASE_STUN`; CPI 2,0), the TAXADO! stamp gives 0,8–0,85 s to leave
+the shadow, chases at 220 px/s and only hurts for 0,15 s as it lands (`lule.STAMP`), and the giant L's back laser stops
+20 px before the centre (`lule.LSW` −20); Janjinha has 1500 HP (CPI 3000), dwells 5–6 s at each stop (CPI 4–5), leaves at 60 s
+(CPI 75) and takes ×2,5 damage while Lule is stunned (CPI ×1,5) (`janjinha.JN`). Measured on the humanbot (SPEC5 §18.4): a good player finishes the 1º Mandato with
+1–2 continues, a casual one with 2–4.

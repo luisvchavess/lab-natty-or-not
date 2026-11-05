@@ -63,31 +63,42 @@
     // ---- core.js ----
     // NORMAL: chefão com vida mais "elástica" pela PRESSÃO: ×0,50 (R 0) … ×1,00 (R 0,75) … ×1,17 (R 1).
     // A arma no máximo não corta mais a luta pela metade (L5/L3 ≥ 0,75) e quem está apanhando pega chefão mais curto.
-    // (o MODO CPI fica em ×0,80 + 0,37·R, nunca abaixo desta curva)
-    'core.PRESS': { BHP0: 0.5, BHP1: 0.67 },
+    // (o MODO CPI fica em ×0,95 + 0,22·R, nunca abaixo desta curva)
+    // Os tiros não aceleram com a PRESSÃO (CPI: até ×1,22 em R 1): no NORMAL ela pesa na vida do chefão e no prêmio
+    'core.PRESS': { BHP0: 0.5, BHP1: 0.67, SPD: 0 },
     // NORMAL: 7 P do nível 1 ao 5 (CPI: 13) — com a morte zerando a barra, o bom jogador ficava no nível 3;
-    // 4 vidas por crédito e 4 s de invencibilidade na volta (mortes em cadeia logo depois de voltar)
-    'core.T': { POWER_NEED: [0, 1, 2, 2, 2], START_LIVES: 4, RESPAWN_INV: 4 },
+    // 5 vidas por crédito (CPI: 3; com 4 o bom jogador entrava com 2 recursos por partida e o casual com 4,3)
+    // e 4 s de invencibilidade na volta (mortes em cadeia logo depois de voltar)
+    'core.T': { POWER_NEED: [0, 1, 2, 2, 2], START_LIVES: 5, RESPAWN_INV: 4 },
 
     // ---- enemies.js ----
-    // NORMAL: fases 2–5 um pouco mais calmas (nível da tabela menor: tiro, intervalo, vida dos comuns),
-    // PRESSÃO adensa menos (intervalo/1º tiro, sem o tiro a mais no leque em CRISE) e a revanche vem menos
-    'enemies.T': { LVL: [0, 0.8, 1.5, 1.9, 2.2], P_IVL: 0.15, P_FIRST: 0.15, P_FAN3: 0, PREV_CHANCE: 0.35 },
+    // NORMAL: fases 2–5 mais calmas (nível da tabela menor: tiro, intervalo, vida dos comuns; a Esplanada matava
+    // o bom jogador 1,6 vez antes da Dilmãe), PRESSÃO quase não adensa (intervalo/1º tiro, sem o tiro a mais no
+    // leque em CRISE) e a revanche vem menos
+    'enemies.T': { LVL: [0, 0.5, 1.2, 1.5, 1.8], P_IVL: 0.05, P_FIRST: 0.05, P_FAN3: 0, PREV_CHANCE: 0.35 },
 
     // ---- bosses.js ----
     // NORMAL: em CRISE/CAOS os chefões 1–4 não ganham tiro a mais nem esperas menores (como o Lule, lule.PV)
     'bosses.KIT': { PN3: 0, PW3: 1 },
-    // NORMAL: Centrão cansa antes (o casual chegava ao cansaço em 0/6 lutas)
-    'bosses.centrao': { fatStart: 110 },
+    // NORMAL: Centrão cansa antes (o casual chegava ao cansaço em 0/6 lutas) e atira um pouco mais devagar (CPI ×1,15)
+    'bosses.centrao': { fatStart: 110, spdK: 1.05 },
+    // NORMAL: Dilmãe atira na velocidade escrita (CPI ×1,12: a Esplanada era a fase que mais matava o bom jogador
+    // depois do Planalto) e cansa antes (casual)
+    'bosses.dilmae': { spdK: 1, fatStart: 150 },
+    // NORMAL: as sementinhas miradas do 3º turno saem a cada 1,8 s a 130 px/s (CPI 1,45 s a 150): eram o que mais
+    // matava na Dilmãe (bom jogador 2 mortes por luta, casual 4)
+    'bosses.MT': { P3_SEED_EVERY: 1.8, P3_SEED_SPD: 130 },
 
     // ---- erika.js ----
-    // NORMAL: tiros da Erika um pouco mais lentos e a armadura EM ALTA mais fraca
-    'erika.T': { SPD_K: 1.1 },
+    // NORMAL: tiros da Erika na velocidade escrita (CPI ×1,15), cansa antes (o casual cansava a Erika em 1 de 4 lutas;
+    // CPI 205 s) e a armadura EM ALTA mais fraca
+    'erika.T': { SPD_K: 1, FAT_START: 160 },
     'erika.FI': { ARMOR: [1, 0.95, 0.93, 0.9, 0.86] },
 
     // ---- taxad.js ----
-    // NORMAL: tiros do Taxad na velocidade escrita; cofres embaralham mais devagar (casual achava pouco)
-    'taxad.T': { SPD_K: 1 },
+    // NORMAL: tiros do Taxad na velocidade escrita, cansa antes (o casual cansava o Taxad em 1 de 6 lutas; CPI 190 s);
+    // cofres embaralham mais devagar (casual achava pouco)
+    'taxad.T': { SPD_K: 1, FAT_START: 160 },
     'taxad.CF': { SW: [0.66, 0.6, 0.54, 0.5, 0.46] },
     // NORMAL: teclas/arcabouço com mais respiro (a régua matava muito na P2), '00' mais lento e espaçado,
     // descanso maior no 5º turno
@@ -95,8 +106,14 @@
       ZERO_SPD: 65, ZERO_EVERY: 3.5, ZERO_DELAY: 1, P5_REST: 0.9 },
 
     // ---- lule.js / janjinha.js ----
-    // NORMAL: cansaço da 2ª vida mais cedo e o tonto passa um pouco da troca de turno
-    'lule.T': { FAT2: 150, PHASE_STUN: 2.6 },
+    // NORMAL: cansaço da 2ª vida mais cedo (o casual quase nunca chegava nele) e o tonto passa um pouco da troca de turno
+    'lule.T': { FAT2: 105, PHASE_STUN: 2.6 },
+    // NORMAL: o carimbo TAXADO! trava antes e bate depois (0,8–0,85 s para sair da sombra; CPI 0,5–0,55 s), persegue
+    // mais devagar e só machuca na hora da batida (0,15 s; CPI 0,32 s) — era o que mais matava o bom jogador no Lule
+    'lule.STAMP': { TRACK: 0.6, WARN: 1.4, TRACK2: 0.4, WARN2: 1.25, SPD: 220, LIFE: 0.15 },
+    // NORMAL: o laser de trás do L gigante para 20 px ANTES do centro (CPI: passa 12 px): quem fica no meio,
+    // embaixo do Lule, não é mais pego no fim da varredura
+    'lule.LSW': { END_DX: -20 },
     // NORMAL: o OLÉ paga mais (1º tonto mais longo, multiplicador maior)
     'lule.LEAO': { STUN: [4.4, 2.8, 2.8], MUL: 3.15 },
     // NORMAL: sem o tiro a mais / esperas menores em CRISE (lv 3–4)

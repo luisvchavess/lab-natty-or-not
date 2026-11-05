@@ -56,7 +56,7 @@
   // (vida, cansaço, velocidade), 'taxad.TX' (padrões), 'taxad.CF' (a manha dos cofres) e 'taxad.ROUND' (tiros
   // durante a rodada). O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada copiado no carregamento).
   const tune = G.tune || ((id, o) => o);
-  // HP a R = 0,75 (o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
+  // HP a R = 0,75 (o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
   // FAT_START = cansaço (s de luta); SPD_K = multiplicador dos tiros. O def lê estes valores na hora (getters).
   const T = tune('taxad.T', { HP: 9000, HP_L2: 7200, FAT_START: 190, SPD_K: 1.15 });
   // Padrões (velocidades antes do spdK 1,15; esperas por pW, contagens por pN / pRing).

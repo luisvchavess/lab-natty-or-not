@@ -1707,7 +1707,7 @@
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold],
     ['bs_cedula', COL.red], ['small', '#ff2a4a']];
   G.Bosses.define('centrao', {
-    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
+    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
     // spdK 1 = tiros na velocidade escrita (como antes, sem o campo); registrado com hp e fatStart ('bosses.centrao')
     name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 8000, r: 46, homeY: 165, fatStart: 140, spdK: 1.15, // balanço: hp 5600 → 8000, spdK 1 → 1,15
@@ -1949,6 +1949,8 @@
     // a cada P5_FAN s (antes do pW) e anel de P5_RING sementes a cada P5_RING_T s
     P5_STUN: 3.5, P5_MUL: 2.2, P5_GAP: 2.0, P5_FLIP: 4.0, P5_WARN: 1.0, P5_FAN: 1.6, P5_FAN_SPD: 140, P5_FAN_SPR: 0.5,
     P5_RING: 12, P5_RING_T: 3.0, P5_RING_SPD: 100,
+    // 3º turno: sementinhas miradas da mão a cada P3_SEED_EVERY s (pW; ×0,85–1,15) a P3_SEED_SPD px/s (lidos a cada leque)
+    P3_SEED_EVERY: 1.45, P3_SEED_SPD: 150,
   });
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
@@ -2247,12 +2249,12 @@
     }
   }
   // fase 3: sementinhas miradas da mão
-  function* dilBgSeeds(b, every) {
+  function* dilBgSeeds(b) {
     const d = b.data;
     for (;;) {
-      yield pW(every, d.pl) * M.rand(0.85, 1.15);
+      yield pW(MT.P3_SEED_EVERY, d.pl) * M.rand(0.85, 1.15);
       const hp = dilHand(b), n = pN(3, d.pl);
-      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, 0.11 * (n - 1), 150, { style: 'bs_semente', color: COL.orange });
+      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, 0.11 * (n - 1), MT.P3_SEED_SPD, { style: 'bs_semente', color: COL.orange });
       sfx('enemy_shot');
     }
   }
@@ -2829,7 +2831,7 @@
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange], ['small', '#ff2a4a']];
   G.Bosses.define('dilmae', {
-    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
+    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (155 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
     name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6900, r: 40, homeY: 168, spdK: 1.12, fatStart: 175, // balanço: hp 6000 → 6900, fatStart 155 → 175
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
@@ -2931,7 +2933,7 @@
       if (stunning(b)) d.stunT = Math.min(d.stunT, 2.0);
       // pressão de fundo: os potes também arrotam vento mirado durante as rajadas (o 2º turno era o mais calmo)
       if (idx === 1) { co(b, dilP2(b)); co(b, dilBgJars(b, L2() ? 2.2 : 2.6), 1); }
-      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.45), 1); }
+      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b), 1); }
       else if (idx === 3) { co(b, dilP4(b)); co(b, null, 1); }
       else if (idx === 4) {
         lastStand(b); // (a 1ª meta sai 1,5 s depois: d.metaT acima)

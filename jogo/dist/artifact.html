@@ -1579,31 +1579,42 @@ body.in-play #toasts { opacity: 0; }
     // ---- core.js ----
     // NORMAL: chefão com vida mais "elástica" pela PRESSÃO: ×0,50 (R 0) … ×1,00 (R 0,75) … ×1,17 (R 1).
     // A arma no máximo não corta mais a luta pela metade (L5/L3 ≥ 0,75) e quem está apanhando pega chefão mais curto.
-    // (o MODO CPI fica em ×0,80 + 0,37·R, nunca abaixo desta curva)
-    'core.PRESS': { BHP0: 0.5, BHP1: 0.67 },
+    // (o MODO CPI fica em ×0,95 + 0,22·R, nunca abaixo desta curva)
+    // Os tiros não aceleram com a PRESSÃO (CPI: até ×1,22 em R 1): no NORMAL ela pesa na vida do chefão e no prêmio
+    'core.PRESS': { BHP0: 0.5, BHP1: 0.67, SPD: 0 },
     // NORMAL: 7 P do nível 1 ao 5 (CPI: 13) — com a morte zerando a barra, o bom jogador ficava no nível 3;
-    // 4 vidas por crédito e 4 s de invencibilidade na volta (mortes em cadeia logo depois de voltar)
-    'core.T': { POWER_NEED: [0, 1, 2, 2, 2], START_LIVES: 4, RESPAWN_INV: 4 },
+    // 5 vidas por crédito (CPI: 3; com 4 o bom jogador entrava com 2 recursos por partida e o casual com 4,3)
+    // e 4 s de invencibilidade na volta (mortes em cadeia logo depois de voltar)
+    'core.T': { POWER_NEED: [0, 1, 2, 2, 2], START_LIVES: 5, RESPAWN_INV: 4 },
 
     // ---- enemies.js ----
-    // NORMAL: fases 2–5 um pouco mais calmas (nível da tabela menor: tiro, intervalo, vida dos comuns),
-    // PRESSÃO adensa menos (intervalo/1º tiro, sem o tiro a mais no leque em CRISE) e a revanche vem menos
-    'enemies.T': { LVL: [0, 0.8, 1.5, 1.9, 2.2], P_IVL: 0.15, P_FIRST: 0.15, P_FAN3: 0, PREV_CHANCE: 0.35 },
+    // NORMAL: fases 2–5 mais calmas (nível da tabela menor: tiro, intervalo, vida dos comuns; a Esplanada matava
+    // o bom jogador 1,6 vez antes da Dilmãe), PRESSÃO quase não adensa (intervalo/1º tiro, sem o tiro a mais no
+    // leque em CRISE) e a revanche vem menos
+    'enemies.T': { LVL: [0, 0.5, 1.2, 1.5, 1.8], P_IVL: 0.05, P_FIRST: 0.05, P_FAN3: 0, PREV_CHANCE: 0.35 },
 
     // ---- bosses.js ----
     // NORMAL: em CRISE/CAOS os chefões 1–4 não ganham tiro a mais nem esperas menores (como o Lule, lule.PV)
     'bosses.KIT': { PN3: 0, PW3: 1 },
-    // NORMAL: Centrão cansa antes (o casual chegava ao cansaço em 0/6 lutas)
-    'bosses.centrao': { fatStart: 110 },
+    // NORMAL: Centrão cansa antes (o casual chegava ao cansaço em 0/6 lutas) e atira um pouco mais devagar (CPI ×1,15)
+    'bosses.centrao': { fatStart: 110, spdK: 1.05 },
+    // NORMAL: Dilmãe atira na velocidade escrita (CPI ×1,12: a Esplanada era a fase que mais matava o bom jogador
+    // depois do Planalto) e cansa antes (casual)
+    'bosses.dilmae': { spdK: 1, fatStart: 150 },
+    // NORMAL: as sementinhas miradas do 3º turno saem a cada 1,8 s a 130 px/s (CPI 1,45 s a 150): eram o que mais
+    // matava na Dilmãe (bom jogador 2 mortes por luta, casual 4)
+    'bosses.MT': { P3_SEED_EVERY: 1.8, P3_SEED_SPD: 130 },
 
     // ---- erika.js ----
-    // NORMAL: tiros da Erika um pouco mais lentos e a armadura EM ALTA mais fraca
-    'erika.T': { SPD_K: 1.1 },
+    // NORMAL: tiros da Erika na velocidade escrita (CPI ×1,15), cansa antes (o casual cansava a Erika em 1 de 4 lutas;
+    // CPI 205 s) e a armadura EM ALTA mais fraca
+    'erika.T': { SPD_K: 1, FAT_START: 160 },
     'erika.FI': { ARMOR: [1, 0.95, 0.93, 0.9, 0.86] },
 
     // ---- taxad.js ----
-    // NORMAL: tiros do Taxad na velocidade escrita; cofres embaralham mais devagar (casual achava pouco)
-    'taxad.T': { SPD_K: 1 },
+    // NORMAL: tiros do Taxad na velocidade escrita, cansa antes (o casual cansava o Taxad em 1 de 6 lutas; CPI 190 s);
+    // cofres embaralham mais devagar (casual achava pouco)
+    'taxad.T': { SPD_K: 1, FAT_START: 160 },
     'taxad.CF': { SW: [0.66, 0.6, 0.54, 0.5, 0.46] },
     // NORMAL: teclas/arcabouço com mais respiro (a régua matava muito na P2), '00' mais lento e espaçado,
     // descanso maior no 5º turno
@@ -1611,8 +1622,14 @@ body.in-play #toasts { opacity: 0; }
       ZERO_SPD: 65, ZERO_EVERY: 3.5, ZERO_DELAY: 1, P5_REST: 0.9 },
 
     // ---- lule.js / janjinha.js ----
-    // NORMAL: cansaço da 2ª vida mais cedo e o tonto passa um pouco da troca de turno
-    'lule.T': { FAT2: 150, PHASE_STUN: 2.6 },
+    // NORMAL: cansaço da 2ª vida mais cedo (o casual quase nunca chegava nele) e o tonto passa um pouco da troca de turno
+    'lule.T': { FAT2: 105, PHASE_STUN: 2.6 },
+    // NORMAL: o carimbo TAXADO! trava antes e bate depois (0,8–0,85 s para sair da sombra; CPI 0,5–0,55 s), persegue
+    // mais devagar e só machuca na hora da batida (0,15 s; CPI 0,32 s) — era o que mais matava o bom jogador no Lule
+    'lule.STAMP': { TRACK: 0.6, WARN: 1.4, TRACK2: 0.4, WARN2: 1.25, SPD: 220, LIFE: 0.15 },
+    // NORMAL: o laser de trás do L gigante para 20 px ANTES do centro (CPI: passa 12 px): quem fica no meio,
+    // embaixo do Lule, não é mais pego no fim da varredura
+    'lule.LSW': { END_DX: -20 },
     // NORMAL: o OLÉ paga mais (1º tonto mais longo, multiplicador maior)
     'lule.LEAO': { STUN: [4.4, 2.8, 2.8], MUL: 3.15 },
     // NORMAL: sem o tiro a mais / esperas menores em CRISE (lv 3–4)
@@ -2661,7 +2678,7 @@ body.in-play #toasts { opacity: 0; }
     COLORS: ['#9aa5b8', '#3ddc84', '#ffd23f', '#ff8c1a', '#ff2a4a', '#ff3dd8'],
     SPD: 0.22, SPD_CAP: 250,              // tiros
     EHP: 0.35, BIGHP: 0.5,                // inimigos comuns / grandes
-    BHP0: 0.80, BHP1: 0.37,               // vida do chefão, travada na chegada (BHP1 0,27 → 0,37: nunca abaixo do NORMAL)
+    BHP0: 0.95, BHP1: 0.22,               // vida do chefão, travada na chegada (MODO CPI ×0,95…×1,17: nunca abaixo do NORMAL)
     SCORE: 1, PIX: 0.6, BOSSPIX: 1, CLEARPIX: 1,
     STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
     GOLD_AVG: 0.5, GOLD_PIX: 400,
@@ -3125,7 +3142,7 @@ body.in-play #toasts { opacity: 0; }
     const g = G.game; if (!g) return null;
     const def = G.Bosses.defs[id];
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
-    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,08 (R 0,75) … ×1,17 (R 1) no MODO CPI;
+    // vida travada na chegada pela PRESSÃO: ×0,95 (R 0) … ×1,12 (R 0,75) … ×1,17 (R 1) no MODO CPI;
     // o NORMAL (data.js) usa ×0,50 … ×1,00 … ×1,17
     const P = PC(), R = G.press.R;
     const hpMul = (g.loop > 1 ? T.L2_BHP : 1) * (P.BHP0 + P.BHP1 * R);
@@ -18757,7 +18774,7 @@ body.in-play #toasts { opacity: 0; }
   const CEN_SHOTS = [['bs_171', COL.pink], ['bs_171', COL.violet], ['bs_171', COL.magenta], ['bs_moeda', COL.gold],
     ['bs_cedula', COL.red], ['small', '#ff2a4a']];
   G.Bosses.define('centrao', {
-    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
+    // Rodada 5 (SPEC5 §4): HP 3500 → 5600 (citado na PRESSÃO 0,75; o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (140 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
     // spdK 1 = tiros na velocidade escrita (como antes, sem o campo); registrado com hp e fatStart ('bosses.centrao')
     name: 'O CENTRÃO', title: 'Toma Lá, Dá Cá', hp: 8000, r: 46, homeY: 165, fatStart: 140, spdK: 1.15, // balanço: hp 5600 → 8000, spdK 1 → 1,15
@@ -18999,6 +19016,8 @@ body.in-play #toasts { opacity: 0; }
     // a cada P5_FAN s (antes do pW) e anel de P5_RING sementes a cada P5_RING_T s
     P5_STUN: 3.5, P5_MUL: 2.2, P5_GAP: 2.0, P5_FLIP: 4.0, P5_WARN: 1.0, P5_FAN: 1.6, P5_FAN_SPD: 140, P5_FAN_SPR: 0.5,
     P5_RING: 12, P5_RING_T: 3.0, P5_RING_SPD: 100,
+    // 3º turno: sementinhas miradas da mão a cada P3_SEED_EVERY s (pW; ×0,85–1,15) a P3_SEED_SPD px/s (lidos a cada leque)
+    P3_SEED_EVERY: 1.45, P3_SEED_SPD: 150,
   });
   BS.define('bs_mandioca', { r: 6, size: 28, spin: 7, paint(x, s, c) {
     // raiz de mandioca girando (casca marrom, ponta cortada branca)
@@ -19297,12 +19316,12 @@ body.in-play #toasts { opacity: 0; }
     }
   }
   // fase 3: sementinhas miradas da mão
-  function* dilBgSeeds(b, every) {
+  function* dilBgSeeds(b) {
     const d = b.data;
     for (;;) {
-      yield pW(every, d.pl) * M.rand(0.85, 1.15);
+      yield pW(MT.P3_SEED_EVERY, d.pl) * M.rand(0.85, 1.15);
       const hp = dilHand(b), n = pN(3, d.pl);
-      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, 0.11 * (n - 1), 150, { style: 'bs_semente', color: COL.orange });
+      fan(hp[0], hp[1], aimFrom(hp[0], hp[1]), n, 0.11 * (n - 1), MT.P3_SEED_SPD, { style: 'bs_semente', color: COL.orange });
       sfx('enemy_shot');
     }
   }
@@ -19879,7 +19898,7 @@ body.in-play #toasts { opacity: 0; }
     ['bs_vento', COL.magenta], ['bs_vento', COL.violet], ['bs_meta', COL.pink], ['bs_meta', COL.red], ['bs_meta', COL.magenta],
     ['bs_cedula', COL.red], ['bs_cedula', COL.orange], ['small', '#ff2a4a']];
   G.Bosses.define('dilmae', {
-    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
+    // Rodada 5 (SPEC5 §4): HP 2900 → 6000 (citado na PRESSÃO 0,75; o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) no spawn),
     // cansaço depois (155 s) e um 5º turno de desespero (last: true → banner ÚLTIMO RECURSO, SEM SAÍDA após 30 s)
     name: 'DILMÃE', title: 'A Estocadora de Vento', fem: true, hp: 6900, r: 40, homeY: 168, spdK: 1.12, fatStart: 175, // balanço: hp 6000 → 6900, fatStart 155 → 175
     score: 160000, pix: 150, music: 'boss', defeatText: 'IMPEACHMENT!',
@@ -19981,7 +20000,7 @@ body.in-play #toasts { opacity: 0; }
       if (stunning(b)) d.stunT = Math.min(d.stunT, 2.0);
       // pressão de fundo: os potes também arrotam vento mirado durante as rajadas (o 2º turno era o mais calmo)
       if (idx === 1) { co(b, dilP2(b)); co(b, dilBgJars(b, L2() ? 2.2 : 2.6), 1); }
-      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b, 1.45), 1); }
+      else if (idx === 2) { co(b, dilP3(b)); co(b, dilBgSeeds(b), 1); }
       else if (idx === 3) { co(b, dilP4(b)); co(b, null, 1); }
       else if (idx === 4) {
         lastStand(b); // (a 1ª meta sai 1,5 s depois: d.metaT acima)
@@ -20191,7 +20210,7 @@ body.in-play #toasts { opacity: 0; }
     SPIRAL_SPD: 95, SPIRAL_STEP: 0.13, SPIRAL_W: 0.9, P4_HEARTS: 3.0, P4_HEART_SPD: 112, P4_THREAD_EVERY: 8, P4_THREAD_ROWS: 1,
     P5_SPD_K: 1.2, P5_STEP: 0.12, P5_HEARTS: 5.0,
   });
-  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) na chegada). Rodada 4 era 4700 / 3400 (a arma no
+  // HP (SPEC5 §4, valores a PRESSÃO 0,75: o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) na chegada). Rodada 4 era 4700 / 3400 (a arma no
   // máximo resolvia a luta em ~73 s); agora a luta boa no nv.5 fica em ~100–130 s com a cena do Pavanatto.
   // HP_L2 = base do 2º mandato (o core ainda põe ×1,25). FAT_START = cansaço (s de luta; já inclui os ~6,5 s da cena).
   // SPD_K = multiplicador dos tiros (def.spdK). O def lê estes valores na hora (getters hp / fatStart / spdK).
@@ -21943,7 +21962,7 @@ body.in-play #toasts { opacity: 0; }
   // (vida, cansaço, velocidade), 'taxad.TX' (padrões), 'taxad.CF' (a manha dos cofres) e 'taxad.ROUND' (tiros
   // durante a rodada). O NORMAL só muda pelo G.TUNE_NORMAL; tudo é lido na hora (nada copiado no carregamento).
   const tune = G.tune || ((id, o) => o);
-  // HP a R = 0,75 (o core trava ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
+  // HP a R = 0,75 (o core trava ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) pela PRESSÃO na chegada); HP_L2 = base do 2º mandato (o core põe ×1,25).
   // FAT_START = cansaço (s de luta); SPD_K = multiplicador dos tiros. O def lê estes valores na hora (getters).
   const T = tune('taxad.T', { HP: 9000, HP_L2: 7200, FAT_START: 190, SPD_K: 1.15 });
   // Padrões (velocidades antes do spdK 1,15; esperas por pW, contagens por pN / pRing).
@@ -23510,7 +23529,7 @@ body.in-play #toasts { opacity: 0; }
   // em G.TUNE_NORMAL['lule.T'] etc. Tudo é lido na hora (nada de copiar um destes números no carregamento).
   const tune = G.tune || ((id, o) => o);
 
-  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,80…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) e o ×1,25 do 2º mandato;
+  // HP (SPEC5 §4, 1º mandato com PRESSÃO 0,75 = latch ×1,0; o core aplica ×0,95…×1,17 (CPI) / ×0,50…×1,17 (NORMAL) e o ×1,25 do 2º mandato;
   // d.hpMul = b.maxHp / T.HP1 leva o mesmo fator para as outras vidas e para a Janjinha). Meta nv.5: 1ª vida 80–105 s,
   // Janjinha 30–50 s, resto da 2ª vida 50–75 s. Quem chega fraco não fica preso: o Lule CANSA (FAT1/FAT2/FAT3).
   // Cansaço (anti-empate), contado por vida: começa aos FATn s da vida, chega a ×(1 + FAT_MAX) em FAT_RAMP s.
@@ -24351,14 +24370,18 @@ body.in-play #toasts { opacity: 0; }
 
   // --- Carimbo gigante "TAXADO!": a sombra segue o Zé, trava e o carimbo desce ---
   // A colisão é um laser invisível (cápsula 124×64) — o desenho é todo nosso.
+  // STAMP (MODO CPI; o NORMAL vem de G.TUNE_NORMAL['lule.STAMP']): TRACK/WARN = s até a sombra travar / até a batida
+  // no Tudo Taxado (1ª vida); TRACK2/WARN2 = o mesmo nos carimbos rápidos da 2ª vida (Volta por Cima, Fim de Mandato);
+  // SPD = px/s com que a sombra persegue o Zé antes de travar; LIFE = s que a batida machuca. Lidos a cada carimbo.
+  const STAMP = tune('lule.STAMP', { TRACK: 0.75, WARN: 1.25, TRACK2: 0.55, WARN2: 1.1, SPD: 300, LIFE: 0.32 });
   function dropStamp(b, d, o) {
     if (!canShoot()) return;
     o = o || {};
     const p = pl();
-    const st = { x: M.clamp(p.x, 62, G.W - 62), y: M.clamp(p.y, 110, G.H - 40), t: 0, track: o.track != null ? o.track : 0.75, warn: o.warn || 1.25, slammed: false, cancel: false, rot: M.rand(-0.12, 0.12) };
+    const st = { x: M.clamp(p.x, 62, G.W - 62), y: M.clamp(p.y, 110, G.H - 40), t: 0, track: o.track != null ? o.track : STAMP.TRACK, warn: o.warn || STAMP.WARN, slammed: false, cancel: false, rot: M.rand(-0.12, 0.12) };
     st.end = st.warn + 1.7;
     st.laser = G.laser({
-      x: st.x - 30, y: st.y, ang: 0, len: 60, width: 76, warn: st.warn, life: 0.32, color: 'rgba(0,0,0,0)',
+      x: st.x - 30, y: st.y, ang: 0, len: 60, width: 76, warn: st.warn, life: STAMP.LIFE, color: 'rgba(0,0,0,0)',
       update(l) { if (laserGuard(l, b)) { st.cancel = true; return; } l.x = st.x - 30; l.y = st.y; l.ang = 0; },
     });
     if (!st.laser) return;
@@ -24374,8 +24397,8 @@ body.in-play #toasts { opacity: 0; }
       st.t += dt;
       if (st.cancel && !st.slammed) { st.fade = (st.fade || 0) + dt; if (st.fade > 0.25) L.splice(i, 1); continue; }
       if (st.t < st.track && p.alive) {
-        st.x = M.approach(st.x, M.clamp(p.x, 62, G.W - 62), 300 * dt);
-        st.y = M.approach(st.y, M.clamp(p.y, 110, G.H - 40), 300 * dt);
+        st.x = M.approach(st.x, M.clamp(p.x, 62, G.W - 62), STAMP.SPD * dt);
+        st.y = M.approach(st.y, M.clamp(p.y, 110, G.H - 40), STAMP.SPD * dt);
       }
       if (!st.slammed && st.t >= st.warn) {
         st.slammed = true;
@@ -24423,6 +24446,9 @@ body.in-play #toasts { opacity: 0; }
   // --- O "L" GIGANTE: dois lasers perpendiculares saindo do letreiro de neon (mão direita) ---
   // s = +1: o L gira no sentido horário e empurra o Zé para a ESQUERDA; s = -1: anti-horário, empurra para a DIREITA.
   // O laser "de trás" termina perto do centro da tela na altura do Zé: dá para fugir sempre para o lado certo.
+  // LSW.END_DX (MODO CPI 12; NORMAL em G.TUNE_NORMAL['lule.LSW']) = quantos px o laser de trás passa do centro da tela
+  // (na altura 0,80H) no fim da varredura; negativo = para antes do centro. Lido a cada L.
+  const LSW = tune('lule.LSW', { END_DX: 12 });
   function* lSweep(b, d, s, omega, delta, opts) {
     opts = opts || {};
     d.tx = G.W / 2; d.ty = HOME_Y;
@@ -24435,7 +24461,7 @@ body.in-play #toasts { opacity: 0; }
     // (o Leão mordeu o Lule no meio do aviso: o tonto apagou o letreiro, então não tem L)
     if (!canShoot() || d.lsign !== sign) { if (d.lsign === sign) d.lsign = null; pose(b, 'idle', 0.1); return; }
     const h0 = handPos(b, 1);
-    const aEnd = Math.atan2(G.H * 0.8 - h0.y, G.W / 2 - s * 12 - h0.x);
+    const aEnd = Math.atan2(G.H * 0.8 - h0.y, G.W / 2 - s * LSW.END_DX - h0.x);
     const aA0 = aEnd - s * delta;                       // laser "de trás" (o que empurra)
     const aB0 = aA0 + s * DOWN;                         // o outro lado do L
     const warn = opts.warn || 1.2, life = delta / omega + 0.25;
@@ -24745,7 +24771,7 @@ body.in-play #toasts { opacity: 0; }
       for (let i = 0; i < (jUp(b) ? 1 : 2); i++) {
         laneRain(d, 2, { spd: 215, warn: 0.9 });
         yield W(d, 0.7);
-        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // 0,55 s entre a trava (contorno piscando) e a batida
+        if (!lionBusy(d)) dropStamp(b, d, { track: STAMP.TRACK2, warn: STAMP.WARN2 }); // WARN2 − TRACK2 (0,55 s no CPI) entre a trava (contorno piscando) e a batida
         yield W(d, 1.7);
       }
       yield W(d, 0.8);
@@ -24817,7 +24843,7 @@ body.in-play #toasts { opacity: 0; }
     co(b, (function* () {
       yield 1.8;
       for (;;) {
-        if (!lionBusy(d)) dropStamp(b, d, { track: 0.55, warn: 1.1 }); // (com o Leão em cena, nada de carimbo)
+        if (!lionBusy(d)) dropStamp(b, d, { track: STAMP.TRACK2, warn: STAMP.WARN2 }); // (com o Leão em cena, nada de carimbo)
         yield W(d, 3.0);
       }
     })());

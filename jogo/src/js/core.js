@@ -806,7 +806,7 @@
     COLORS: ['#9aa5b8', '#3ddc84', '#ffd23f', '#ff8c1a', '#ff2a4a', '#ff3dd8'],
     SPD: 0.22, SPD_CAP: 250,              // tiros
     EHP: 0.35, BIGHP: 0.5,                // inimigos comuns / grandes
-    BHP0: 0.80, BHP1: 0.37,               // vida do chefão, travada na chegada (BHP1 0,27 → 0,37: nunca abaixo do NORMAL)
+    BHP0: 0.95, BHP1: 0.22,               // vida do chefão, travada na chegada (MODO CPI ×0,95…×1,17: nunca abaixo do NORMAL)
     SCORE: 1, PIX: 0.6, BOSSPIX: 1, CLEARPIX: 1,
     STUN: 0.3,                            // + em todo multiplicador de tonto (teto 4)
     GOLD_AVG: 0.5, GOLD_PIX: 400,
@@ -1270,7 +1270,7 @@
     const g = G.game; if (!g) return null;
     const def = G.Bosses.defs[id];
     if (!def) { G.reportError('Chefão inexistente: ' + id, 'spawnBoss'); return null; }
-    // vida travada na chegada pela PRESSÃO: ×0,80 (R 0) … ×1,08 (R 0,75) … ×1,17 (R 1) no MODO CPI;
+    // vida travada na chegada pela PRESSÃO: ×0,95 (R 0) … ×1,12 (R 0,75) … ×1,17 (R 1) no MODO CPI;
     // o NORMAL (data.js) usa ×0,50 … ×1,00 … ×1,17
     const P = PC(), R = G.press.R;
     const hpMul = (g.loop > 1 ? T.L2_BHP : 1) * (P.BHP0 + P.BHP1 * R);
